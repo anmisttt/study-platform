@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Nginx runs as www-data and cannot read under /root — use /var/www when deploying as root.
+if [[ -n "${APP_DIR:-}" ]]; then
+  :
+elif [[ "$(id -u)" -eq 0 ]]; then
+  APP_DIR="/var/www/study-platform"
+else
+  APP_DIR="${HOME}/apps/study-platform"
+fi
+BUNDLE_DIR="${BUNDLE_DIR:-$HOME}"
+BACKEND_BUNDLE="${BACKEND_BUNDLE:-$BUNDLE_DIR/backend-bundle.tgz}"
+FRONTEND_BUNDLE="${FRONTEND_BUNDLE:-$BUNDLE_DIR/frontend-bundle.tgz}"
+BACKEND_DIR="${APP_DIR}/backend"
+FRONTEND_DIR="${APP_DIR}/frontend"
+SITE_NAME="${SITE_NAME:-study-platform}"
+API_PORT="${API_PORT:-3001}"
+SERVER_NAME="${SERVER_NAME:-_}"
+BACKEND_PROCESS_NAME="${BACKEND_PROCESS_NAME:-study-backend}"
+
+for required_cmd in tar node npm pm2 nginx; do
+  if ! command -v "${required_cmd}" >/dev/null 2>&1; then
+    echo "Missing required command: ${required_cmd}"
+    echo "Run: bash vm-provision-ubuntu.sh"
+    exit 1
+  fi
+done
+
+for bundle_path in "${BACKEND_BUNDLE}" "${FRONTEND_BUNDLE}"; do
+  if [[ ! -f "${bundle_path}" ]]; then
+    echo "Bundle is missing: ${bundle_path}"
+    exit 1
+  fi
+done
+
+echo "==> Preparing app directories (${APP_DIR})"
+mkdir -p "${APP_DIR}" "${BACKEND_DIR}" "${FRONTEND_DIR}"
+
+echo "==> Extracting bundles"
+tar -xzf "${BACKEND_BUNDLE}" -C "${APP_DIR}"
+tar -xzf "${FRONTEND_BUNDLE}" -C "${FRONTEND_DIR}"
+
+echo "==> Installing backend production dependencies"
+cd "${BACKEND_DIR}"
+npm install --omit=dev
+
+LEGACY_ENV="${HOME}/apps/study-platform/backend/.env"
+if [[ ! -f ".env" && -f "${LEGACY_ENV}" ]]; then
+  cp "${LEGACY_ENV}" .env
+  echo "Migrated .env from ${LEGACY_ENV}"
+fi
+
+if [[ ! -f ".env" ]]; then
+  cat > .env <<EOF
+OPENAI_API_KEY=replace_me
+PORT=${API_PORT}
+EOF
+  echo "Created ${BACKEND_DIR}/.env template. Fill OPENAI_API_KEY and re-run this script."
+  exit 1
+fi
+
+echo "==> Restarting backend with PM2"
+set -a
+source .env
+set +a
+
+if pm2 describe "${BACKEND_PROCESS_NAME}" >/dev/null 2>&1; then
+  pm2 delete "${BACKEND_PROCESS_NAME}"
+fi
+
+pm2 start dist/server.js --name "${BACKEND_PROCESS_NAME}" --cwd "${BACKEND_DIR}"
+pm2 save
+
+echo "==> Configuring Nginx"
+NGINX_CONF="/etc/nginx/sites-available/${SITE_NAME}"
+sudo tee "${NGINX_CONF}" >/dev/null <<EOF
+server {
+  listen 80;
+  server_name ${SERVER_NAME};
+
+  root ${FRONTEND_DIR}/dist;
+  index index.html;
+
+  location / {
+    try_files \$uri /index.html;
+  }
+
+  location /api/ {
+    proxy_pass http://127.0.0.1:${API_PORT}/;
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+  }
+}
+EOF
+
+sudo ln -sfn "${NGINX_CONF}" "/etc/nginx/sites-enabled/${SITE_NAME}"
+if [[ -f /etc/nginx/sites-enabled/default ]]; then
+  sudo rm -f /etc/nginx/sites-enabled/default
+fi
+sudo nginx -t
+sudo systemctl restart nginx
+
+echo "==> Deployment complete"
+echo "Backend health: curl http://127.0.0.1:${API_PORT}/health"
+echo "Public app: http://$(hostname -I | awk '{print $1}')"

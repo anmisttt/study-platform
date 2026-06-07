@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bookGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#b26dff" />
+      <stop offset="100%" stop-color="#7b2cff" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#f6efff" />
+  <path d="M14 18c0-2.2 1.8-4 4-4h15c4.4 0 8 3.6 8 8v28H18c-2.2 0-4-1.8-4-4V18z" fill="url(#bookGradient)" />
+  <path d="M50 18c0-2.2-1.8-4-4-4H31c-4.4 0-8 3.6-8 8v28h23c2.2 0 4-1.8 4-4V18z" fill="#8a39ff" />
+  <path d="M32 18v32" stroke="#efe2ff" stroke-width="2" stroke-linecap="round" />
+  <path d="M21 24h8M21 30h8M21 36h8M35 24h8M35 30h8M35 36h8" stroke="#e9d9ff" stroke-width="2" stroke-linecap="round" />
+</svg>
