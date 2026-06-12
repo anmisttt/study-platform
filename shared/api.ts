@@ -1,7 +1,7 @@
 import type { PracticeSolution } from "./domain";
 
 export const MAX_ANSWER_LENGTH = 3000;
-export const MAX_RECORDING_SECONDS = 60;
+export const MAX_RECORDING_SECONDS = 180;
 
 export type TheoryCheckResult = {
   rating: number;
