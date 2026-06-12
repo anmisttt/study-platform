@@ -93,7 +93,7 @@ app.get("/chapters/:chapterId", (req: Request, res: Response): void => {
   res.json(chapter);
 });
 
-app.post("/check/:chapterId/theory/:questionId", async (req: Request, res: Response) => {
+app.post("/chapters/:chapterId/questions/theory/:questionId/check", async (req: Request, res: Response): Promise<void> => {
   const answer = ensureAnswer(req, res);
   if (!answer) return;
 
@@ -126,7 +126,7 @@ app.post("/check/:chapterId/theory/:questionId", async (req: Request, res: Respo
 });
 
 app.post(
-  "/check/:chapterId/practice/:questionId",
+  "/chapters/:chapterId/questions/practice/:questionId/check",
   async (req: Request, res: Response): Promise<void> => {
     const answer = ensureAnswer(req, res);
     if (!answer) return;

@@ -33,8 +33,6 @@ export type ChapterSession = {
   details: Chapter | null;
   loading: boolean;
   error: string;
-  isPracticing: boolean;
-  currentIndex: number;
   responses: Record<string, ResponseEntry>;
   drafts: Record<string, string>;
 };
@@ -44,8 +42,6 @@ export function createInitialChapterSession(): ChapterSession {
     details: null,
     loading: false,
     error: "",
-    isPracticing: false,
-    currentIndex: 0,
     responses: {},
     drafts: {},
   };

@@ -2,7 +2,7 @@
 
 Live site: [https://study-platform.me](https://study-platform.me)
 
-Simple TypeScript full-stack app for practicing chapter questions, checking answers, and getting a score summary.
+A free platform to practice different SWE topics.
 
 ## Stack
 
@@ -70,8 +70,8 @@ Then open `http://localhost:5173`.
 - `GET /health`
 - `GET /chapters`
 - `GET /chapters/:chapterId` (chapter details on demand)
-- `POST /check/:chapterId/theory/:questionId` with `{ "answer": "..." }`
-- `POST /check/:chapterId/practice/:questionId` with `{ "answer": "..." }`
+- `POST /chapters/:chapterId/questions/theory/:questionId/check` with `{ "answer": "..." }`
+- `POST /chapters/:chapterId/questions/practice/:questionId/check` with `{ "answer": "..." }`
 
 Responses are mocked to simulate LLM grading and include `rating`, `comment`, and reference answer/solutions.
 

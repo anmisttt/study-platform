@@ -2,38 +2,24 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import QuestionCard from "./questionCard";
 import Timer from "./timer";
 import type { Chapter, ChapterMeta } from "@study-platform/shared";
-import { MAX_ANSWER_LENGTH, MAX_RECORDING_SECONDS, PracticeQuality } from "@study-platform/shared";
+import {
+  chapterQuestionCheckApiPath,
+  MAX_ANSWER_LENGTH,
+  MAX_RECORDING_SECONDS,
+  PracticeQuality,
+} from "@study-platform/shared";
 import type { ChapterSession, CheckResult, QuestionItem, ResponseEntry } from "./contest-types";
+import { flattenItems } from "../utils/questions";
 
 type ContestProps = {
   chapterMeta: ChapterMeta | null;
   chapterSession: ChapterSession;
   apiBase: string;
+  questionRef?: string;
+  onQuestionNavigate: (questionRef: string) => void;
   onSessionChange: (updater: (session: ChapterSession) => ChapterSession) => void;
   onResetProgress: () => void;
 };
-
-function flattenItems(chapter: Chapter): QuestionItem[] {
-  const theoryItems: QuestionItem[] = chapter.theory.map((item, index) => ({
-    id: `theory-${index}`,
-    type: "theory",
-    questionId: index,
-    title: `Theory ${index + 1}`,
-    prompt: item.question,
-    details: "",
-  }));
-
-  const practiceItems: QuestionItem[] = chapter.practice.map((item, index) => ({
-    id: `practice-${index}`,
-    type: "practice",
-    questionId: index,
-    title: `Practice ${index + 1}`,
-    prompt: item.task,
-    details: item.description,
-  }));
-
-  return [...theoryItems, ...practiceItems];
-}
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
@@ -85,10 +71,21 @@ function fileExtensionFromMimeType(mimeType: string): string {
 
 const MAX_RECORDING_MS = MAX_RECORDING_SECONDS * 1000;
 
+function findQuestionIndex(items: QuestionItem[], questionRef: string | undefined): number {
+  if (!questionRef) {
+    return 0;
+  }
+
+  const index = items.findIndex((item) => item.id === questionRef);
+  return index >= 0 ? index : 0;
+}
+
 function Contest({
   chapterMeta,
   chapterSession,
   apiBase,
+  questionRef,
+  onQuestionNavigate,
   onSessionChange,
   onResetProgress,
 }: ContestProps) {
@@ -103,8 +100,9 @@ function Contest({
     () => (chapterSession.details ? flattenItems(chapterSession.details) : []),
     [chapterSession.details],
   );
-  const currentIndex = items.length === 0 ? 0 : Math.min(chapterSession.currentIndex, items.length - 1);
-  const currentItem = items[currentIndex] ?? null;
+  const isPracticeMode = Boolean(questionRef);
+  const currentIndex = items.length === 0 ? 0 : findQuestionIndex(items, questionRef);
+  const currentItem = isPracticeMode ? (items[currentIndex] ?? null) : null;
   const currentResponse = currentItem ? chapterSession.responses[currentItem.id] : null;
   const referenceAnswer = getReferenceAnswer(chapterSession.details, currentItem);
   const answerInput = currentItem
@@ -156,10 +154,10 @@ function Contest({
       return;
     }
     const nextIndex = Math.max(0, Math.min(index, items.length - 1));
-    onSessionChange((session) => ({
-      ...session,
-      currentIndex: nextIndex,
-    }));
+    const nextItem = items[nextIndex];
+    if (nextItem) {
+      onQuestionNavigate(nextItem.id);
+    }
   }
 
   function handleAnswerInputChange(value: string): void {
@@ -175,18 +173,13 @@ function Contest({
     }));
   }
 
-  async function startPractice(): Promise<void> {
+  async function loadChapterDetails(): Promise<Chapter | null> {
     if (!chapterMeta) {
-      return;
+      return null;
     }
 
     if (chapterSession.details) {
-      onSessionChange((session) => ({
-        ...session,
-        isPracticing: true,
-        error: "",
-      }));
-      return;
+      return chapterSession.details;
     }
 
     onSessionChange((session) => ({
@@ -204,19 +197,27 @@ function Contest({
       onSessionChange((session) => ({
         ...session,
         details: data,
-        isPracticing: true,
-        currentIndex: session.currentIndex,
       }));
+      return data;
     } catch (error: unknown) {
       onSessionChange((session) => ({
         ...session,
         error: errorMessage(error, "Failed to load chapter details."),
       }));
+      return null;
     } finally {
       onSessionChange((session) => ({
         ...session,
         loading: false,
       }));
+    }
+  }
+
+  async function startPractice(): Promise<void> {
+    const details = await loadChapterDetails();
+    const firstItem = details ? flattenItems(details)[0] : null;
+    if (firstItem) {
+      onQuestionNavigate(firstItem.id);
     }
   }
 
@@ -337,7 +338,7 @@ function Contest({
     setIsChecking(true);
     const trimmedAnswer = answerInput.trim();
     try {
-      const endpoint = `${apiBase}/check/${chapterMeta.id}/${currentItem.type}/${currentItem.questionId}`;
+      const endpoint = `${apiBase}${chapterQuestionCheckApiPath(chapterMeta.id, currentItem.type, currentItem.questionId)}`;
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -397,12 +398,12 @@ function Contest({
   }
 
   useEffect(() => {
-    if (!chapterMeta || !chapterSession.isPracticing || chapterSession.details || chapterSession.loading) {
+    if (!questionRef || !chapterMeta || chapterSession.details || chapterSession.loading) {
       return;
     }
 
-    void startPractice();
-  }, [chapterMeta, chapterSession.isPracticing, chapterSession.details, chapterSession.loading]);
+    void loadChapterDetails();
+  }, [questionRef, chapterMeta, chapterSession.details, chapterSession.loading]);
 
   useEffect(() => {
     return () => {
@@ -414,7 +415,7 @@ function Contest({
     return null;
   }
 
-  if (!chapterSession.isPracticing) {
+  if (!isPracticeMode) {
     return (
       <div className="start-card">
         <h1>{chapterMeta.name}</h1>
@@ -435,6 +436,10 @@ function Contest({
         </button>
       </div>
     );
+  }
+
+  if (chapterSession.loading || !chapterSession.details) {
+    return <div className="screen-message">Loading chapter questions...</div>;
   }
 
   if (!currentItem) {
