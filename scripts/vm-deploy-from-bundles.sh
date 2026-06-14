@@ -194,6 +194,8 @@ fi
 
 echo "==> Installing backend production dependencies"
 cd "${BACKEND_DIR}"
+DEPLOY_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bash "${DEPLOY_SCRIPT_DIR}/install-native-deps.sh"
 npm install --omit=dev
 
 if ! restore_app_env; then

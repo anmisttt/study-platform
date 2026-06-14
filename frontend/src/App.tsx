@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import "./styles/App.css";
 import Contest from "./components/contest";
 import { flattenItems } from "./utils/questions";
@@ -12,44 +12,23 @@ import {
   chapterOverviewPath,
   chapterQuestionPath,
   chaptersPath,
+  roomIdFromSearch,
 } from "./routes/paths";
+import { clearRoomDrafts } from "./utils/draftStorage";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 const GITHUB_REPO_URL = "https://github.com/anmisttt/study-platform";
-const CHAPTER_SESSIONS_STORAGE_KEY = "study-platform.chapter-sessions";
-type PersistedChapterSession = Pick<ChapterSession, "responses" | "drafts">;
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-function hydrateChapterSessions(rawValue: string): Record<string, ChapterSession> {
-  const parsedValue = JSON.parse(rawValue) as unknown;
-  if (!parsedValue || typeof parsedValue !== "object" || Array.isArray(parsedValue)) {
-    return {};
-  }
-
-  return Object.entries(parsedValue).reduce<Record<string, ChapterSession>>((sessions, [chapterId, value]) => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      return sessions;
-    }
-
-    const persistedSession = value as Partial<PersistedChapterSession>;
-    sessions[chapterId] = {
-      ...createInitialChapterSession(),
-      responses: persistedSession.responses && typeof persistedSession.responses === "object" ? persistedSession.responses : {},
-      drafts: persistedSession.drafts && typeof persistedSession.drafts === "object" ? persistedSession.drafts : {},
-    };
-
-    return sessions;
-  }, {});
-}
-
 type ChapterRouteProps = {
   chapters: Map<string, ChapterMeta>;
-  chapterSessions: Record<string, ChapterSession>;
-  onSessionChange: (chapterId: string, updater: (session: ChapterSession) => ChapterSession) => void;
-  onResetProgress: (chapterId: string) => void;
+  roomSessions: Record<string, ChapterSession>;
+  roomId: string | null;
+  onSessionChange: (roomId: string, updater: (session: ChapterSession) => ChapterSession) => void;
+  onResetProgress: (roomId: string) => void;
 };
 
 function ChaptersIndexPage() {
@@ -73,10 +52,12 @@ function ChaptersIndexPage() {
   );
 }
 
-function ChapterOverviewPage({ chapters, chapterSessions, onSessionChange, onResetProgress }: ChapterRouteProps) {
+function ChapterOverviewPage({ chapters, roomSessions, roomId, onSessionChange, onResetProgress }: ChapterRouteProps) {
   const { chapterId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const chapterMeta = chapterId ? (chapters.get(chapterId) ?? null) : null;
+  const roomError = (location.state as { roomError?: string } | null)?.roomError ?? "";
 
   if (!chapterId || !chapterMeta) {
     return <Navigate to={chaptersPath()} replace />;
@@ -85,26 +66,37 @@ function ChapterOverviewPage({ chapters, chapterSessions, onSessionChange, onRes
   return (
     <Contest
       chapterMeta={chapterMeta}
-      chapterSession={chapterSessions[chapterId] ?? createInitialChapterSession()}
+      chapterSession={roomId ? (roomSessions[roomId] ?? createInitialChapterSession()) : createInitialChapterSession()}
       apiBase={API_BASE}
-      onQuestionNavigate={(questionRef) => {
-        navigate(chapterQuestionPath(chapterId, questionRef));
+      roomId={roomId}
+      initialError={roomError}
+      onQuestionNavigate={(questionRef, activeRoomId) => {
+        navigate(chapterQuestionPath(chapterId, questionRef, activeRoomId));
+      }}
+      onRoomAccessError={(message) => {
+        navigate(chapterOverviewPath(chapterId), { replace: true, state: { roomError: message } });
       }}
       onSessionChange={(updater) => {
-        onSessionChange(chapterId, updater);
+        if (!roomId) {
+          return;
+        }
+        onSessionChange(roomId, updater);
       }}
       onResetProgress={() => {
-        onResetProgress(chapterId);
+        if (!roomId) {
+          return;
+        }
+        onResetProgress(roomId);
       }}
     />
   );
 }
 
-function ChapterQuestionPage({ chapters, chapterSessions, onSessionChange, onResetProgress }: ChapterRouteProps) {
+function ChapterQuestionPage({ chapters, roomSessions, roomId, onSessionChange, onResetProgress }: ChapterRouteProps) {
   const { chapterId, questionRef } = useParams();
   const navigate = useNavigate();
   const chapterMeta = chapterId ? (chapters.get(chapterId) ?? null) : null;
-  const chapterSession = chapterId ? (chapterSessions[chapterId] ?? createInitialChapterSession()) : createInitialChapterSession();
+  const chapterSession = roomId ? (roomSessions[roomId] ?? createInitialChapterSession()) : createInitialChapterSession();
   const items = useMemo(() => (chapterSession.details ? flattenItems(chapterSession.details) : []), [chapterSession.details]);
 
   useEffect(() => {
@@ -112,36 +104,48 @@ function ChapterQuestionPage({ chapters, chapterSessions, onSessionChange, onRes
       return;
     }
 
+    if (!roomId) {
+      navigate(chapterOverviewPath(chapterId), {
+        replace: true,
+        state: { roomError: "A room ID is required to practice." },
+      });
+      return;
+    }
+
     if (!questionRef || !parseQuestionRef(questionRef)) {
-      navigate(chapterOverviewPath(chapterId), { replace: true });
+      navigate(chapterOverviewPath(chapterId, roomId), { replace: true });
       return;
     }
 
     if (items.length > 0 && !items.some((item) => item.id === questionRef)) {
-      navigate(chapterOverviewPath(chapterId), { replace: true });
+      navigate(chapterOverviewPath(chapterId, roomId), { replace: true });
     }
-  }, [chapterId, questionRef, items, navigate]);
+  }, [chapterId, roomId, questionRef, items, navigate]);
 
-  if (!chapterId || !chapterMeta || !questionRef || !parseQuestionRef(questionRef)) {
+  if (!chapterId || !chapterMeta || !roomId || !questionRef || !parseQuestionRef(questionRef)) {
     return null;
   }
 
   return (
     <Contest
-      key={`${chapterId}-${questionRef}`}
+      key={`${roomId}-${questionRef}`}
       chapterMeta={chapterMeta}
       chapterSession={chapterSession}
       apiBase={API_BASE}
+      roomId={roomId}
       questionRef={questionRef}
-      onQuestionNavigate={(nextQuestionRef) => {
-        navigate(chapterQuestionPath(chapterId, nextQuestionRef));
+      onQuestionNavigate={(nextQuestionRef, activeRoomId) => {
+        navigate(chapterQuestionPath(chapterId, nextQuestionRef, activeRoomId));
+      }}
+      onRoomAccessError={(message) => {
+        navigate(chapterOverviewPath(chapterId), { replace: true, state: { roomError: message } });
       }}
       onSessionChange={(updater) => {
-        onSessionChange(chapterId, updater);
+        onSessionChange(roomId, updater);
       }}
       onResetProgress={() => {
-        onResetProgress(chapterId);
-        navigate(chapterOverviewPath(chapterId));
+        onResetProgress(roomId);
+        navigate(chapterOverviewPath(chapterId, roomId));
       }}
     />
   );
@@ -149,46 +153,26 @@ function ChapterQuestionPage({ chapters, chapterSessions, onSessionChange, onRes
 
 function ChapterIdRedirect() {
   const { chapterId } = useParams();
+  const location = useLocation();
+  const roomId = roomIdFromSearch(location.search);
 
   if (!chapterId) {
     return <Navigate to={chaptersPath()} replace />;
   }
 
-  return <Navigate to={chapterOverviewPath(chapterId)} replace />;
+  return <Navigate to={chapterOverviewPath(chapterId, roomId ?? undefined)} replace />;
 }
 
 function App() {
   const [chapters, setChapters] = useState<Map<string, ChapterMeta>>(new Map());
   const [loadingChapters, setLoadingChapters] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string>("");
-  const [chapterSessions, setChapterSessions] = useState<Record<string, ChapterSession>>(() => {
-    try {
-      const rawValue = localStorage.getItem(CHAPTER_SESSIONS_STORAGE_KEY);
-      if (!rawValue) {
-        return {};
-      }
-      return hydrateChapterSessions(rawValue);
-    } catch {
-      return {};
-    }
-  });
+  const [roomSessions, setRoomSessions] = useState<Record<string, ChapterSession>>({});
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const activeChapterId = activeChapterIdFromPath(location.pathname);
-
-  useEffect(() => {
-    const persistableSessions = Object.entries(chapterSessions).reduce<Record<string, PersistedChapterSession>>(
-      (sessions, [chapterId, session]) => {
-        sessions[chapterId] = {
-          responses: session.responses,
-          drafts: session.drafts,
-        };
-        return sessions;
-      },
-      {},
-    );
-
-    localStorage.setItem(CHAPTER_SESSIONS_STORAGE_KEY, JSON.stringify(persistableSessions));
-  }, [chapterSessions]);
+  const roomId = roomIdFromSearch(searchParams.toString());
+  const isPracticeRoute = /^\/chapters\/[^/]+\/questions\//.test(location.pathname);
 
   useEffect(() => {
     let mounted = true;
@@ -224,27 +208,29 @@ function App() {
 
   const chaptersList = useMemo(() => Array.from(chapters.values()), [chapters]);
 
-  function handleSessionChange(chapterId: string, updater: (session: ChapterSession) => ChapterSession): void {
-    setChapterSessions((prev) => {
-      const currentSession = prev[chapterId] ?? createInitialChapterSession();
+  function handleSessionChange(activeRoomId: string, updater: (session: ChapterSession) => ChapterSession): void {
+    setRoomSessions((prev) => {
+      const currentSession = prev[activeRoomId] ?? createInitialChapterSession();
       return {
         ...prev,
-        [chapterId]: updater(currentSession),
+        [activeRoomId]: updater(currentSession),
       };
     });
   }
 
-  function handleResetProgress(chapterId: string): void {
-    setChapterSessions((prev) => {
+  function handleResetProgress(activeRoomId: string): void {
+    clearRoomDrafts(activeRoomId);
+    setRoomSessions((prev) => {
       const nextSessions = { ...prev };
-      delete nextSessions[chapterId];
+      delete nextSessions[activeRoomId];
       return nextSessions;
     });
   }
 
   const routeProps: ChapterRouteProps = {
     chapters,
-    chapterSessions,
+    roomSessions,
+    roomId,
     onSessionChange: handleSessionChange,
     onResetProgress: handleResetProgress,
   };
@@ -262,6 +248,12 @@ function App() {
       <TableOfContents chapters={chaptersList} activeChapterId={activeChapterId} />
 
       <main className="content">
+        {roomId && isPracticeRoute && (
+          <div className="room-id-corner">
+            <span>Room ID:</span>
+            <code>{roomId}</code>
+          </div>
+        )}
         <Routes>
           <Route path="/" element={<Navigate to={chaptersPath()} replace />} />
           <Route path="/chapters" element={<ChaptersIndexPage />} />

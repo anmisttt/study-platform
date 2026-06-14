@@ -16,6 +16,14 @@ export function parseQuestionRef(ref: string): { type: QuestionType; index: numb
   };
 }
 
-export function chapterQuestionCheckApiPath(chapterId: string, type: QuestionType, questionIndex: number): string {
-  return `/chapters/${chapterId}/questions/${type}/${questionIndex}/check`;
+export function roomApiPath(roomId: string): string {
+  return `/rooms/${roomId}`;
+}
+
+export function roomQuestionCheckApiPath(roomId: string, type: QuestionType, questionIndex: number): string {
+  return `/rooms/${roomId}/questions/${type}/${questionIndex}/check`;
+}
+
+export function createRoomApiPath(): string {
+  return "/rooms";
 }

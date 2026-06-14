@@ -1,4 +1,4 @@
-import type { PracticeSolution } from "./domain";
+import type { PracticeItem, PracticeSolution, TheoryItem } from "./domain";
 
 export const MAX_ANSWER_LENGTH = 3000;
 export const MAX_RECORDING_SECONDS = 180;
@@ -13,4 +13,29 @@ export type PracticeCheckResult = {
   rating: number;
   comment: string;
   solutions: PracticeSolution[];
+};
+
+export type RoomAnswerFields = {
+  user_answer?: string;
+  rating?: number;
+  comment?: string;
+  revision?: number;
+};
+
+export type RoomTheoryItem = TheoryItem & RoomAnswerFields;
+
+export type RoomPracticeItem = PracticeItem & RoomAnswerFields;
+
+export type QuestionCheckRequest = {
+  answer: string;
+  baseRevision: number;
+};
+
+export type RoomDetails = {
+  roomId: string;
+  chapterId: string;
+  number: number;
+  name: string;
+  theory: RoomTheoryItem[];
+  practice: RoomPracticeItem[];
 };

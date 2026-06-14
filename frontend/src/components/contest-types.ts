@@ -35,6 +35,7 @@ export type ChapterSession = {
   error: string;
   responses: Record<string, ResponseEntry>;
   drafts: Record<string, string>;
+  revisions: Record<string, number>;
 };
 
 export function createInitialChapterSession(): ChapterSession {
@@ -44,5 +45,6 @@ export function createInitialChapterSession(): ChapterSession {
     error: "",
     responses: {},
     drafts: {},
+    revisions: {},
   };
 }

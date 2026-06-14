@@ -54,10 +54,29 @@
 }
 
 .content {
+  position: relative;
   padding: 56px;
   display: flex;
   justify-content: center;
   align-items: flex-start;
+}
+
+.room-id-corner {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.room-id-corner code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+  color: #374151;
+  background: #f3f4f6;
+  padding: 4px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.05em;
 }
 
 .start-card,
@@ -73,6 +92,65 @@
 .practice-card h1,
 .start-card h1 {
   margin-top: 0;
+}
+
+.start-card-status {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: #4f46e5;
+}
+
+.start-card-room-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 4px;
+}
+
+.start-card-room-join-form {
+  display: contents;
+}
+
+.start-card-room-panel .start-card-button {
+  padding: 6px 12px;
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.start-card-join {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.start-card-room-or {
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.start-card-generate {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.room-id-input {
+  flex: 0 0 9ch;
+  width: auto;
+  box-sizing: border-box;
+  border: 1px solid #c2c5d6;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  text-transform: none;
+}
+
+.room-id-input::placeholder {
+  font-family: inherit;
+  letter-spacing: normal;
+  color: #9ca3af;
 }
 
 .practice-layout {

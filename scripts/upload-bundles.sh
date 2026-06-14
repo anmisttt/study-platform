@@ -16,8 +16,9 @@ BACKEND_BUNDLE="${ARTIFACTS_DIR}/backend-bundle.tgz"
 FRONTEND_BUNDLE="${ARTIFACTS_DIR}/frontend-bundle.tgz"
 VM_PROVISION_SCRIPT="${SCRIPT_DIR}/vm-provision-ubuntu.sh"
 VM_DEPLOY_SCRIPT="${SCRIPT_DIR}/vm-deploy-from-bundles.sh"
+INSTALL_NATIVE_DEPS_SCRIPT="${SCRIPT_DIR}/install-native-deps.sh"
 
-for required_file in "${BACKEND_BUNDLE}" "${FRONTEND_BUNDLE}" "${VM_PROVISION_SCRIPT}" "${VM_DEPLOY_SCRIPT}"; do
+for required_file in "${BACKEND_BUNDLE}" "${FRONTEND_BUNDLE}" "${VM_PROVISION_SCRIPT}" "${VM_DEPLOY_SCRIPT}" "${INSTALL_NATIVE_DEPS_SCRIPT}"; do
   if [[ ! -f "${required_file}" ]]; then
     echo "Missing file: ${required_file}"
     echo "Run 'bash scripts/build-bundles.sh' first."
@@ -44,6 +45,7 @@ scp \
   "${FRONTEND_BUNDLE}" \
   "${VM_PROVISION_SCRIPT}" \
   "${VM_DEPLOY_SCRIPT}" \
+  "${INSTALL_NATIVE_DEPS_SCRIPT}" \
   "${SCP_DEST}"
 
 echo "==> Upload complete"

@@ -1,24 +1,43 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import QuestionCard from "./questionCard";
 import Timer from "./timer";
-import type { Chapter, ChapterMeta } from "@study-platform/shared";
+import type { ChapterMeta, RoomDetails } from "@study-platform/shared";
 import {
-  chapterQuestionCheckApiPath,
+  createRoomApiPath,
   MAX_ANSWER_LENGTH,
   MAX_RECORDING_SECONDS,
   PracticeQuality,
+  roomApiPath,
+  roomQuestionCheckApiPath,
 } from "@study-platform/shared";
-import type { ChapterSession, CheckResult, QuestionItem, ResponseEntry } from "./contest-types";
+import type { ChapterSession, CheckResult, PracticeCheckResult, QuestionItem, ResponseEntry, TheoryCheckResult } from "./contest-types";
 import { flattenItems } from "../utils/questions";
+import { appendRoomDraft, isEditingQuestion, clearRoomDraft, resolveAnswerInput, setRoomDraft } from "../utils/draftStorage";
+import { mergeRoomDetailsIntoSession, roomDetailsToChapterSession } from "../utils/room";
+
+const ROOM_POLL_INTERVAL_MS = 5000;
 
 type ContestProps = {
   chapterMeta: ChapterMeta | null;
   chapterSession: ChapterSession;
   apiBase: string;
+  roomId: string | null;
   questionRef?: string;
-  onQuestionNavigate: (questionRef: string) => void;
+  initialError?: string;
+  onQuestionNavigate: (questionRef: string, roomId: string) => void;
+  onRoomAccessError: (message: string) => void;
   onSessionChange: (updater: (session: ChapterSession) => ChapterSession) => void;
   onResetProgress: () => void;
+};
+
+type ConflictPayload = {
+  error?: string;
+  room?: RoomDetails;
+};
+
+type CheckResponsePayload = CheckResult & {
+  revision?: number;
+  error?: string;
 };
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -35,10 +54,12 @@ function getDotRatingClass(response: ResponseEntry | undefined): string {
   return `rating-${normalizedRating}`;
 }
 
-function getReferenceAnswer(chapter: Chapter | null, item: QuestionItem | null): string {
-  if (!chapter || !item) {
+function getReferenceAnswer(chapterSession: ChapterSession, item: QuestionItem | null): string {
+  if (!chapterSession.details || !item) {
     return "Answer is unavailable for this question.";
   }
+
+  const chapter = chapterSession.details;
 
   if (item.type === "theory") {
     const theoryItem = chapter.theory[item.questionId];
@@ -84,14 +105,21 @@ function Contest({
   chapterMeta,
   chapterSession,
   apiBase,
+  roomId,
   questionRef,
+  initialError = "",
   onQuestionNavigate,
+  onRoomAccessError,
   onSessionChange,
   onResetProgress,
 }: ContestProps) {
   const [isChecking, setIsChecking] = useState<boolean>(false);
   const [isListening, setIsListening] = useState<boolean>(false);
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
+  const [roomInput, setRoomInput] = useState<string>(roomId ?? "");
+  const [isRoomActionPending, setIsRoomActionPending] = useState<boolean>(false);
+  const [startError, setStartError] = useState<string>("");
+  const [draftRevision, setDraftRevision] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordingLimitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -104,10 +132,11 @@ function Contest({
   const currentIndex = items.length === 0 ? 0 : findQuestionIndex(items, questionRef);
   const currentItem = isPracticeMode ? (items[currentIndex] ?? null) : null;
   const currentResponse = currentItem ? chapterSession.responses[currentItem.id] : null;
-  const referenceAnswer = getReferenceAnswer(chapterSession.details, currentItem);
-  const answerInput = currentItem
-    ? chapterSession.drafts[currentItem.id] ?? chapterSession.responses[currentItem.id]?.answer ?? ""
-    : "";
+  const referenceAnswer = getReferenceAnswer(chapterSession, currentItem);
+  const answerInput = useMemo(
+    () => (currentItem ? resolveAnswerInput(roomId, currentItem.id, chapterSession) : ""),
+    [roomId, currentItem, chapterSession, draftRevision],
+  );
   const allAnswered =
     items.length > 0 && items.every((item) => Boolean(chapterSession.responses[item.id]?.result));
 
@@ -123,6 +152,40 @@ function Contest({
     const total = ratings.reduce((sum, value) => sum + value, 0);
     return { average: total / ratings.length, total };
   }, [items, chapterSession.responses]);
+
+  useEffect(() => {
+    setRoomInput(roomId ?? "");
+  }, [roomId]);
+
+  useEffect(() => {
+    if (initialError) {
+      setStartError(initialError);
+    }
+  }, [initialError]);
+
+  async function fetchRoom(activeRoomId: string): Promise<RoomDetails> {
+    if (!chapterMeta) {
+      throw new Error("Chapter is unavailable.");
+    }
+
+    const res = await fetch(
+      `${apiBase}${roomApiPath(activeRoomId)}?chapterId=${encodeURIComponent(chapterMeta.id)}`,
+    );
+    const payload = (await res.json()) as RoomDetails & { error?: string };
+    if (!res.ok) {
+      throw new Error(payload.error ?? "Failed to load room.");
+    }
+
+    return payload;
+  }
+
+  function applyConflictRoom(payload: ConflictPayload): void {
+    if (!roomId || !payload.room) {
+      return;
+    }
+
+    onSessionChange((session) => mergeRoomDetailsIntoSession(session, payload.room!));
+  }
 
   function stopStreamTracks(): void {
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -150,75 +213,118 @@ function Contest({
   }
 
   function openQuestion(index: number): void {
-    if (items.length === 0) {
+    if (items.length === 0 || !roomId) {
       return;
     }
     const nextIndex = Math.max(0, Math.min(index, items.length - 1));
     const nextItem = items[nextIndex];
     if (nextItem) {
-      onQuestionNavigate(nextItem.id);
+      onQuestionNavigate(nextItem.id, roomId);
     }
   }
 
   function handleAnswerInputChange(value: string): void {
-    if (!currentItem) {
+    if (!currentItem || !roomId) {
       return;
     }
+
+    const nextValue = value.slice(0, MAX_ANSWER_LENGTH);
+    setRoomDraft(roomId, currentItem.id, nextValue);
     onSessionChange((session) => ({
       ...session,
       drafts: {
         ...session.drafts,
-        [currentItem.id]: value.slice(0, MAX_ANSWER_LENGTH),
+        [currentItem.id]: nextValue,
       },
     }));
   }
 
-  async function loadChapterDetails(): Promise<Chapter | null> {
+  async function syncRoomDetails(activeRoomId: string, options?: { showLoading?: boolean }): Promise<RoomDetails | null> {
     if (!chapterMeta) {
       return null;
     }
 
-    if (chapterSession.details) {
-      return chapterSession.details;
+    const showLoading = options?.showLoading ?? false;
+    if (showLoading) {
+      onSessionChange((session) => ({
+        ...session,
+        loading: true,
+        error: "",
+      }));
     }
 
-    onSessionChange((session) => ({
-      ...session,
-      loading: true,
-      error: "",
-    }));
-
     try {
-      const res = await fetch(`${apiBase}/chapters/${chapterMeta.id}`);
-      if (!res.ok) {
-        throw new Error("Failed to load chapter details.");
-      }
-      const data: Chapter = await res.json();
+      const payload = await fetchRoom(activeRoomId);
       onSessionChange((session) => ({
-        ...session,
-        details: data,
-      }));
-      return data;
-    } catch (error: unknown) {
-      onSessionChange((session) => ({
-        ...session,
-        error: errorMessage(error, "Failed to load chapter details."),
-      }));
-      return null;
-    } finally {
-      onSessionChange((session) => ({
-        ...session,
+        ...mergeRoomDetailsIntoSession(session, payload),
         loading: false,
+        error: "",
       }));
+      return payload;
+    } catch (error: unknown) {
+      const message = errorMessage(error, "Failed to load room.");
+      if (showLoading) {
+        onSessionChange((session) => ({
+          ...session,
+          loading: false,
+          error: message,
+        }));
+      }
+      return null;
     }
   }
 
-  async function startPractice(): Promise<void> {
-    const details = await loadChapterDetails();
-    const firstItem = details ? flattenItems(details)[0] : null;
-    if (firstItem) {
-      onQuestionNavigate(firstItem.id);
+  async function beginPracticeWithRoom(activeRoomId: string): Promise<void> {
+    setIsRoomActionPending(true);
+    setStartError("");
+    try {
+      const room = await fetchRoom(activeRoomId);
+      const firstItem = flattenItems(roomDetailsToChapterSession(room).details!)[0];
+      if (!firstItem) {
+        throw new Error("This room has no questions.");
+      }
+
+      onQuestionNavigate(firstItem.id, activeRoomId);
+    } catch (error: unknown) {
+      setStartError(errorMessage(error, "Failed to start practicing."));
+    } finally {
+      setIsRoomActionPending(false);
     }
+  }
+
+  async function generateNewRoom(): Promise<void> {
+    if (!chapterMeta) {
+      return;
+    }
+
+    setIsRoomActionPending(true);
+    setStartError("");
+    try {
+      const res = await fetch(`${apiBase}${createRoomApiPath()}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chapterId: chapterMeta.id }),
+      });
+      const payload = (await res.json()) as { roomId?: string; error?: string };
+      if (!res.ok || !payload.roomId) {
+        throw new Error(payload.error ?? "Failed to create room.");
+      }
+
+      await beginPracticeWithRoom(payload.roomId);
+    } catch (error: unknown) {
+      setStartError(errorMessage(error, "Failed to create room."));
+      setIsRoomActionPending(false);
+    }
+  }
+
+  async function joinExistingRoom(): Promise<void> {
+    const trimmedRoomId = roomInput.trim();
+    if (!trimmedRoomId) {
+      setStartError("Enter a room ID to join.");
+      return;
+    }
+
+    await beginPracticeWithRoom(trimmedRoomId);
   }
 
   async function transcribeAudio(itemIdAtStart: string, audioBlob: Blob): Promise<void> {
@@ -244,20 +350,17 @@ function Contest({
         return;
       }
 
-      onSessionChange((session) => {
-        const existingAnswer = session.drafts[itemIdAtStart] ?? session.responses[itemIdAtStart]?.answer ?? "";
-        const nextAnswer = (existingAnswer ? `${existingAnswer} ${finalTranscript}` : finalTranscript).slice(
-          0,
-          MAX_ANSWER_LENGTH,
-        );
-        return {
-          ...session,
-          drafts: {
-            ...session.drafts,
-            [itemIdAtStart]: nextAnswer,
-          },
-        };
-      });
+      if (!roomId) {
+        return;
+      }
+
+      appendRoomDraft(
+        roomId,
+        itemIdAtStart,
+        finalTranscript,
+        chapterSession.responses[itemIdAtStart]?.answer ?? "",
+      );
+      setDraftRevision((revision) => revision + 1);
     } catch (error: unknown) {
       window.alert(errorMessage(error, "Failed to transcribe audio."));
     } finally {
@@ -331,39 +434,69 @@ function Contest({
   }
 
   async function handleCheck(): Promise<void> {
-    if (!chapterMeta || !currentItem || !answerInput.trim()) {
+    if (!roomId || !currentItem || !answerInput.trim()) {
       return;
     }
 
     setIsChecking(true);
     const trimmedAnswer = answerInput.trim();
+    const baseRevision = chapterSession.revisions[currentItem.id] ?? 0;
+
     try {
-      const endpoint = `${apiBase}${chapterQuestionCheckApiPath(chapterMeta.id, currentItem.type, currentItem.questionId)}`;
+      const endpoint = `${apiBase}${roomQuestionCheckApiPath(roomId, currentItem.type, currentItem.questionId)}`;
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answer: trimmedAnswer }),
+        body: JSON.stringify({ answer: trimmedAnswer, baseRevision }),
       });
 
+      const payload = (await res.json()) as CheckResponsePayload & ConflictPayload;
+      if (res.status === 409) {
+        applyConflictRoom(payload);
+        throw new Error(payload.error ?? "Question was updated by someone else.");
+      }
       if (!res.ok) {
-        throw new Error("Failed to check answer.");
+        throw new Error(payload.error ?? "Failed to check answer.");
       }
 
-      const result: CheckResult = await res.json();
-      onSessionChange((session) => ({
-        ...session,
-        responses: {
-          ...session.responses,
-          [currentItem.id]: {
-            answer: trimmedAnswer,
-            result,
+      if (typeof payload.revision !== "number") {
+        throw new Error("Server did not return answer revision.");
+      }
+
+      const nextRevision = payload.revision;
+      const checkResult: CheckResult =
+        currentItem.type === "theory"
+          ? {
+              rating: payload.rating,
+              comment: payload.comment,
+              answer: (payload as TheoryCheckResult).answer,
+            }
+          : {
+              rating: payload.rating,
+              comment: payload.comment,
+              solutions: (payload as PracticeCheckResult).solutions,
+            };
+
+      clearRoomDraft(roomId, currentItem.id);
+      onSessionChange((session) => {
+        const nextDrafts = { ...session.drafts };
+        delete nextDrafts[currentItem.id];
+        return {
+          ...session,
+          responses: {
+            ...session.responses,
+            [currentItem.id]: {
+              answer: trimmedAnswer,
+              result: checkResult,
+            },
           },
-        },
-        drafts: {
-          ...session.drafts,
-          [currentItem.id]: trimmedAnswer,
-        },
-      }));
+          revisions: {
+            ...session.revisions,
+            [currentItem.id]: nextRevision,
+          },
+          drafts: nextDrafts,
+        };
+      });
       stopVoiceRecording();
     } catch (error: unknown) {
       window.alert(errorMessage(error, "Request failed."));
@@ -373,22 +506,18 @@ function Contest({
   }
 
   function handleTryAgain(): void {
-    if (!currentItem) {
+    if (!currentItem || !roomId) {
       return;
     }
 
-    onSessionChange((session) => {
-      const nextResponses = { ...session.responses };
-      delete nextResponses[currentItem.id];
-      return {
-        ...session,
-        responses: nextResponses,
-        drafts: {
-          ...session.drafts,
-          [currentItem.id]: "",
-        },
-      };
-    });
+    setRoomDraft(roomId, currentItem.id, "");
+    onSessionChange((session) => ({
+      ...session,
+      drafts: {
+        ...session.drafts,
+        [currentItem.id]: "",
+      },
+    }));
     stopVoiceRecording();
   }
 
@@ -398,12 +527,34 @@ function Contest({
   }
 
   useEffect(() => {
-    if (!questionRef || !chapterMeta || chapterSession.details || chapterSession.loading) {
+    if (!isPracticeMode || !roomId || !chapterMeta || chapterSession.details || chapterSession.loading) {
       return;
     }
 
-    void loadChapterDetails();
-  }, [questionRef, chapterMeta, chapterSession.details, chapterSession.loading]);
+    void syncRoomDetails(roomId, { showLoading: true });
+  }, [isPracticeMode, roomId, chapterMeta, chapterSession.details, chapterSession.loading]);
+
+  useEffect(() => {
+    if (!isPracticeMode || !roomId || !chapterMeta || !chapterSession.details) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void syncRoomDetails(roomId);
+    }, ROOM_POLL_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [isPracticeMode, roomId, chapterMeta, chapterSession.details]);
+
+  useEffect(() => {
+    if (!isPracticeMode || !roomId || chapterSession.loading || chapterSession.details || !chapterSession.error) {
+      return;
+    }
+
+    onRoomAccessError(chapterSession.error);
+  }, [isPracticeMode, roomId, chapterSession.loading, chapterSession.details, chapterSession.error, onRoomAccessError]);
 
   useEffect(() => {
     return () => {
@@ -416,35 +567,79 @@ function Contest({
   }
 
   if (!isPracticeMode) {
+    const isBusy = chapterSession.loading || isRoomActionPending;
+
     return (
       <div className="start-card">
         <h1>{chapterMeta.name}</h1>
-        {chapterSession.loading && <p>Loading chapter questions...</p>}
-        {chapterSession.error && <p className="error-inline">{chapterSession.error}</p>}
         <p>
           {chapterMeta.theoryCount} theory items + {chapterMeta.practiceCount} practice tasks
         </p>
-        <button
-          type="button"
-          className="primary-button"
-          onClick={() => {
-            void startPractice();
-          }}
-          disabled={chapterSession.loading}
-        >
-          Start practicing
-        </button>
+        {chapterSession.loading && <p className="start-card-status">Loading room...</p>}
+        {(startError || chapterSession.error) && (
+          <p className="error-inline">{startError || chapterSession.error}</p>
+        )}
+
+        <div className="start-card-room-panel">
+          <form
+            className="start-card-room-join-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void joinExistingRoom();
+            }}
+          >
+            <input
+              type="text"
+              className="room-id-input"
+              value={roomInput}
+              onChange={(event) => setRoomInput(event.target.value)}
+              placeholder="Room ID"
+              maxLength={6}
+              disabled={isBusy}
+              spellCheck={false}
+              autoComplete="off"
+            />
+            <button
+              type="submit"
+              className="primary-button start-card-button start-card-join"
+              disabled={isBusy}
+            >
+              Join room
+            </button>
+          </form>
+          <span className="start-card-room-or" aria-hidden="true">
+            or
+          </span>
+          <button
+            type="button"
+            className="secondary-button start-card-button start-card-generate"
+            onClick={() => {
+              void generateNewRoom();
+            }}
+            disabled={isBusy}
+          >
+            Generate new room
+          </button>
+        </div>
       </div>
     );
   }
 
-  if (chapterSession.loading || !chapterSession.details) {
-    return <div className="screen-message">Loading chapter questions...</div>;
+  if (chapterSession.loading || (!chapterSession.details && !chapterSession.error)) {
+    return <div className="screen-message">Loading room questions...</div>;
+  }
+
+  if (!chapterSession.details) {
+    return null;
   }
 
   if (!currentItem) {
     return null;
   }
+
+  const isEditingLocally =
+    roomId && currentItem ? isEditingQuestion(roomId, currentItem.id, chapterSession) : false;
+  const showCheckedAnswer = Boolean(currentResponse?.result) && !isEditingLocally;
 
   return (
     <div className="practice-layout">
@@ -479,7 +674,7 @@ function Contest({
 
         <QuestionCard
           currentItem={currentItem}
-          response={currentResponse}
+          response={showCheckedAnswer ? currentResponse : null}
           answerInput={answerInput}
           isChecking={isChecking}
           isListening={isListening}

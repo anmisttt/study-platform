@@ -10,6 +10,10 @@ echo "==> Installing OS packages"
 sudo apt update
 sudo apt install -y curl git nginx
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "==> Installing native deps for SQLite (better-sqlite3)"
+bash "${SCRIPT_DIR}/install-native-deps.sh"
+
 echo "==> Installing Node.js 20"
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
