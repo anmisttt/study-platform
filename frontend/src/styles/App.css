@@ -446,7 +446,7 @@
   color: #6b7280;
 }
 
-.answer-char-count.at-limit {
+.answer-char-count-over {
   color: #dc2626;
   font-weight: 500;
 }
@@ -456,6 +456,10 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.check-button-wrap {
+  display: inline-flex;
 }
 
 .answer-preview {

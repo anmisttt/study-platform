@@ -4,7 +4,6 @@ import Timer from "./timer";
 import type { ChapterMeta, RoomDetails } from "@study-platform/shared";
 import {
   createRoomApiPath,
-  MAX_ANSWER_LENGTH,
   MAX_RECORDING_SECONDS,
   PracticeQuality,
   roomApiPath,
@@ -12,8 +11,9 @@ import {
 } from "@study-platform/shared";
 import type { ChapterSession, CheckResult, PracticeCheckResult, QuestionItem, ResponseEntry, TheoryCheckResult } from "./contest-types";
 import { flattenItems } from "../utils/questions";
-import { appendRoomDraft, isEditingQuestion, clearRoomDraft, resolveAnswerInput, setRoomDraft } from "../utils/draftStorage";
+import { isEditingQuestion, resolveAnswerInput } from "../utils/draftStorage";
 import { mergeRoomDetailsIntoSession, roomDetailsToChapterSession } from "../utils/room";
+import { useCollaborativeDraft } from "../hooks/useCollaborativeDraft";
 
 const ROOM_POLL_INTERVAL_MS = 5000;
 
@@ -119,7 +119,6 @@ function Contest({
   const [roomInput, setRoomInput] = useState<string>(roomId ?? "");
   const [isRoomActionPending, setIsRoomActionPending] = useState<boolean>(false);
   const [startError, setStartError] = useState<string>("");
-  const [draftRevision, setDraftRevision] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordingLimitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -133,10 +132,17 @@ function Contest({
   const currentItem = isPracticeMode ? (items[currentIndex] ?? null) : null;
   const currentResponse = currentItem ? chapterSession.responses[currentItem.id] : null;
   const referenceAnswer = getReferenceAnswer(chapterSession, currentItem);
-  const answerInput = useMemo(
-    () => (currentItem ? resolveAnswerInput(roomId, currentItem.id, chapterSession) : ""),
-    [roomId, currentItem, chapterSession, draftRevision],
-  );
+  const collaborativeDraft = useCollaborativeDraft({
+    apiBase,
+    roomId,
+    questionId: currentItem?.id ?? null,
+    enabled: isPracticeMode && Boolean(roomId),
+  });
+  const answerInput = roomId
+    ? collaborativeDraft.answerInput
+    : currentItem
+      ? resolveAnswerInput(roomId, currentItem.id, chapterSession)
+      : "";
   const allAnswered =
     items.length > 0 && items.every((item) => Boolean(chapterSession.responses[item.id]?.result));
 
@@ -228,15 +234,7 @@ function Contest({
       return;
     }
 
-    const nextValue = value.slice(0, MAX_ANSWER_LENGTH);
-    setRoomDraft(roomId, currentItem.id, nextValue);
-    onSessionChange((session) => ({
-      ...session,
-      drafts: {
-        ...session.drafts,
-        [currentItem.id]: nextValue,
-      },
-    }));
+    collaborativeDraft.onAnswerInputChange(value);
   }
 
   async function syncRoomDetails(activeRoomId: string, options?: { showLoading?: boolean }): Promise<RoomDetails | null> {
@@ -354,13 +352,10 @@ function Contest({
         return;
       }
 
-      appendRoomDraft(
-        roomId,
-        itemIdAtStart,
+      collaborativeDraft.appendDraftText(
         finalTranscript,
         chapterSession.responses[itemIdAtStart]?.answer ?? "",
       );
-      setDraftRevision((revision) => revision + 1);
     } catch (error: unknown) {
       window.alert(errorMessage(error, "Failed to transcribe audio."));
     } finally {
@@ -477,7 +472,7 @@ function Contest({
               solutions: (payload as PracticeCheckResult).solutions,
             };
 
-      clearRoomDraft(roomId, currentItem.id);
+      collaborativeDraft.clearCollaborativeDraft();
       onSessionChange((session) => {
         const nextDrafts = { ...session.drafts };
         delete nextDrafts[currentItem.id];
@@ -510,7 +505,7 @@ function Contest({
       return;
     }
 
-    setRoomDraft(roomId, currentItem.id, "");
+    collaborativeDraft.clearCollaborativeDraft();
     onSessionChange((session) => ({
       ...session,
       drafts: {
@@ -638,7 +633,9 @@ function Contest({
   }
 
   const isEditingLocally =
-    roomId && currentItem ? isEditingQuestion(roomId, currentItem.id, chapterSession) : false;
+    roomId && currentItem
+      ? isEditingQuestion(roomId, currentItem.id, chapterSession) || collaborativeDraft.answerInput.trim().length > 0
+      : false;
   const showCheckedAnswer = Boolean(currentResponse?.result) && !isEditingLocally;
 
   return (

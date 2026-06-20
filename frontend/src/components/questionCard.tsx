@@ -10,6 +10,26 @@ function formatRecordingCountdown(seconds: number): string {
   return `${minutes}:${secs.toString().padStart(2, "0")}`;
 }
 
+function getCheckButtonTooltip(
+  isChecking: boolean,
+  answerInput: string,
+  isOverAnswerLimit: boolean,
+): string | undefined {
+  if (isChecking) {
+    return "Checking your answer...";
+  }
+
+  if (!answerInput.trim()) {
+    return "Enter an answer to check.";
+  }
+
+  if (isOverAnswerLimit) {
+    return `Answer must not exceed ${MAX_ANSWER_LENGTH} characters.`;
+  }
+
+  return undefined;
+}
+
 type QuestionCardProps = {
   currentItem: QuestionItem;
   response: ResponseEntry | null;
@@ -60,6 +80,10 @@ function QuestionCard({
     };
   }, [isListening]);
 
+  const isOverAnswerLimit = answerInput.length > MAX_ANSWER_LENGTH;
+  const isCheckDisabled = isChecking || !answerInput.trim() || isOverAnswerLimit;
+  const checkButtonTooltip = getCheckButtonTooltip(isChecking, answerInput, isOverAnswerLimit);
+
   return (
     <>
       <h1>{currentItem.title}</h1>
@@ -79,13 +103,12 @@ function QuestionCard({
               onChange={(event) => onAnswerInputChange(event.target.value)}
               placeholder="Type your answer in any language..."
               rows={5}
-              maxLength={MAX_ANSWER_LENGTH}
             />
-            <p
-              className={`answer-char-count${answerInput.length >= MAX_ANSWER_LENGTH ? " at-limit" : ""}`}
-              aria-live="polite"
-            >
-              {answerInput.length} / {MAX_ANSWER_LENGTH}
+            <p className="answer-char-count" aria-live="polite">
+              <span className={isOverAnswerLimit ? "answer-char-count-over" : undefined}>
+                {answerInput.length}
+              </span>{" "}
+              / {MAX_ANSWER_LENGTH}
             </p>
           </div>
           <div className="answer-actions">
@@ -111,16 +134,18 @@ function QuestionCard({
                 />
               </svg>
             </button>
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => {
-                void onCheck();
-              }}
-              disabled={isChecking || !answerInput.trim()}
-            >
-              {isChecking ? "Checking..." : "Check"}
-            </button>
+            <span className="check-button-wrap" title={checkButtonTooltip}>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  void onCheck();
+                }}
+                disabled={isCheckDisabled}
+              >
+                {isChecking ? "Checking..." : "Check"}
+              </button>
+            </span>
           </div>
           {isAnswerVisible && (
             <div className="answer-preview">

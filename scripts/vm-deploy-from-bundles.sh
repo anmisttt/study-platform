@@ -98,6 +98,16 @@ server {
     try_files \$uri /index.html;
   }
 
+  location /api/drafts/ws {
+    proxy_pass http://127.0.0.1:${API_PORT}/drafts/ws;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+
   location /api/ {
     proxy_pass http://127.0.0.1:${API_PORT}/;
     proxy_http_version 1.1;
@@ -124,6 +134,15 @@ server {
 
   location / {
     try_files \$uri /index.html;
+  }
+
+  location /api/drafts/ws {
+    proxy_pass http://127.0.0.1:${API_PORT}/drafts/ws;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
   }
 
   location /api/ {

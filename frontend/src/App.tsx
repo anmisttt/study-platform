@@ -14,7 +14,7 @@ import {
   chaptersPath,
   roomIdFromSearch,
 } from "./routes/paths";
-import { clearRoomDrafts } from "./utils/draftStorage";
+import { clearRoomDraftUpdates } from "./utils/draftStorage";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 const GITHUB_REPO_URL = "https://github.com/anmisttt/study-platform";
@@ -219,7 +219,7 @@ function App() {
   }
 
   function handleResetProgress(activeRoomId: string): void {
-    clearRoomDrafts(activeRoomId);
+    void clearRoomDraftUpdates(activeRoomId);
     setRoomSessions((prev) => {
       const nextSessions = { ...prev };
       delete nextSessions[activeRoomId];

@@ -1,8 +1,11 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express, { Request, Response } from "express";
+import { createServer } from "node:http";
 import multer from "multer";
+import { roomDraftsWebSocketPath } from "@study-platform/shared";
 import { chapters, getChapterById } from "./chapters";
+import { DraftRelay } from "./drafts/draftRelay";
 import { assertRoomChapter, getRoomDetails } from "./db/roomContext";
 import { RoomsDb } from "./db/roomsDb";
 import { ConflictError, NotFoundError, UserError } from "./errors";
@@ -191,7 +194,11 @@ app.post("/rooms", (req: Request, res: Response): void => {
   }
 });
 
-app.listen(PORT, HOST, () => {
+const draftRelay = new DraftRelay();
+const httpServer = createServer(app);
+draftRelay.attach(httpServer, roomDraftsWebSocketPath());
+
+httpServer.listen(PORT, HOST, () => {
   // eslint-disable-next-line no-console
   console.log(`Backend server running on http://${HOST}:${PORT}`);
 });

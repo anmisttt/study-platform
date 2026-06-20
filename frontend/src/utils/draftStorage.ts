@@ -1,83 +1,129 @@
-import { MAX_ANSWER_LENGTH } from "@study-platform/shared";
+const DB_NAME = "study-platform.drafts";
+const DB_VERSION = 1;
+const STORE_NAME = "drafts";
 
-const ROOM_DRAFTS_STORAGE_KEY = "study-platform.room-drafts";
+type DraftRecord = {
+  key: string;
+  update: Uint8Array;
+};
 
-type RoomDraftsStore = Record<string, Record<string, string>>;
+const persistedDraftKeys = new Set<string>();
 
-function readStore(): RoomDraftsStore {
+function draftKey(roomId: string, questionId: string): string {
+  return `${roomId}:${questionId}`;
+}
+
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "key" });
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("Failed to open draft IndexedDB."));
+  });
+}
+
+function waitForTransaction(transaction: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error("Draft IndexedDB transaction failed."));
+    transaction.onabort = () => reject(transaction.error ?? new Error("Draft IndexedDB transaction aborted."));
+  });
+}
+
+function readRecord(db: IDBDatabase, key: string): Promise<Uint8Array | null> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readonly");
+    const request = transaction.objectStore(STORE_NAME).get(key);
+
+    request.onsuccess = () => {
+      const record = request.result as DraftRecord | undefined;
+      resolve(record?.update ?? null);
+    };
+    request.onerror = () => reject(request.error ?? new Error("Failed to read draft from IndexedDB."));
+  });
+}
+
+export function hasPersistedDraft(roomId: string, questionId: string): boolean {
+  return persistedDraftKeys.has(draftKey(roomId, questionId));
+}
+
+export async function loadDraftUpdate(roomId: string, questionId: string): Promise<Uint8Array | null> {
+  const key = draftKey(roomId, questionId);
+  const db = await openDb();
+
   try {
-    const raw = localStorage.getItem(ROOM_DRAFTS_STORAGE_KEY);
-    if (!raw) {
-      return {};
+    const storedUpdate = await readRecord(db, key);
+    if (storedUpdate && storedUpdate.length > 0) {
+      persistedDraftKeys.add(key);
+      return storedUpdate;
+    }
+  } finally {
+    db.close();
+  }
+
+  return null;
+}
+
+export async function saveDraftUpdate(roomId: string, questionId: string, update: Uint8Array): Promise<void> {
+  const key = draftKey(roomId, questionId);
+  const db = await openDb();
+
+  try {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+
+    if (update.length === 0) {
+      store.delete(key);
+      persistedDraftKeys.delete(key);
+    } else {
+      store.put({ key, update } satisfies DraftRecord);
+      persistedDraftKeys.add(key);
     }
 
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-
-    return parsed as RoomDraftsStore;
-  } catch {
-    return {};
+    await waitForTransaction(transaction);
+  } finally {
+    db.close();
   }
 }
 
-function writeStore(store: RoomDraftsStore): void {
-  localStorage.setItem(ROOM_DRAFTS_STORAGE_KEY, JSON.stringify(store));
+export async function clearDraftUpdate(roomId: string, questionId: string): Promise<void> {
+  await saveDraftUpdate(roomId, questionId, new Uint8Array());
 }
 
-export function getRoomDraft(roomId: string, questionId: string): string | undefined {
-  const roomDrafts = readStore()[roomId];
-  if (!roomDrafts || !(questionId in roomDrafts)) {
-    return undefined;
+export async function clearRoomDraftUpdates(roomId: string): Promise<void> {
+  const db = await openDb();
+  const prefix = `${roomId}:`;
+
+  try {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.openCursor();
+
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        return;
+      }
+
+      if (typeof cursor.key === "string" && cursor.key.startsWith(prefix)) {
+        cursor.delete();
+        persistedDraftKeys.delete(cursor.key);
+      }
+
+      cursor.continue();
+    };
+
+    await waitForTransaction(transaction);
+  } finally {
+    db.close();
   }
-
-  return roomDrafts[questionId];
-}
-
-export function setRoomDraft(roomId: string, questionId: string, value: string): void {
-  const store = readStore();
-  const roomDrafts = { ...(store[roomId] ?? {}) };
-  roomDrafts[questionId] = value;
-  store[roomId] = roomDrafts;
-  writeStore(store);
-}
-
-export function appendRoomDraft(
-  roomId: string,
-  questionId: string,
-  text: string,
-  existingFallback = "",
-): string {
-  const current = getRoomDraft(roomId, questionId) ?? existingFallback;
-  const next = (current ? `${current} ${text}` : text).slice(0, MAX_ANSWER_LENGTH);
-  setRoomDraft(roomId, questionId, next);
-  return next;
-}
-
-export function clearRoomDraft(roomId: string, questionId: string): void {
-  const store = readStore();
-  const roomDrafts = store[roomId];
-  if (!roomDrafts || !(questionId in roomDrafts)) {
-    return;
-  }
-
-  const nextRoomDrafts = { ...roomDrafts };
-  delete nextRoomDrafts[questionId];
-
-  if (Object.keys(nextRoomDrafts).length === 0) {
-    delete store[roomId];
-  } else {
-    store[roomId] = nextRoomDrafts;
-  }
-
-  writeStore(store);
-}
-
-export function clearRoomDrafts(roomId: string): void {
-  const store = readStore();
-  delete store[roomId];
-  writeStore(store);
 }
 
 export function isEditingQuestion(
@@ -85,27 +131,18 @@ export function isEditingQuestion(
   questionId: string,
   session: { drafts: Record<string, string> },
 ): boolean {
-  if (roomId && hasRoomDraft(roomId, questionId)) {
+  if (roomId && hasPersistedDraft(roomId, questionId)) {
     return true;
   }
 
   return questionId in session.drafts;
 }
 
-export function hasRoomDraft(roomId: string, questionId: string): boolean {
-  const roomDrafts = readStore()[roomId];
-  return Boolean(roomDrafts && questionId in roomDrafts);
-}
-
 export function resolveAnswerInput(
-  roomId: string | null,
+  _roomId: string | null,
   questionId: string,
   session: { drafts: Record<string, string>; responses: Record<string, { answer: string }> },
 ): string {
-  if (roomId && hasRoomDraft(roomId, questionId)) {
-    return getRoomDraft(roomId, questionId)!;
-  }
-
   if (questionId in session.drafts) {
     return session.drafts[questionId];
   }

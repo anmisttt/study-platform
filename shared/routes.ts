@@ -27,3 +27,7 @@ export function roomQuestionCheckApiPath(roomId: string, type: QuestionType, que
 export function createRoomApiPath(): string {
   return "/rooms";
 }
+
+export function roomDraftsWebSocketPath(): string {
+  return "/drafts/ws";
+}
