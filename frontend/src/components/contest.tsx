@@ -91,6 +91,9 @@ function fileExtensionFromMimeType(mimeType: string): string {
 }
 
 const MAX_RECORDING_MS = MAX_RECORDING_SECONDS * 1000;
+// Stop slightly before the hard limit so encoded duration stays under the server cap.
+const RECORDING_LIMIT_BUFFER_MS = 1000;
+const RECORDING_LIMIT_CHECK_MS = 250;
 
 function findQuestionIndex(items: QuestionItem[], questionRef: string | undefined): number {
   if (!questionRef) {
@@ -116,12 +119,14 @@ function Contest({
   const [isChecking, setIsChecking] = useState<boolean>(false);
   const [isListening, setIsListening] = useState<boolean>(false);
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
+  const [recordingSecondsLeft, setRecordingSecondsLeft] = useState<number>(MAX_RECORDING_SECONDS);
   const [roomInput, setRoomInput] = useState<string>(roomId ?? "");
   const [isRoomActionPending, setIsRoomActionPending] = useState<boolean>(false);
   const [startError, setStartError] = useState<string>("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const recordingLimitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordingStartedAtRef = useRef<number | null>(null);
+  const recordingLimitIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const items = useMemo(
     () => (chapterSession.details ? flattenItems(chapterSession.details) : []),
@@ -198,18 +203,47 @@ function Contest({
     mediaStreamRef.current = null;
   }
 
-  function clearRecordingLimitTimeout(): void {
-    if (recordingLimitTimeoutRef.current !== null) {
-      clearTimeout(recordingLimitTimeoutRef.current);
-      recordingLimitTimeoutRef.current = null;
+  function clearRecordingLimitTimer(): void {
+    if (recordingLimitIntervalRef.current !== null) {
+      clearInterval(recordingLimitIntervalRef.current);
+      recordingLimitIntervalRef.current = null;
     }
+    recordingStartedAtRef.current = null;
+  }
+
+  function startRecordingLimitTimer(): void {
+    clearRecordingLimitTimer();
+    recordingStartedAtRef.current = Date.now();
+    setRecordingSecondsLeft(MAX_RECORDING_SECONDS);
+
+    recordingLimitIntervalRef.current = setInterval(() => {
+      const startedAt = recordingStartedAtRef.current;
+      if (startedAt === null) {
+        return;
+      }
+
+      const elapsedMs = Date.now() - startedAt;
+      const secondsLeft = Math.max(0, MAX_RECORDING_SECONDS - Math.ceil(elapsedMs / 1000));
+      setRecordingSecondsLeft(secondsLeft);
+
+      if (elapsedMs >= MAX_RECORDING_MS - RECORDING_LIMIT_BUFFER_MS) {
+        stopVoiceRecording();
+      }
+    }, RECORDING_LIMIT_CHECK_MS);
   }
 
   function stopVoiceRecording(): void {
-    clearRecordingLimitTimeout();
+    clearRecordingLimitTimer();
+    setRecordingSecondsLeft(MAX_RECORDING_SECONDS);
     const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state !== "inactive") {
-      recorder.stop();
+      try {
+        recorder.stop();
+      } catch {
+        mediaRecorderRef.current = null;
+        stopStreamTracks();
+      }
+      setIsListening(false);
       return;
     }
 
@@ -418,10 +452,7 @@ function Contest({
       mediaRecorderRef.current = recorder;
       setIsListening(true);
       recorder.start();
-      recordingLimitTimeoutRef.current = setTimeout(() => {
-        recordingLimitTimeoutRef.current = null;
-        stopVoiceRecording();
-      }, MAX_RECORDING_MS);
+      startRecordingLimitTimer();
     } catch {
       stopStreamTracks();
       window.alert("Microphone permission is required for voice input.");
@@ -676,6 +707,7 @@ function Contest({
           isChecking={isChecking}
           isListening={isListening}
           isTranscribing={isTranscribing}
+          recordingSecondsLeft={recordingSecondsLeft}
           referenceAnswer={referenceAnswer}
           onAnswerInputChange={handleAnswerInputChange}
           onVoiceInput={() => {

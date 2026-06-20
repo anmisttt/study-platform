@@ -1,4 +1,4 @@
-import { MAX_ANSWER_LENGTH, MAX_RECORDING_SECONDS } from "@study-platform/shared";
+import { MAX_ANSWER_LENGTH } from "@study-platform/shared";
 import { useEffect, useState } from "react";
 import Answer from "./answer";
 import FormattedText from "./formattedText";
@@ -37,6 +37,7 @@ type QuestionCardProps = {
   isChecking: boolean;
   isListening: boolean;
   isTranscribing: boolean;
+  recordingSecondsLeft: number;
   referenceAnswer: string;
   onAnswerInputChange: (value: string) => void;
   onVoiceInput: () => void;
@@ -51,6 +52,7 @@ function QuestionCard({
   isChecking,
   isListening,
   isTranscribing,
+  recordingSecondsLeft,
   referenceAnswer,
   onAnswerInputChange,
   onVoiceInput,
@@ -58,27 +60,10 @@ function QuestionCard({
   onTryAgain,
 }: QuestionCardProps) {
   const [isAnswerVisible, setIsAnswerVisible] = useState(false);
-  const [recordingSecondsLeft, setRecordingSecondsLeft] = useState(MAX_RECORDING_SECONDS);
 
   useEffect(() => {
     setIsAnswerVisible(false);
   }, [currentItem.id]);
-
-  useEffect(() => {
-    if (!isListening) {
-      setRecordingSecondsLeft(MAX_RECORDING_SECONDS);
-      return;
-    }
-
-    setRecordingSecondsLeft(MAX_RECORDING_SECONDS);
-    const intervalId = window.setInterval(() => {
-      setRecordingSecondsLeft((prev) => Math.max(0, prev - 1));
-    }, 1000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [isListening]);
 
   const isOverAnswerLimit = answerInput.length > MAX_ANSWER_LENGTH;
   const isCheckDisabled = isChecking || !answerInput.trim() || isOverAnswerLimit;
@@ -155,8 +140,8 @@ function QuestionCard({
           )}
           {isListening && (
             <p className="status-inline" role="status" aria-live="polite">
-              Recording... {formatRecordingCountdown(recordingSecondsLeft)} seconds left — tap the microphone again to
-              finish.
+              Recording... {formatRecordingCountdown(recordingSecondsLeft)} remaining — recording stops automatically
+              at the limit.
             </p>
           )}
           {isTranscribing && (

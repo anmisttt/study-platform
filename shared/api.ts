@@ -1,7 +1,7 @@
 import type { PracticeItem, PracticeSolution, TheoryItem } from "./domain";
 
-export const MAX_ANSWER_LENGTH = 3000;
-export const MAX_RECORDING_SECONDS = 180;
+export const MAX_ANSWER_LENGTH = 5000;
+export const MAX_RECORDING_SECONDS = 300;
 
 export type TheoryCheckResult = {
   rating: number;
