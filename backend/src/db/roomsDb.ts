@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { ConflictError, NotFoundError, ServerError } from "../errors";
 import { Db } from "./db";
 import { ROOMS_TABLE_SCHEMA } from "./schemas";
-import type { AnswerFieldsJson, PracticeJson, TheoryJson, RoomsRow } from "./typings";
+import type { AnswerFieldsJson, RoomsRow } from "./typings";
 
 const ROOM_ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 const ROOM_ID_LENGTH = 6;
@@ -30,11 +30,8 @@ export class RoomsDb extends Db {
     throw new ServerError("Failed to generate unique room id");
   }
 
-  addRoom({ roomId, chapterId, theory, practice }: { roomId: string; chapterId: string; theory: TheoryJson[]; practice: PracticeJson[] }): void {
-    this.run(
-      "INSERT INTO rooms (id, chapter_id, theory, practice) VALUES (?, ?, ?, ?)",
-      [roomId, chapterId, JSON.stringify(theory), JSON.stringify(practice)],
-    );
+  addRoom({ roomId, chapterId }: { roomId: string; chapterId: string }): void {
+    this.run("INSERT INTO rooms (id, chapter_id) VALUES (?, ?)", [roomId, chapterId]);
   }
 
   getRoom(roomId: string): RoomsRow | undefined {
@@ -61,26 +58,20 @@ export class RoomsDb extends Db {
       throw new NotFoundError("Room not found.");
     }
 
-    const theory = JSON.parse(room.theory) as TheoryJson[];
-    const item = theory[questionIndex];
-    if (!item) {
-      throw new NotFoundError("Theory question not found in room.");
-    }
-
-    const currentRevision = this.getItemRevision(item);
+    const theoryAnswers = JSON.parse(room.theory_answers) as AnswerFieldsJson[];
+    const currentRevision = this.getItemRevision(theoryAnswers[questionIndex]);
     this.assertRevisionMatch(currentRevision, baseRevision);
 
     const nextRevision = currentRevision + 1;
-    theory[questionIndex] = {
-      ...item,
+    theoryAnswers[questionIndex] = {
       user_answer,
       rating,
       comment,
       revision: nextRevision,
     };
 
-    this.run("UPDATE rooms SET theory = ?, updated_at = datetime('now') WHERE id = ?", [
-      JSON.stringify(theory),
+    this.run("UPDATE rooms SET theory_answers = ?, updated_at = datetime('now') WHERE id = ?", [
+      JSON.stringify(theoryAnswers),
       roomId,
     ]);
 
@@ -107,34 +98,28 @@ export class RoomsDb extends Db {
       throw new NotFoundError("Room not found.");
     }
 
-    const practice = JSON.parse(room.practice) as PracticeJson[];
-    const item = practice[questionIndex];
-    if (!item) {
-      throw new NotFoundError("Practice task not found in room.");
-    }
-
-    const currentRevision = this.getItemRevision(item);
+    const practiceAnswers = JSON.parse(room.practice_answers) as AnswerFieldsJson[];
+    const currentRevision = this.getItemRevision(practiceAnswers[questionIndex]);
     this.assertRevisionMatch(currentRevision, baseRevision);
 
     const nextRevision = currentRevision + 1;
-    practice[questionIndex] = {
-      ...item,
+    practiceAnswers[questionIndex] = {
       user_answer,
       rating,
       comment,
       revision: nextRevision,
     };
 
-    this.run("UPDATE rooms SET practice = ?, updated_at = datetime('now') WHERE id = ?", [
-      JSON.stringify(practice),
+    this.run("UPDATE rooms SET practice_answers = ?, updated_at = datetime('now') WHERE id = ?", [
+      JSON.stringify(practiceAnswers),
       roomId,
     ]);
 
     return nextRevision;
   }
 
-  private getItemRevision(item: AnswerFieldsJson): number {
-    return item.revision ?? 0;
+  private getItemRevision(item: AnswerFieldsJson | undefined): number {
+    return item?.revision ?? 0;
   }
 
   private assertRevisionMatch(currentRevision: number, baseRevision: number): void {
@@ -144,11 +129,6 @@ export class RoomsDb extends Db {
   }
 
   private createRoomsTable(): void {
-    const columns = this.all<{ name: string; type: string }>("PRAGMA table_info(rooms)");
-    const chapterColumn = columns.find((column) => column.name === "chapter_id");
-    if (chapterColumn && chapterColumn.type.toUpperCase() === "INTEGER") {
-      this.run("DROP TABLE rooms");
-    }
     this.run(ROOMS_TABLE_SCHEMA);
   }
 

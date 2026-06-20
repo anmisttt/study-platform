@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+DEPLOY_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Production domain defaults to study-platform.me (https://study-platform.me).
 # Override SERVER_NAME=_ for IP-only deploys without HTTPS.
 # Nginx runs as www-data and cannot read under /root — use /var/www when deploying as root.
@@ -194,7 +196,6 @@ fi
 
 echo "==> Installing backend production dependencies"
 cd "${BACKEND_DIR}"
-DEPLOY_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bash "${DEPLOY_SCRIPT_DIR}/install-native-deps.sh"
 npm install --omit=dev
 

@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS rooms (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   chapter_id TEXT NOT NULL,
-  theory TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(theory)),
-  practice TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(practice))
+  theory_answers TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(theory_answers)),
+  practice_answers TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(practice_answers))
 );
 `;

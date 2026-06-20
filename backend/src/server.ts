@@ -5,7 +5,6 @@ import multer from "multer";
 import { chapters, getChapterById } from "./chapters";
 import { assertRoomChapter, getRoomDetails } from "./db/roomContext";
 import { RoomsDb } from "./db/roomsDb";
-import { extendWithUserAnswers } from "./db/helpers";
 import { ConflictError, NotFoundError, UserError } from "./errors";
 import { resolveChapter, resolveQuestionIndex } from "./http/chapterContext";
 import { readParam, readQueryParam } from "./http/params";
@@ -184,12 +183,7 @@ app.post("/rooms", (req: Request, res: Response): void => {
     const { chapter } = resolveChapter(readParam(req.body.chapterId));
     const roomId = roomsDb.generateUniqueRoomId();
 
-    roomsDb.addRoom({
-      roomId,
-      chapterId: chapter.id,
-      theory: chapter.theory.map((item) => extendWithUserAnswers(item)),
-      practice: chapter.practice.map((item) => extendWithUserAnswers(item)),
-    });
+    roomsDb.addRoom({ roomId, chapterId: chapter.id });
 
     res.json({ roomId });
   } catch (error: unknown) {

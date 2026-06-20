@@ -1,16 +1,17 @@
 import type { RoomDetails } from "@study-platform/shared";
 import { getChapterById } from "../chapters";
 import { NotFoundError, UserError } from "../errors";
+import { mergePracticeWithAnswers, mergeTheoryWithAnswers } from "./helpers";
 import type { RoomsDb } from "./roomsDb";
-import type { PracticeJson, TheoryJson } from "./typings";
+import type { AnswerFieldsJson } from "./typings";
 
-function parseRoomContent(room: { theory: string; practice: string }): {
-  theory: TheoryJson[];
-  practice: PracticeJson[];
+function parseRoomAnswers(room: { theory_answers: string; practice_answers: string }): {
+  theoryAnswers: AnswerFieldsJson[];
+  practiceAnswers: AnswerFieldsJson[];
 } {
   return {
-    theory: JSON.parse(room.theory) as TheoryJson[],
-    practice: JSON.parse(room.practice) as PracticeJson[],
+    theoryAnswers: JSON.parse(room.theory_answers) as AnswerFieldsJson[],
+    practiceAnswers: JSON.parse(room.practice_answers) as AnswerFieldsJson[],
   };
 }
 
@@ -29,14 +30,14 @@ export function getRoomDetails(roomId: string | null, roomsDb: RoomsDb): RoomDet
     throw new NotFoundError("Chapter not found for room.");
   }
 
-  const { theory, practice } = parseRoomContent(room);
+  const { theoryAnswers, practiceAnswers } = parseRoomAnswers(room);
   return {
     roomId,
     chapterId: chapter.id,
     number: chapter.number,
     name: chapter.name,
-    theory,
-    practice,
+    theory: mergeTheoryWithAnswers(chapter.theory, theoryAnswers),
+    practice: mergePracticeWithAnswers(chapter.practice, practiceAnswers),
   };
 }
 

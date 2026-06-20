@@ -1,14 +1,35 @@
-import type { PracticeItem, TheoryItem } from "@study-platform/shared";
-import type { PracticeJson, TheoryJson } from "./typings";
+import type { PracticeItem, RoomPracticeItem, RoomTheoryItem, TheoryItem } from "@study-platform/shared";
+import type { AnswerFieldsJson } from "./typings";
 
-export function extendWithUserAnswers(block: TheoryItem): TheoryJson;
-export function extendWithUserAnswers(block: PracticeItem): PracticeJson;
-export function extendWithUserAnswers(block: TheoryItem | PracticeItem): TheoryJson | PracticeJson {
+export function answerFieldsForIndex(
+  answers: AnswerFieldsJson[],
+  index: number,
+): Required<Pick<AnswerFieldsJson, "revision">> & AnswerFieldsJson {
+  const stored = answers[index];
   return {
-    ...block,
-    user_answer: undefined,
-    rating: undefined,
-    comment: undefined,
-    revision: 0,
+    user_answer: stored?.user_answer,
+    rating: stored?.rating,
+    comment: stored?.comment,
+    revision: stored?.revision ?? 0,
   };
+}
+
+export function mergeTheoryWithAnswers(
+  theory: TheoryItem[],
+  answers: AnswerFieldsJson[],
+): RoomTheoryItem[] {
+  return theory.map((item, index) => ({
+    ...item,
+    ...answerFieldsForIndex(answers, index),
+  }));
+}
+
+export function mergePracticeWithAnswers(
+  practice: PracticeItem[],
+  answers: AnswerFieldsJson[],
+): RoomPracticeItem[] {
+  return practice.map((item, index) => ({
+    ...item,
+    ...answerFieldsForIndex(answers, index),
+  }));
 }
