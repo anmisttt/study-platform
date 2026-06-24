@@ -1,18 +1,11 @@
-import type { PracticeItem, PracticeSolution, TheoryItem } from "./domain";
+import type { PracticeItem, TheoryItem } from "./domain";
 
 export const MAX_ANSWER_LENGTH = 5000;
 export const MAX_RECORDING_SECONDS = 300;
 
-export type TheoryCheckResult = {
+export type CheckResult = {
   rating: number;
   comment: string;
-  answer: string;
-};
-
-export type PracticeCheckResult = {
-  rating: number;
-  comment: string;
-  solutions: PracticeSolution[];
 };
 
 export type RoomAnswerFields = {

@@ -1,6 +1,6 @@
-import type { Chapter, PracticeCheckResult, TheoryCheckResult } from "@study-platform/shared";
+import type { Chapter, CheckResult } from "@study-platform/shared";
 
-export type { Chapter, ChapterMeta, PracticeCheckResult, TheoryCheckResult } from "@study-platform/shared";
+export type { Chapter, ChapterMeta, CheckResult } from "@study-platform/shared";
 
 export type TheoryQuestionItem = {
   id: string;
@@ -21,8 +21,6 @@ export type PracticeQuestionItem = {
 };
 
 export type QuestionItem = TheoryQuestionItem | PracticeQuestionItem;
-
-export type CheckResult = TheoryCheckResult | PracticeCheckResult;
 
 export type ResponseEntry = {
   answer: string;

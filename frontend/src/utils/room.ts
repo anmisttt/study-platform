@@ -29,7 +29,6 @@ export function roomDetailsToChapterSession(
         result: {
           rating: item.rating,
           comment: item.comment ?? "",
-          answer: item.answer,
         },
       };
     }
@@ -44,7 +43,6 @@ export function roomDetailsToChapterSession(
         result: {
           rating: item.rating,
           comment: item.comment ?? "",
-          solutions: item.solutions,
         },
       };
     }

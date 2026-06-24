@@ -1,4 +1,4 @@
-import { MAX_ANSWER_LENGTH } from "@study-platform/shared";
+import { MAX_ANSWER_LENGTH, type PracticeSolution } from "@study-platform/shared";
 import { useEffect, useState } from "react";
 import Answer from "./answer";
 import FormattedText from "./formattedText";
@@ -33,12 +33,13 @@ function getCheckButtonTooltip(
 type QuestionCardProps = {
   currentItem: QuestionItem;
   response: ResponseEntry | null;
+  isEditingLocally: boolean;
   answerInput: string;
   isChecking: boolean;
   isListening: boolean;
   isTranscribing: boolean;
   recordingSecondsLeft: number;
-  referenceAnswer: string;
+  solutions: string | PracticeSolution[];
   onAnswerInputChange: (value: string) => void;
   onVoiceInput: () => void;
   onCheck: () => Promise<void>;
@@ -48,12 +49,13 @@ type QuestionCardProps = {
 function QuestionCard({
   currentItem,
   response,
+  isEditingLocally,
   answerInput,
   isChecking,
   isListening,
   isTranscribing,
   recordingSecondsLeft,
-  referenceAnswer,
+  solutions,
   onAnswerInputChange,
   onVoiceInput,
   onCheck,
@@ -68,6 +70,7 @@ function QuestionCard({
   const isOverAnswerLimit = answerInput.length > MAX_ANSWER_LENGTH;
   const isCheckDisabled = isChecking || !answerInput.trim() || isOverAnswerLimit;
   const checkButtonTooltip = getCheckButtonTooltip(isChecking, answerInput, isOverAnswerLimit);
+  const showAnswer = isAnswerVisible || (!isEditingLocally && response?.result);
 
   return (
     <>
@@ -80,7 +83,7 @@ function QuestionCard({
         )}
       </div>
 
-      {!response?.result && (
+      {(isEditingLocally || !response?.result) && (
         <div className="answer-box">
           <div className="answer-input-wrap">
             <textarea
@@ -97,13 +100,18 @@ function QuestionCard({
             </p>
           </div>
           <div className="answer-actions">
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setIsAnswerVisible((prev) => !prev)}
-            >
-              {isAnswerVisible ? "Hide answer" : "Show answer"}
-            </button>
+            <span className="check-button-wrap" title={checkButtonTooltip}>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  void onCheck();
+                }}
+                disabled={isCheckDisabled}
+              >
+                {isChecking ? "Checking..." : "Check"}
+              </button>
+            </span>
             <button
               type="button"
               className={`voice-button ${isListening ? "recording" : ""}`}
@@ -119,25 +127,14 @@ function QuestionCard({
                 />
               </svg>
             </button>
-            <span className="check-button-wrap" title={checkButtonTooltip}>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => {
-                  void onCheck();
-                }}
-                disabled={isCheckDisabled}
-              >
-                {isChecking ? "Checking..." : "Check"}
-              </button>
-            </span>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setIsAnswerVisible((prev) => !prev)}
+            >
+              {`${isAnswerVisible ? "Hide" : "Show"} ${response?.result ? "previous" : "reference"} answer`}
+            </button>
           </div>
-          {isAnswerVisible && (
-            <div className="answer-preview">
-              <p className="answer-preview-title">Correct answer</p>
-              <FormattedText text={referenceAnswer} className="answer-preview-text" />
-            </div>
-          )}
           {isListening && (
             <p className="status-inline" role="status" aria-live="polite">
               Recording... {formatRecordingCountdown(recordingSecondsLeft)} remaining — recording stops automatically
@@ -152,7 +149,18 @@ function QuestionCard({
         </div>
       )}
 
-      {response?.result && <Answer currentItem={currentItem} response={response} onTryAgain={onTryAgain} />}
+      {showAnswer && (
+        <Answer
+          currentItem={currentItem}
+          isEditingLocally={isEditingLocally}
+          response={response}
+          solutions={solutions}
+          onTryAgain={() => {
+            setIsAnswerVisible(false);
+            onTryAgain();
+          }}
+        />
+      )}
     </>
   );
 }

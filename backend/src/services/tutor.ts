@@ -1,9 +1,4 @@
-import type {
-  PracticeCheckResult,
-  PracticeItem,
-  TheoryCheckResult,
-  TheoryItem,
-} from "@study-platform/shared";
+import type { CheckResult } from "@study-platform/shared";
 import { OpenAI } from "openai";
 
 export class Tutor {
@@ -55,34 +50,8 @@ export class Tutor {
     return JSON.parse(response.choices[0].message.content) as {rating: number, comment: string};
   }
 
-  public async evaluateTheoryAnswer({
-    theoryItem,
-    prompt,
-  }: {
-    theoryItem: TheoryItem;
-    prompt: string;
-  }): Promise<TheoryCheckResult> {
-    const { rating, comment } = await this.evaluateAnswerWithLLM(prompt);
-    return {
-      rating,
-      comment,
-      answer: theoryItem.answer,
-    };
-  }
-
-  public async evaluatePracticeAnswer({
-    practiceItem,
-    prompt,
-  }: {
-    practiceItem: PracticeItem;
-    prompt: string;
-  }): Promise<PracticeCheckResult> {
-    const { rating, comment } = await this.evaluateAnswerWithLLM(prompt);
-    return {
-      rating,
-      comment,
-      solutions: practiceItem.solutions,
-    };
+  public async evaluateAnswer(prompt: string): Promise<CheckResult> {
+    return this.evaluateAnswerWithLLM(prompt);
   }
 
 }

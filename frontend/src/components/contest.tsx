@@ -5,13 +5,13 @@ import type { ChapterMeta, RoomDetails } from "@study-platform/shared";
 import {
   createRoomApiPath,
   MAX_RECORDING_SECONDS,
-  PracticeQuality,
+  type PracticeSolution,
   roomApiPath,
   roomQuestionCheckApiPath,
 } from "@study-platform/shared";
-import type { ChapterSession, CheckResult, PracticeCheckResult, QuestionItem, ResponseEntry, TheoryCheckResult } from "./contest-types";
+import type { ChapterSession, CheckResult, QuestionItem, ResponseEntry } from "./contest-types";
 import { flattenItems } from "../utils/questions";
-import { isEditingQuestion, resolveAnswerInput } from "../utils/draftStorage";
+import { resolveAnswerInput } from "../utils/draftStorage";
 import { mergeRoomDetailsIntoSession, roomDetailsToChapterSession } from "../utils/room";
 import { useCollaborativeDraft } from "../hooks/useCollaborativeDraft";
 
@@ -54,9 +54,12 @@ function getDotRatingClass(response: ResponseEntry | undefined): string {
   return `rating-${normalizedRating}`;
 }
 
-function getReferenceAnswer(chapterSession: ChapterSession, item: QuestionItem | null): string {
+function getQuestionSolutions(
+  chapterSession: ChapterSession,
+  item: QuestionItem | null,
+): string | PracticeSolution[] {
   if (!chapterSession.details || !item) {
-    return "Answer is unavailable for this question.";
+    return item?.type === "practice" ? [] : "Answer is unavailable for this question.";
   }
 
   const chapter = chapterSession.details;
@@ -71,11 +74,7 @@ function getReferenceAnswer(chapterSession: ChapterSession, item: QuestionItem |
   }
 
   const practiceItem = chapter.practice[item.questionId];
-  if (!practiceItem?.solutions?.length) {
-    return "Answer is unavailable for this question.";
-  }
-
-  return practiceItem.solutions.sort((a, b) => PracticeQuality[b.quality] - PracticeQuality[a.quality])[0].solution;
+  return practiceItem?.solutions ?? [];
 }
 
 function fileExtensionFromMimeType(mimeType: string): string {
@@ -123,6 +122,8 @@ function Contest({
   const [roomInput, setRoomInput] = useState<string>(roomId ?? "");
   const [isRoomActionPending, setIsRoomActionPending] = useState<boolean>(false);
   const [startError, setStartError] = useState<string>("");
+  const [isEditingLocally, setIsEditingLocally] = useState<boolean>(true);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordingStartedAtRef = useRef<number | null>(null);
@@ -136,7 +137,7 @@ function Contest({
   const currentIndex = items.length === 0 ? 0 : findQuestionIndex(items, questionRef);
   const currentItem = isPracticeMode ? (items[currentIndex] ?? null) : null;
   const currentResponse = currentItem ? chapterSession.responses[currentItem.id] : null;
-  const referenceAnswer = getReferenceAnswer(chapterSession, currentItem);
+  const questionSolutions = getQuestionSolutions(chapterSession, currentItem);
   const collaborativeDraft = useCollaborativeDraft({
     apiBase,
     roomId,
@@ -173,6 +174,25 @@ function Contest({
       setStartError(initialError);
     }
   }, [initialError]);
+
+  useEffect(() => {
+    setIsEditingLocally(true);
+  }, [currentItem?.id]);
+
+  useEffect(() => {
+    if (!collaborativeDraft.isDraftHydrated) {
+      return;
+    }
+
+    if (currentResponse?.result && collaborativeDraft.answerInput.trim().length === 0) {
+      setIsEditingLocally(false);
+    }
+  }, [
+    currentItem?.id,
+    currentResponse?.result,
+    collaborativeDraft.isDraftHydrated,
+    collaborativeDraft.answerInput,
+  ]);
 
   async function fetchRoom(activeRoomId: string): Promise<RoomDetails> {
     if (!chapterMeta) {
@@ -500,18 +520,10 @@ function Contest({
       }
 
       const nextRevision = payload.revision;
-      const checkResult: CheckResult =
-        currentItem.type === "theory"
-          ? {
-              rating: payload.rating,
-              comment: payload.comment,
-              answer: (payload as TheoryCheckResult).answer,
-            }
-          : {
-              rating: payload.rating,
-              comment: payload.comment,
-              solutions: (payload as PracticeCheckResult).solutions,
-            };
+      const checkResult: CheckResult = {
+        rating: payload.rating,
+        comment: payload.comment,
+      };
 
       collaborativeDraft.clearCollaborativeDraft();
       onSessionChange((session) => {
@@ -546,14 +558,7 @@ function Contest({
       return;
     }
 
-    collaborativeDraft.clearCollaborativeDraft();
-    onSessionChange((session) => ({
-      ...session,
-      drafts: {
-        ...session.drafts,
-        [currentItem.id]: "",
-      },
-    }));
+    setIsEditingLocally(true);
     stopVoiceRecording();
   }
 
@@ -673,12 +678,6 @@ function Contest({
     return null;
   }
 
-  const isEditingLocally =
-    roomId && currentItem
-      ? isEditingQuestion(roomId, currentItem.id, chapterSession) || collaborativeDraft.answerInput.trim().length > 0
-      : false;
-  const showCheckedAnswer = Boolean(currentResponse?.result) && !isEditingLocally;
-
   return (
     <div className="practice-layout">
       <div className="practice-header">
@@ -712,13 +711,14 @@ function Contest({
 
         <QuestionCard
           currentItem={currentItem}
-          response={showCheckedAnswer ? currentResponse : null}
+          response={currentResponse}
+          isEditingLocally={isEditingLocally}
           answerInput={answerInput}
           isChecking={isChecking}
           isListening={isListening}
           isTranscribing={isTranscribing}
           recordingSecondsLeft={recordingSecondsLeft}
-          referenceAnswer={referenceAnswer}
+          solutions={questionSolutions}
           onAnswerInputChange={handleAnswerInputChange}
           onVoiceInput={() => {
             void handleVoiceInput();

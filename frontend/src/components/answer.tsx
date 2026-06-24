@@ -1,36 +1,44 @@
-import type { PracticeCheckResult, TheoryCheckResult } from "@study-platform/shared";
+import type { PracticeSolution } from "@study-platform/shared";
 import FormattedText from "./formattedText";
 import type { QuestionItem, ResponseEntry } from "./contest-types";
 
 type AnswerProps = {
   currentItem: QuestionItem;
-  response: ResponseEntry;
+  isEditingLocally: boolean;
+  response: ResponseEntry | null;
+  solutions: string | PracticeSolution[];
   onTryAgain: () => void;
 };
 
-function Answer({ currentItem, response, onTryAgain }: AnswerProps) {
+function Answer({ currentItem, isEditingLocally, response, solutions, onTryAgain }: AnswerProps) {
+  const hasResult = Boolean(response?.result);
+
   return (
     <div className="result-card">
-      <p>
-        <strong>Rating:</strong> {response.result.rating}/5
-      </p>
-      <p>
-        <strong>Your answer:</strong> {response.answer}
-      </p>
-      <p>
-        <strong>Comment:</strong> {response.result.comment}
-      </p>
+      {hasResult && response && (
+        <>
+          <p>
+            <strong>Rating:</strong> {response.result.rating}/5
+          </p>
+          <p>
+            <strong>Your answer:</strong> {response.answer}
+          </p>
+          <p>
+            <strong>Comment:</strong> {response.result.comment}
+          </p>
+        </>
+      )}
 
       {currentItem.type === "theory" ? (
         <div>
           <strong>Valid answer:</strong>
-          <FormattedText text={(response.result as TheoryCheckResult).answer} />
+          <FormattedText text={typeof solutions === "string" ? solutions : ""} />
         </div>
       ) : (
         <div>
           <strong>Reference solutions:</strong>
           <ul className="solution-list">
-            {(response.result as PracticeCheckResult).solutions.map((entry) => (
+            {(Array.isArray(solutions) ? solutions : []).map((entry) => (
               <li key={entry.quality}>
                 <strong>{entry.quality}:</strong>
                 <FormattedText text={entry.solution} />
@@ -40,9 +48,11 @@ function Answer({ currentItem, response, onTryAgain }: AnswerProps) {
         </div>
       )}
 
-      <button type="button" className="secondary-button" onClick={onTryAgain}>
-        Try again
-      </button>
+      {!isEditingLocally && (
+        <button type="button" className="secondary-button" onClick={onTryAgain}>
+          Try again
+        </button>
+      )}
     </div>
   );
 }

@@ -16,6 +16,23 @@ import { updateYText } from "../utils/yTextBinding";
 const DRAFT_SEND_DEBOUNCE_MS = 1000;
 const WS_RECONNECT_DELAY_MS = 1000;
 
+function closeDraftWebSocket(ws: WebSocket): void {
+  ws.onmessage = null;
+  ws.onerror = null;
+  ws.onclose = null;
+
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.close();
+    return;
+  }
+
+  if (ws.readyState === WebSocket.CONNECTING) {
+    ws.onopen = () => {
+      ws.close();
+    };
+  }
+}
+
 function encodeUpdateBase64(update: Uint8Array): string {
   let binary = "";
   for (let index = 0; index < update.length; index += 1) {
@@ -61,12 +78,6 @@ function parseServerMessage(raw: string): DraftServerMessage | null {
   }
 }
 
-function readDraftText(update: Uint8Array): string {
-  const doc = new Y.Doc();
-  Y.applyUpdate(doc, update);
-  return doc.getText(DRAFT_YTEXT_NAME).toString();
-}
-
 type UseCollaborativeDraftOptions = {
   apiBase: string;
   roomId: string | null;
@@ -76,6 +87,7 @@ type UseCollaborativeDraftOptions = {
 
 type UseCollaborativeDraftResult = {
   answerInput: string;
+  isDraftHydrated: boolean;
   onAnswerInputChange: (value: string) => void;
   appendDraftText: (text: string, existingFallback?: string) => void;
   clearCollaborativeDraft: () => void;
@@ -88,6 +100,7 @@ export function useCollaborativeDraft({
   enabled,
 }: UseCollaborativeDraftOptions): UseCollaborativeDraftResult {
   const [answerInput, setAnswerInput] = useState("");
+  const [isDraftHydrated, setIsDraftHydrated] = useState(false);
   const docRef = useRef<Y.Doc | null>(null);
   const ytextRef = useRef<Y.Text | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -188,6 +201,25 @@ export function useCollaborativeDraft({
     setAnswerInput(ytext.toString());
   }, []);
 
+  const applyLocalDraftUpdate = useCallback(
+    (update: Uint8Array) => {
+      const doc = docRef.current;
+      if (!doc || update.length === 0) {
+        return;
+      }
+
+      suppressPersistRef.current = true;
+      applyingRemoteUpdateRef.current = true;
+      Y.applyUpdate(doc, update);
+      applyingRemoteUpdateRef.current = false;
+      suppressPersistRef.current = false;
+      lastSentStateVectorRef.current = Y.encodeStateVector(doc);
+      syncAnswerFromYText();
+      setIsDraftHydrated(true);
+    },
+    [syncAnswerFromYText],
+  );
+
   const resetQuestionDoc = useCallback(() => {
     detachDocPersistence();
     const doc = new Y.Doc();
@@ -196,6 +228,7 @@ export function useCollaborativeDraft({
     ytextRef.current = ytext;
     lastSentStateVectorRef.current = Y.encodeStateVector(doc);
     setAnswerInput("");
+    setIsDraftHydrated(false);
   }, [detachDocPersistence]);
 
   const applySnapshot = useCallback(
@@ -247,6 +280,16 @@ export function useCollaborativeDraft({
         applyingRemoteUpdateRef.current = false;
       }
 
+      const currentDoc = docRef.current;
+      if (currentDoc) {
+        const currentUpdate = Y.encodeStateAsUpdate(currentDoc);
+        if (currentUpdate.length > 0) {
+          applyingRemoteUpdateRef.current = true;
+          Y.applyUpdate(mergedDoc, currentUpdate);
+          applyingRemoteUpdateRef.current = false;
+        }
+      }
+
       docRef.current = mergedDoc;
       ytextRef.current = mergedDoc.getText(DRAFT_YTEXT_NAME);
       lastSentStateVectorRef.current = serverStateVector;
@@ -255,8 +298,12 @@ export function useCollaborativeDraft({
 
       bindDocPersistence(mergedDoc, activeRoomId, activeQuestionId);
       syncAnswerFromYText();
+      setIsDraftHydrated(true);
 
-      await saveDraftUpdate(activeRoomId, activeQuestionId, Y.encodeStateAsUpdate(mergedDoc));
+      const mergedUpdate = Y.encodeStateAsUpdate(mergedDoc);
+      if (mergedUpdate.length > 0 || serverUpdate.length > 0) {
+        await saveDraftUpdate(activeRoomId, activeQuestionId, mergedUpdate);
+      }
 
       if (
         snapshotGenerationRef.current !== generation ||
@@ -292,7 +339,7 @@ export function useCollaborativeDraft({
             return;
           }
 
-          setAnswerInput(readDraftText(update));
+          applyLocalDraftUpdate(update);
         });
       }
 
@@ -310,7 +357,7 @@ export function useCollaborativeDraft({
         }),
       );
     },
-    [clearDebounceTimer, flushPendingUpdate, resetQuestionDoc],
+    [applyLocalDraftUpdate, clearDebounceTimer, flushPendingUpdate, resetQuestionDoc],
   );
 
   const handleServerMessage = useCallback(
@@ -349,8 +396,10 @@ export function useCollaborativeDraft({
     if (!enabled || !roomId) {
       clearDebounceTimer();
       detachDocPersistence();
-      wsRef.current?.close();
-      wsRef.current = null;
+      if (wsRef.current) {
+        closeDraftWebSocket(wsRef.current);
+        wsRef.current = null;
+      }
       activeQuestionRef.current = null;
       docRef.current = null;
       ytextRef.current = null;
@@ -358,6 +407,7 @@ export function useCollaborativeDraft({
       snapshotReceivedRef.current = false;
       snapshotGenerationRef.current += 1;
       setAnswerInput("");
+      setIsDraftHydrated(false);
       return;
     }
 
@@ -375,6 +425,11 @@ export function useCollaborativeDraft({
       wsRef.current = ws;
 
       ws.onopen = () => {
+        if (disposed) {
+          ws.close();
+          return;
+        }
+
         if (questionIdRef.current) {
           subscribeToQuestion(roomId, questionIdRef.current);
         }
@@ -422,7 +477,9 @@ export function useCollaborativeDraft({
       }
       clearDebounceTimer();
       flushPendingUpdate();
-      activeWs?.close();
+      if (activeWs) {
+        closeDraftWebSocket(activeWs);
+      }
       if (wsRef.current === activeWs) {
         wsRef.current = null;
       }
@@ -515,6 +572,7 @@ export function useCollaborativeDraft({
 
   return {
     answerInput,
+    isDraftHydrated,
     onAnswerInputChange,
     appendDraftText,
     clearCollaborativeDraft,

@@ -85,7 +85,7 @@ app.post("/rooms/:roomId/questions/theory/:questionId/check", async (req: Reques
       throw new NotFoundError("Theory question not found.");
     }
 
-    const result = await tutor.evaluateTheoryAnswer({ theoryItem, prompt: userPromptForTheory(answer, theoryItem) });
+    const result = await tutor.evaluateAnswer(userPromptForTheory(answer, theoryItem));
 
     const revision = roomsDb.updateTheoryAnswer({
       roomId: room.roomId,
@@ -123,10 +123,7 @@ app.post("/rooms/:roomId/questions/practice/:questionId/check", async (req: Requ
       throw new NotFoundError("Practice task not found.");
     }
 
-    const result = await tutor.evaluatePracticeAnswer({
-      practiceItem,
-      prompt: userPromptForPractice(answer, practiceItem),
-    });
+    const result = await tutor.evaluateAnswer(userPromptForPractice(answer, practiceItem));
 
     const revision = roomsDb.updatePracticeAnswer({
       roomId: room.roomId,

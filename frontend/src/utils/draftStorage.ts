@@ -7,8 +7,6 @@ type DraftRecord = {
   update: Uint8Array;
 };
 
-const persistedDraftKeys = new Set<string>();
-
 function draftKey(roomId: string, questionId: string): string {
   return `${roomId}:${questionId}`;
 }
@@ -50,10 +48,6 @@ function readRecord(db: IDBDatabase, key: string): Promise<Uint8Array | null> {
   });
 }
 
-export function hasPersistedDraft(roomId: string, questionId: string): boolean {
-  return persistedDraftKeys.has(draftKey(roomId, questionId));
-}
-
 export async function loadDraftUpdate(roomId: string, questionId: string): Promise<Uint8Array | null> {
   const key = draftKey(roomId, questionId);
   const db = await openDb();
@@ -61,7 +55,6 @@ export async function loadDraftUpdate(roomId: string, questionId: string): Promi
   try {
     const storedUpdate = await readRecord(db, key);
     if (storedUpdate && storedUpdate.length > 0) {
-      persistedDraftKeys.add(key);
       return storedUpdate;
     }
   } finally {
@@ -81,10 +74,8 @@ export async function saveDraftUpdate(roomId: string, questionId: string, update
 
     if (update.length === 0) {
       store.delete(key);
-      persistedDraftKeys.delete(key);
     } else {
       store.put({ key, update } satisfies DraftRecord);
-      persistedDraftKeys.add(key);
     }
 
     await waitForTransaction(transaction);
@@ -114,7 +105,6 @@ export async function clearRoomDraftUpdates(roomId: string): Promise<void> {
 
       if (typeof cursor.key === "string" && cursor.key.startsWith(prefix)) {
         cursor.delete();
-        persistedDraftKeys.delete(cursor.key);
       }
 
       cursor.continue();
@@ -124,18 +114,6 @@ export async function clearRoomDraftUpdates(roomId: string): Promise<void> {
   } finally {
     db.close();
   }
-}
-
-export function isEditingQuestion(
-  roomId: string | null,
-  questionId: string,
-  session: { drafts: Record<string, string> },
-): boolean {
-  if (roomId && hasPersistedDraft(roomId, questionId)) {
-    return true;
-  }
-
-  return questionId in session.drafts;
 }
 
 export function resolveAnswerInput(
