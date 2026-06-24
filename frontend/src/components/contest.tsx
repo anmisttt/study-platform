@@ -242,8 +242,8 @@ function Contest({
       } catch {
         mediaRecorderRef.current = null;
         stopStreamTracks();
+        setIsListening(false);
       }
-      setIsListening(false);
       return;
     }
 
@@ -430,15 +430,25 @@ function Contest({
       };
 
       recorder.onerror = () => {
-        mediaRecorderRef.current = null;
-        stopStreamTracks();
+        if (mediaRecorderRef.current === recorder) {
+          mediaRecorderRef.current = null;
+        }
+        stream.getTracks().forEach((track) => track.stop());
+        if (mediaStreamRef.current === stream) {
+          mediaStreamRef.current = null;
+        }
         setIsListening(false);
         window.alert("Failed to record audio.");
       };
 
       recorder.onstop = () => {
-        mediaRecorderRef.current = null;
-        stopStreamTracks();
+        if (mediaRecorderRef.current === recorder) {
+          mediaRecorderRef.current = null;
+        }
+        stream.getTracks().forEach((track) => track.stop());
+        if (mediaStreamRef.current === stream) {
+          mediaStreamRef.current = null;
+        }
         setIsListening(false);
         const audioBlob = new Blob(audioChunks, {
           type: recorder.mimeType || "audio/webm",
