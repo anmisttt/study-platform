@@ -1,5 +1,5 @@
 import { MAX_ANSWER_LENGTH, type PracticeSolution } from "@study-platform/shared";
-import { useEffect, useState } from "react";
+import { type RefObject, useEffect, useState } from "react";
 import Answer from "./answer";
 import FormattedText from "./formattedText";
 import type { QuestionItem, ResponseEntry } from "./contest-types";
@@ -40,6 +40,7 @@ type QuestionCardProps = {
   isTranscribing: boolean;
   recordingSecondsLeft: number;
   solutions: string | PracticeSolution[];
+  answerTextareaRef?: RefObject<HTMLTextAreaElement | null>;
   onAnswerInputChange: (value: string) => void;
   onVoiceInput: () => void;
   onCheck: () => Promise<void>;
@@ -56,6 +57,7 @@ function QuestionCard({
   isTranscribing,
   recordingSecondsLeft,
   solutions,
+  answerTextareaRef,
   onAnswerInputChange,
   onVoiceInput,
   onCheck,
@@ -87,6 +89,7 @@ function QuestionCard({
         <div className="answer-box">
           <div className="answer-input-wrap">
             <textarea
+              ref={answerTextareaRef}
               value={answerInput}
               onChange={(event) => onAnswerInputChange(event.target.value)}
               placeholder="Type your answer in any language..."

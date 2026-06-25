@@ -684,7 +684,7 @@ function Contest({
         <p className="practice-chapter-number">Chapter {chapterMeta.number}</p>
         <h1 className="practice-chapter-title">{chapterMeta.name}</h1>
         <button type="button" className="secondary-button reset-progress-button" onClick={handleResetProgress}>
-          Reset progress
+          Start again
         </button>
       </div>
 
@@ -719,6 +719,7 @@ function Contest({
           isTranscribing={isTranscribing}
           recordingSecondsLeft={recordingSecondsLeft}
           solutions={questionSolutions}
+          answerTextareaRef={roomId ? collaborativeDraft.textareaRef : undefined}
           onAnswerInputChange={handleAnswerInputChange}
           onVoiceInput={() => {
             void handleVoiceInput();

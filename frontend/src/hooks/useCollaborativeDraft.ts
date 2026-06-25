@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import * as Y from "yjs";
 import {
   DRAFT_YTEXT_NAME,
@@ -88,6 +88,7 @@ type UseCollaborativeDraftOptions = {
 type UseCollaborativeDraftResult = {
   answerInput: string;
   isDraftHydrated: boolean;
+  textareaRef: RefObject<HTMLTextAreaElement | null>;
   onAnswerInputChange: (value: string) => void;
   appendDraftText: (text: string, existingFallback?: string) => void;
   clearCollaborativeDraft: () => void;
@@ -103,6 +104,11 @@ export function useCollaborativeDraft({
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
   const docRef = useRef<Y.Doc | null>(null);
   const ytextRef = useRef<Y.Text | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const pendingCursorRestoreRef = useRef<{
+    start: Y.RelativePosition;
+    end: Y.RelativePosition;
+  } | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const activeQuestionRef = useRef<string | null>(null);
   const lastSentStateVectorRef = useRef<Uint8Array | null>(null);
@@ -199,6 +205,30 @@ export function useCollaborativeDraft({
     }
 
     setAnswerInput(ytext.toString());
+  }, []);
+
+  // Capture the local caret as Yjs relative positions before a remote update is
+  // applied, so it can be restored afterwards instead of jumping to the end of
+  // the textarea when React replaces the controlled value.
+  const captureCursorBeforeRemoteUpdate = useCallback(() => {
+    const textarea = textareaRef.current;
+    const ytext = ytextRef.current;
+    if (!textarea || !ytext) {
+      return;
+    }
+
+    if (typeof document !== "undefined" && document.activeElement !== textarea) {
+      pendingCursorRestoreRef.current = null;
+      return;
+    }
+
+    const start = Math.min(textarea.selectionStart, ytext.length);
+    const end = Math.min(textarea.selectionEnd, ytext.length);
+
+    pendingCursorRestoreRef.current = {
+      start: Y.createRelativePositionFromTypeIndex(ytext, start, -1),
+      end: Y.createRelativePositionFromTypeIndex(ytext, end, -1),
+    };
   }, []);
 
   const applyLocalDraftUpdate = useCallback(
@@ -380,16 +410,18 @@ export function useCollaborativeDraft({
       }
 
       if (message.type === "snapshot") {
+        captureCursorBeforeRemoteUpdate();
         void applySnapshot(message);
         return;
       }
 
+      captureCursorBeforeRemoteUpdate();
       applyingRemoteUpdateRef.current = true;
       Y.applyUpdate(doc, decodeUpdateBase64(message.update));
       applyingRemoteUpdateRef.current = false;
       syncAnswerFromYText();
     },
-    [applySnapshot, syncAnswerFromYText],
+    [applySnapshot, captureCursorBeforeRemoteUpdate, syncAnswerFromYText],
   );
 
   useEffect(() => {
@@ -504,6 +536,35 @@ export function useCollaborativeDraft({
     subscribeToQuestion(roomId, questionId);
   }, [enabled, questionId, roomId, subscribeToQuestion]);
 
+  // Restore the caret after a remote update re-renders the textarea. The
+  // relative positions resolve to the correct absolute offsets even if the
+  // remote change inserted or deleted text before the caret.
+  useLayoutEffect(() => {
+    const pending = pendingCursorRestoreRef.current;
+    if (!pending) {
+      return;
+    }
+    pendingCursorRestoreRef.current = null;
+
+    const textarea = textareaRef.current;
+    const doc = docRef.current;
+    if (!textarea || !doc) {
+      return;
+    }
+
+    const startAbs = Y.createAbsolutePositionFromRelativePosition(pending.start, doc);
+    const endAbs = Y.createAbsolutePositionFromRelativePosition(pending.end, doc);
+    const length = textarea.value.length;
+    const start = startAbs ? Math.min(startAbs.index, length) : length;
+    const end = endAbs ? Math.min(endAbs.index, length) : length;
+
+    try {
+      textarea.setSelectionRange(start, end);
+    } catch {
+      // The textarea may be detached or of an unsupported type; ignore.
+    }
+  }, [answerInput]);
+
   const onAnswerInputChange = useCallback(
     (value: string) => {
       const ytext = ytextRef.current;
@@ -573,6 +634,7 @@ export function useCollaborativeDraft({
   return {
     answerInput,
     isDraftHydrated,
+    textareaRef,
     onAnswerInputChange,
     appendDraftText,
     clearCollaborativeDraft,
