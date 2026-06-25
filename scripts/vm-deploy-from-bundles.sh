@@ -69,6 +69,7 @@ write_nginx_config() {
     sudo tee "${nginx_conf}" >/dev/null <<EOF
 server {
   listen 80;
+  listen [::]:80;
   server_name ${SERVER_NAME};
 
   location /.well-known/acme-challenge/ {
@@ -82,6 +83,7 @@ server {
 
 server {
   listen 443 ssl;
+  listen [::]:443 ssl;
   server_name ${SERVER_NAME};
 
   client_max_body_size 30M;
@@ -121,6 +123,7 @@ EOF
     sudo tee "${nginx_conf}" >/dev/null <<EOF
 server {
   listen 80;
+  listen [::]:80;
   server_name ${SERVER_NAME};
 
   client_max_body_size 30M;
