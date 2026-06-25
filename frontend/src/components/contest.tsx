@@ -683,6 +683,12 @@ function Contest({
       <div className="practice-header">
         <p className="practice-chapter-number">Chapter {chapterMeta.number}</p>
         <h1 className="practice-chapter-title">{chapterMeta.name}</h1>
+        {roomId && (
+          <div className="room-id-inline">
+            <span>Room ID:</span>
+            <code>{roomId}</code>
+          </div>
+        )}
         <button type="button" className="secondary-button reset-progress-button" onClick={handleResetProgress}>
           Start again
         </button>
@@ -731,19 +737,49 @@ function Contest({
         <div className="navigation">
           <button
             type="button"
-            className="secondary-button"
+            className="nav-arrow-button"
             onClick={() => openQuestion(currentIndex - 1)}
             disabled={currentIndex === 0}
+            aria-label="Previous question"
+            title="Previous"
           >
-            Previous
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
           </button>
           <button
             type="button"
-            className="secondary-button"
+            className="nav-arrow-button"
             onClick={() => openQuestion(currentIndex + 1)}
             disabled={currentIndex === items.length - 1}
+            aria-label="Next question"
+            title="Next"
           >
-            Next
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="5" y1="12" x2="19" y2="12" />
+              <polyline points="12 5 19 12 12 19" />
+            </svg>
           </button>
         </div>
 

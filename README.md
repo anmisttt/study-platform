@@ -79,7 +79,7 @@ Responses are mocked to simulate LLM grading and include `rating`, `comment`, an
 
 ```bash
 ./scripts/build-bundles.sh 
-./scripts/upload-bundles.sh ubuntu-s-1vcpu-512mb-10gb-ams3
+./scripts/upload-bundles.sh
 ```
 
 SSH to VM and run:
