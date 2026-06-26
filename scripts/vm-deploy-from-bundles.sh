@@ -193,33 +193,20 @@ restore_app_env() {
 echo "==> Preparing app directories (${APP_DIR})"
 mkdir -p "${APP_DIR}" "${BACKEND_DIR}" "${FRONTEND_DIR}"
 
-ENV_BACKUP=""
-if [[ -f "${APP_ENV}" ]]; then
-  ENV_BACKUP="$(mktemp)"
-  cp "${APP_ENV}" "${ENV_BACKUP}"
-else
-  for legacy_env in "${LEGACY_ENV_PATHS[@]}"; do
-    if [[ -f "${legacy_env}" ]]; then
-      ENV_BACKUP="$(mktemp)"
-      cp "${legacy_env}" "${ENV_BACKUP}"
-      break
-    fi
-  done
-fi
-
 echo "==> Extracting bundles"
+# Clear previous build output so files removed in a newer build don't linger
+# (renamed modules, stale hashed frontend chunks). The bundles never contain a
+# .env and APP_ENV lives outside these dirs, so secrets survive extraction;
+# restore_app_env() (below) handles migrating a legacy .env on first deploy.
+rm -rf "${BACKEND_DIR}/dist" "${FRONTEND_DIR}/dist"
 tar -xzf "${BACKEND_BUNDLE}" -C "${APP_DIR}"
 tar -xzf "${FRONTEND_BUNDLE}" -C "${FRONTEND_DIR}"
-
-if [[ -n "${ENV_BACKUP}" && -f "${ENV_BACKUP}" ]]; then
-  cp "${ENV_BACKUP}" "${APP_ENV}"
-  rm -f "${ENV_BACKUP}"
-fi
 
 echo "==> Installing backend production dependencies"
 cd "${BACKEND_DIR}"
 bash "${DEPLOY_SCRIPT_DIR}/install-native-deps.sh"
-npm install --omit=dev
+# ci (not install) for reproducible, lockfile-exact prod deps; also wipes node_modules first.
+npm ci --omit=dev
 
 if ! restore_app_env; then
   cat > "${APP_ENV}" <<EOF
@@ -233,9 +220,28 @@ fi
 cp "${APP_ENV}" "${BACKEND_ENV}"
 
 echo "==> Restarting backend with PM2"
-set -a
-source "${APP_ENV}"
-set +a
+# Parse KEY=VALUE pairs without executing the file as shell (avoids running
+# arbitrary commands if a value contains shell metacharacters).
+load_env_file() {
+  local env_file="$1" line key value
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="${line%$'\r'}"
+    [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+    [[ "${line}" != *=* ]] && continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
+    [[ -z "${key}" ]] && continue
+    # Strip one layer of matching surrounding quotes.
+    if [[ "${value}" == \"*\" || "${value}" == \'*\' ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+    export "${key}=${value}"
+  done <"${env_file}"
+}
+
+load_env_file "${APP_ENV}"
 
 if [[ -z "${OPENAI_API_KEY:-}" || "${OPENAI_API_KEY}" == "replace_me" ]]; then
   echo "OPENAI_API_KEY is missing or still set to the placeholder in ${APP_ENV}"

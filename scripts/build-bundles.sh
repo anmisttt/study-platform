@@ -13,7 +13,7 @@ mkdir -p "${ARTIFACTS_DIR}"
 
 echo "==> Building shared package (used by backend at runtime and frontend at build time)"
 cd "${SHARED_DIR}"
-npm install
+npm ci
 npm run build
 
 echo "==> Building backend bundle"

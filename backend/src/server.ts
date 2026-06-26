@@ -1,4 +1,4 @@
-import cors from "cors";
+import cors, { type CorsOptions } from "cors";
 import dotenv from "dotenv";
 import express, { Request, Response } from "express";
 import { createServer } from "node:http";
@@ -37,7 +37,30 @@ const upload = multer({
 });
 const roomsDb = new RoomsDb();
 
-app.use(cors());
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://study-platform.me",
+];
+const allowedOrigins = (process.env.CORS_ORIGINS ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const corsAllowlist = allowedOrigins.length > 0 ? allowedOrigins : DEFAULT_ALLOWED_ORIGINS;
+const allowAllOrigins = corsAllowlist.includes("*");
+
+const corsOptions: CorsOptions = {
+  origin(origin, callback) {
+    // Allow non-browser clients (no Origin header) and same-origin requests.
+    if (!origin || allowAllOrigins || corsAllowlist.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error(`Origin not allowed by CORS: ${origin}`));
+  },
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 app.get("/health", (_req: Request, res: Response) => {
