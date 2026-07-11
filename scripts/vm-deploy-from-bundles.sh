@@ -31,6 +31,9 @@ API_PORT="${API_PORT:-3001}"
 SERVER_NAME="${SERVER_NAME:-study-platform.me}"
 ACME_WEBROOT="${ACME_WEBROOT:-/var/www/certbot}"
 BACKEND_PROCESS_NAME="${BACKEND_PROCESS_NAME:-study-backend}"
+NGINX_API_RATE_LIMIT="${NGINX_API_RATE_LIMIT:-30r/s}"
+NGINX_API_BURST="${NGINX_API_BURST:-60}"
+NGINX_WS_CONN_LIMIT="${NGINX_WS_CONN_LIMIT:-5}"
 
 PRIMARY_DOMAIN=""
 if [[ "${SERVER_NAME}" != "_" ]]; then
@@ -67,6 +70,10 @@ write_nginx_config() {
 
   if [[ "${with_ssl}" == "true" ]]; then
     sudo tee "${nginx_conf}" >/dev/null <<EOF
+limit_req_zone \$binary_remote_addr zone=api_per_ip:10m rate=${NGINX_API_RATE_LIMIT};
+limit_conn_zone \$binary_remote_addr zone=ws_per_ip:10m;
+limit_req_status 429;
+
 server {
   listen 80;
   listen [::]:80;
@@ -101,6 +108,7 @@ server {
   }
 
   location /api/drafts/ws {
+    limit_conn ws_per_ip ${NGINX_WS_CONN_LIMIT};
     proxy_pass http://127.0.0.1:${API_PORT}/drafts/ws;
     proxy_http_version 1.1;
     proxy_set_header Upgrade \$http_upgrade;
@@ -121,6 +129,10 @@ server {
 EOF
   else
     sudo tee "${nginx_conf}" >/dev/null <<EOF
+limit_req_zone \$binary_remote_addr zone=api_per_ip:10m rate=${NGINX_API_RATE_LIMIT};
+limit_conn_zone \$binary_remote_addr zone=ws_per_ip:10m;
+limit_req_status 429;
+
 server {
   listen 80;
   listen [::]:80;
@@ -140,6 +152,7 @@ server {
   }
 
   location /api/drafts/ws {
+    limit_conn ws_per_ip ${NGINX_WS_CONN_LIMIT};
     proxy_pass http://127.0.0.1:${API_PORT}/drafts/ws;
     proxy_http_version 1.1;
     proxy_set_header Upgrade \$http_upgrade;
@@ -149,6 +162,7 @@ server {
   }
 
   location /api/ {
+    limit_req zone=api_per_ip burst=${NGINX_API_BURST} nodelay;
     proxy_pass http://127.0.0.1:${API_PORT}/;
     proxy_http_version 1.1;
     proxy_set_header Host \$host;
