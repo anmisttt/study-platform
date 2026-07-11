@@ -659,7 +659,7 @@ function Contest({
             }}
             disabled={isBusy}
           >
-            Generate new room
+            Generate a new room
           </button>
         </div>
       </div>
