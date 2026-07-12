@@ -634,7 +634,7 @@ function Contest({
               className="room-id-input"
               value={roomInput}
               onChange={(event) => setRoomInput(event.target.value)}
-              placeholder="Room ID"
+              placeholder="Room ID..."
               maxLength={6}
               disabled={isBusy}
               spellCheck={false}

@@ -749,6 +749,34 @@
     display: flex;
   }
 
+  .start-card {
+    padding: 20px 14px;
+  }
+
+  .start-card-room-panel {
+    flex-wrap: nowrap;
+    gap: 4px;
+    width: 100%;
+  }
+
+  .start-card-room-panel .start-card-button {
+    padding: 5px 7px;
+    font-size: 12px;
+  }
+
+  .start-card-room-or {
+    font-size: 11px;
+    flex: 0 0 auto;
+  }
+
+  .room-id-input {
+    flex: 0 0 auto;
+    width: 5.5rem;
+    min-width: 5.5rem;
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+
   .chapters-index-page {
     padding-top: 24px;
   }
