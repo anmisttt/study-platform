@@ -4,12 +4,6 @@ import Answer from "./answer";
 import FormattedText from "./formattedText";
 import type { QuestionItem, ResponseEntry } from "./contest-types";
 
-function formatRecordingCountdown(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${minutes}:${secs.toString().padStart(2, "0")}`;
-}
-
 function getCheckButtonTooltip(
   isChecking: boolean,
   answerInput: string,
@@ -38,7 +32,6 @@ type QuestionCardProps = {
   isChecking: boolean;
   isListening: boolean;
   isTranscribing: boolean;
-  recordingSecondsLeft: number;
   solutions: string | PracticeSolution[];
   answerTextareaRef?: RefObject<HTMLTextAreaElement | null>;
   onAnswerInputChange: (value: string) => void;
@@ -55,7 +48,6 @@ function QuestionCard({
   isChecking,
   isListening,
   isTranscribing,
-  recordingSecondsLeft,
   solutions,
   answerTextareaRef,
   onAnswerInputChange,
@@ -73,6 +65,7 @@ function QuestionCard({
   const isCheckDisabled = isChecking || !answerInput.trim() || isOverAnswerLimit;
   const checkButtonTooltip = getCheckButtonTooltip(isChecking, answerInput, isOverAnswerLimit);
   const showAnswer = isAnswerVisible || (!isEditingLocally && response?.result);
+  const showEditor = !isChecking && (isEditingLocally || !response?.result);
 
   return (
     <>
@@ -85,7 +78,13 @@ function QuestionCard({
         )}
       </div>
 
-      {(isEditingLocally || !response?.result) && (
+      {isChecking && (
+        <p className="status-inline checking-status" role="status" aria-live="polite">
+          Checking answer...
+        </p>
+      )}
+
+      {showEditor && (
         <div className="answer-box">
           <div className="answer-input-wrap">
             <textarea
@@ -112,16 +111,22 @@ function QuestionCard({
                 }}
                 disabled={isCheckDisabled}
               >
-                {isChecking ? "Checking..." : "Check"}
+                Check
               </button>
             </span>
             <button
               type="button"
               className={`voice-button ${isListening ? "recording" : ""}`}
               onClick={onVoiceInput}
-              disabled={isTranscribing}
+              disabled={isTranscribing && !isListening}
               aria-label={isListening ? "Stop microphone" : "Use microphone"}
-              title={isTranscribing ? "Transcribing..." : isListening ? "Stop microphone" : "Use microphone"}
+              title={
+                isListening
+                  ? "Stop microphone"
+                  : isTranscribing
+                    ? "Transcribing..."
+                    : "Use microphone"
+              }
             >
               <svg viewBox="0 0 24 24" className="mic-icon" aria-hidden="true">
                 <path
@@ -138,17 +143,6 @@ function QuestionCard({
               {`${isAnswerVisible ? "Hide" : "Show"} ${response?.result ? "previous" : "reference"} answer`}
             </button>
           </div>
-          {isListening && (
-            <p className="status-inline" role="status" aria-live="polite">
-              Recording... {formatRecordingCountdown(recordingSecondsLeft)} remaining — recording stops automatically
-              at the limit.
-            </p>
-          )}
-          {isTranscribing && (
-            <p className="status-inline" role="status" aria-live="polite">
-              Transcribing...
-            </p>
-          )}
         </div>
       )}
 

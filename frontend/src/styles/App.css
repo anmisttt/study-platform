@@ -547,6 +547,12 @@
   font-size: 14px;
 }
 
+.checking-status {
+  margin: 16px 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
 .primary-button,
 .secondary-button,
 .voice-button {

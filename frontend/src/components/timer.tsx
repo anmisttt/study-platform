@@ -3,16 +3,21 @@ import { useEffect, useState } from "react";
 type TimerProps = {
   resetKey: string | number;
   initialSeconds: number;
+  paused?: boolean;
 };
 
-function Timer({ resetKey, initialSeconds }: TimerProps) {
+function Timer({ resetKey, initialSeconds, paused = false }: TimerProps) {
   const [secondsLeft, setSecondsLeft] = useState(initialSeconds);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isPaused, setIsPaused] = useState(paused);
 
   useEffect(() => {
     setSecondsLeft(initialSeconds);
     setIsPaused(false);
   }, [initialSeconds, resetKey]);
+
+  useEffect(() => {
+    setIsPaused(paused);
+  }, [paused]);
 
   useEffect(() => {
     if (isPaused) {
@@ -43,6 +48,7 @@ function Timer({ resetKey, initialSeconds }: TimerProps) {
           type="button"
           className="secondary-button timer-icon-button"
           onClick={() => setIsPaused((prev) => !prev)}
+          disabled={paused}
           aria-label={isPaused ? "Continue timer" : "Pause timer"}
           title={isPaused ? "Continue timer" : "Pause timer"}
         >
@@ -61,7 +67,7 @@ function Timer({ resetKey, initialSeconds }: TimerProps) {
           className="secondary-button timer-icon-button"
           onClick={() => {
             setSecondsLeft(initialSeconds);
-            setIsPaused(false);
+            setIsPaused(paused);
           }}
           aria-label="Reset timer"
           title="Reset timer"

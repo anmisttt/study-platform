@@ -3,6 +3,7 @@ import * as Y from "yjs";
 import { WebSocket, WebSocketServer } from "ws";
 import {
   DRAFT_YTEXT_NAME,
+  type DraftCheckingMessage,
   type DraftClientMessage,
   type DraftServerMessage,
   type DraftUpdateMessage,
@@ -58,6 +59,23 @@ function parseClientMessage(raw: string): DraftClientMessage | null {
       };
     }
 
+    if (message.type === "checking") {
+      if (
+        !isNonEmptyString(message.roomId) ||
+        !isNonEmptyString(message.questionId) ||
+        typeof message.checking !== "boolean"
+      ) {
+        return null;
+      }
+
+      return {
+        type: "checking",
+        roomId: message.roomId.trim(),
+        questionId: message.questionId.trim(),
+        checking: message.checking,
+      };
+    }
+
     return null;
   } catch {
     return null;
@@ -74,6 +92,7 @@ function sendMessage(ws: WebSocket, message: DraftServerMessage): void {
 
 export class DraftRelay {
   private readonly docs = new Map<DraftKey, Y.Doc>();
+  private readonly checkingByKey = new Map<DraftKey, boolean>();
   private readonly subscribers = new Map<DraftKey, Set<WebSocket>>();
   private readonly socketSubscriptions = new WeakMap<WebSocket, DraftKey>();
 
@@ -96,6 +115,11 @@ export class DraftRelay {
 
         if (message.type === "subscribe") {
           this.subscribe(ws, message.roomId, message.questionId);
+          return;
+        }
+
+        if (message.type === "checking") {
+          this.handleChecking(ws, message);
           return;
         }
 
@@ -142,6 +166,45 @@ export class DraftRelay {
       questionId,
       update: snapshot.length > 0 ? encodeUpdateBase64(snapshot) : EMPTY_SNAPSHOT,
     });
+
+    sendMessage(ws, {
+      type: "checking",
+      roomId,
+      questionId,
+      checking: this.checkingByKey.get(key) === true,
+    });
+  }
+
+  private handleChecking(ws: WebSocket, message: DraftCheckingMessage): void {
+    const key = draftKey(message.roomId, message.questionId);
+    if (this.socketSubscriptions.get(ws) !== key) {
+      sendMessage(ws, { type: "error", message: "Subscribe to the question before sending updates." });
+      return;
+    }
+
+    if (message.checking) {
+      this.checkingByKey.set(key, true);
+    } else {
+      this.checkingByKey.delete(key);
+    }
+
+    const roomSubscribers = this.subscribers.get(key);
+    if (!roomSubscribers) {
+      return;
+    }
+
+    for (const peer of roomSubscribers) {
+      if (peer === ws || peer.readyState !== WebSocket.OPEN) {
+        continue;
+      }
+
+      sendMessage(peer, {
+        type: "checking",
+        roomId: message.roomId,
+        questionId: message.questionId,
+        checking: message.checking,
+      });
+    }
   }
 
   private handleUpdate(ws: WebSocket, message: DraftUpdateMessage): void {
@@ -190,6 +253,7 @@ export class DraftRelay {
       if (roomSubscribers.size === 0) {
         this.subscribers.delete(key);
         this.docs.delete(key);
+        this.checkingByKey.delete(key);
       }
     }
 

@@ -180,7 +180,9 @@ app.post("/transcribe", upload.single("audio"), async (req: Request, res: Respon
 
     const durationSeconds = await assertMaxRecordingDuration(req.file.buffer, req.file.mimetype);
     // eslint-disable-next-line no-console
-    console.log(`[Transcribe:${requestId}] Duration ${durationSeconds.toFixed(1)}s`);
+    console.log(
+      `[Transcribe:${requestId}] Duration ${durationSeconds !== null ? `${durationSeconds.toFixed(1)}s` : "unknown"}`,
+    );
 
     const text = await transcriber.transcribeAudio({
       audioBuffer: req.file.buffer,

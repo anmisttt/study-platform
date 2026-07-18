@@ -20,11 +20,22 @@ export type DraftSnapshotMessage = {
   update: string;
 };
 
+export type DraftCheckingMessage = {
+  type: "checking";
+  roomId: string;
+  questionId: string;
+  checking: boolean;
+};
+
 export type DraftErrorMessage = {
   type: "error";
   message: string;
 };
 
-export type DraftClientMessage = DraftSubscribeMessage | DraftUpdateMessage;
+export type DraftClientMessage = DraftSubscribeMessage | DraftUpdateMessage | DraftCheckingMessage;
 
-export type DraftServerMessage = DraftSnapshotMessage | DraftUpdateMessage | DraftErrorMessage;
+export type DraftServerMessage =
+  | DraftSnapshotMessage
+  | DraftUpdateMessage
+  | DraftCheckingMessage
+  | DraftErrorMessage;

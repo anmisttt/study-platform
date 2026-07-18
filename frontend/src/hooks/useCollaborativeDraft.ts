@@ -67,6 +67,15 @@ function parseServerMessage(raw: string): DraftServerMessage | null {
       return message as DraftServerMessage;
     }
 
+    if (
+      message.type === "checking" &&
+      typeof message.roomId === "string" &&
+      typeof message.questionId === "string" &&
+      typeof message.checking === "boolean"
+    ) {
+      return message as DraftServerMessage;
+    }
+
     if (message.type === "error" && typeof message.message === "string") {
       return message as DraftServerMessage;
     }
@@ -88,10 +97,13 @@ type UseCollaborativeDraftOptions = {
 type UseCollaborativeDraftResult = {
   answerInput: string;
   isDraftHydrated: boolean;
+  isAnswerChecking: boolean;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   onAnswerInputChange: (value: string) => void;
   appendDraftText: (text: string, existingFallback?: string) => void;
   clearCollaborativeDraft: () => void;
+  setAnswerChecking: (checking: boolean) => void;
+  clearLocalAnswerChecking: () => void;
 };
 
 export function useCollaborativeDraft({
@@ -102,6 +114,7 @@ export function useCollaborativeDraft({
 }: UseCollaborativeDraftOptions): UseCollaborativeDraftResult {
   const [answerInput, setAnswerInput] = useState("");
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
+  const [isAnswerChecking, setIsAnswerChecking] = useState(false);
   const docRef = useRef<Y.Doc | null>(null);
   const ytextRef = useRef<Y.Text | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -259,6 +272,7 @@ export function useCollaborativeDraft({
     lastSentStateVectorRef.current = Y.encodeStateVector(doc);
     setAnswerInput("");
     setIsDraftHydrated(false);
+    setIsAnswerChecking(false);
   }, [detachDocPersistence]);
 
   const applySnapshot = useCallback(
@@ -415,6 +429,11 @@ export function useCollaborativeDraft({
         return;
       }
 
+      if (message.type === "checking") {
+        setIsAnswerChecking(message.checking);
+        return;
+      }
+
       captureCursorBeforeRemoteUpdate();
       applyingRemoteUpdateRef.current = true;
       Y.applyUpdate(doc, decodeUpdateBase64(message.update));
@@ -440,6 +459,7 @@ export function useCollaborativeDraft({
       snapshotGenerationRef.current += 1;
       setAnswerInput("");
       setIsDraftHydrated(false);
+      setIsAnswerChecking(false);
       return;
     }
 
@@ -631,12 +651,40 @@ export function useCollaborativeDraft({
     setAnswerInput("");
   }, [clearDebounceTimer, flushPendingUpdate]);
 
+  const setAnswerChecking = useCallback((checking: boolean) => {
+    const activeRoomId = roomIdRef.current;
+    const activeQuestionId = questionIdRef.current;
+    const ws = wsRef.current;
+
+    setIsAnswerChecking(checking);
+
+    if (!ws || ws.readyState !== WebSocket.OPEN || !activeRoomId || !activeQuestionId) {
+      return;
+    }
+
+    ws.send(
+      JSON.stringify({
+        type: "checking",
+        roomId: activeRoomId,
+        questionId: activeQuestionId,
+        checking,
+      }),
+    );
+  }, []);
+
+  const clearLocalAnswerChecking = useCallback(() => {
+    setIsAnswerChecking(false);
+  }, []);
+
   return {
     answerInput,
     isDraftHydrated,
+    isAnswerChecking,
     textareaRef,
     onAnswerInputChange,
     appendDraftText,
     clearCollaborativeDraft,
+    setAnswerChecking,
+    clearLocalAnswerChecking,
   };
 }

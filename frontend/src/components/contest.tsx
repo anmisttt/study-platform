@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import QuestionCard from "./questionCard";
 import Timer from "./timer";
 import type { ChapterMeta, RoomDetails } from "@study-platform/shared";
 import {
   createRoomApiPath,
-  MAX_RECORDING_SECONDS,
   type PracticeSolution,
   roomApiPath,
   roomQuestionCheckApiPath,
@@ -14,6 +13,7 @@ import { flattenItems } from "../utils/questions";
 import { resolveAnswerInput } from "../utils/draftStorage";
 import { mergeRoomDetailsIntoSession, roomDetailsToChapterSession } from "../utils/room";
 import { useCollaborativeDraft } from "../hooks/useCollaborativeDraft";
+import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
 
 const ROOM_POLL_INTERVAL_MS = 5000;
 
@@ -77,23 +77,6 @@ function getQuestionSolutions(
   return practiceItem?.solutions ?? [];
 }
 
-function fileExtensionFromMimeType(mimeType: string): string {
-  const [, subtype = "webm"] = mimeType.split("/");
-  const cleanSubtype = subtype.split(";")[0]?.trim().toLowerCase();
-  if (!cleanSubtype) {
-    return "webm";
-  }
-  if (cleanSubtype.includes("mpeg")) {
-    return "mp3";
-  }
-  return cleanSubtype;
-}
-
-const MAX_RECORDING_MS = MAX_RECORDING_SECONDS * 1000;
-// Stop slightly before the hard limit so encoded duration stays under the server cap.
-const RECORDING_LIMIT_BUFFER_MS = 1000;
-const RECORDING_LIMIT_CHECK_MS = 250;
-
 function findQuestionIndex(items: QuestionItem[], questionRef: string | undefined): number {
   if (!questionRef) {
     return 0;
@@ -116,18 +99,12 @@ function Contest({
   onResetProgress,
 }: ContestProps) {
   const [isChecking, setIsChecking] = useState<boolean>(false);
-  const [isListening, setIsListening] = useState<boolean>(false);
-  const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
-  const [recordingSecondsLeft, setRecordingSecondsLeft] = useState<number>(MAX_RECORDING_SECONDS);
   const [roomInput, setRoomInput] = useState<string>(roomId ?? "");
   const [isRoomActionPending, setIsRoomActionPending] = useState<boolean>(false);
   const [startError, setStartError] = useState<string>("");
   const [isEditingLocally, setIsEditingLocally] = useState<boolean>(true);
-
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const recordingStartedAtRef = useRef<number | null>(null);
-  const recordingLimitIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [timerEpoch, setTimerEpoch] = useState(0);
+  const [isCheckPending, setIsCheckPending] = useState(false);
 
   const items = useMemo(
     () => (chapterSession.details ? flattenItems(chapterSession.details) : []),
@@ -143,6 +120,26 @@ function Contest({
     roomId,
     questionId: currentItem?.id ?? null,
     enabled: isPracticeMode && Boolean(roomId),
+  });
+  const {
+    isListening,
+    isTranscribing,
+    toggle: toggleVoiceRecording,
+    stop: stopVoiceRecording,
+  } = useVoiceRecorder({
+    apiBase,
+    onTranscript: (text: string) => {
+      if (!roomId || !currentItem) {
+        return;
+      }
+      collaborativeDraft.appendDraftText(
+        text,
+        chapterSession.responses[currentItem.id]?.answer ?? "",
+      );
+    },
+    onError: (message: string) => {
+      window.alert(message);
+    },
   });
   const answerInput = roomId
     ? collaborativeDraft.answerInput
@@ -177,8 +174,12 @@ function Contest({
 
   useEffect(() => {
     setIsEditingLocally(true);
+    setTimerEpoch(0);
   }, [currentItem?.id]);
 
+  // Only decide result-vs-editor view when landing on a question (after draft
+  // hydrates). Do not re-run on answerInput — an empty draft after "Try again"
+  // must stay in edit mode.
   useEffect(() => {
     if (!collaborativeDraft.isDraftHydrated) {
       return;
@@ -187,12 +188,35 @@ function Contest({
     if (currentResponse?.result && collaborativeDraft.answerInput.trim().length === 0) {
       setIsEditingLocally(false);
     }
-  }, [
-    currentItem?.id,
-    currentResponse?.result,
-    collaborativeDraft.isDraftHydrated,
-    collaborativeDraft.answerInput,
-  ]);
+  }, [currentItem?.id, collaborativeDraft.isDraftHydrated]);
+
+  // Keep peers on the checking screen after the draft is cleared until room poll
+  // delivers the result (or the check fails and the draft comes back).
+  useEffect(() => {
+    if (collaborativeDraft.isAnswerChecking) {
+      setIsCheckPending(true);
+    } else if (collaborativeDraft.answerInput.trim().length > 0) {
+      setIsCheckPending(false);
+    }
+  }, [collaborativeDraft.isAnswerChecking, collaborativeDraft.answerInput]);
+
+  useEffect(() => {
+    if (!currentResponse?.result) {
+      return;
+    }
+
+    collaborativeDraft.clearLocalAnswerChecking();
+    if (isCheckPending) {
+      setIsCheckPending(false);
+      setIsEditingLocally(false);
+    }
+  }, [currentResponse?.result, isCheckPending]);
+
+  useEffect(() => {
+    setIsCheckPending(false);
+  }, [currentItem?.id]);
+
+  const isCheckInProgress = isChecking || collaborativeDraft.isAnswerChecking || isCheckPending;
 
   async function fetchRoom(activeRoomId: string): Promise<RoomDetails> {
     if (!chapterMeta) {
@@ -216,60 +240,6 @@ function Contest({
     }
 
     onSessionChange((session) => mergeRoomDetailsIntoSession(session, payload.room!));
-  }
-
-  function stopStreamTracks(): void {
-    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
-    mediaStreamRef.current = null;
-  }
-
-  function clearRecordingLimitTimer(): void {
-    if (recordingLimitIntervalRef.current !== null) {
-      clearInterval(recordingLimitIntervalRef.current);
-      recordingLimitIntervalRef.current = null;
-    }
-    recordingStartedAtRef.current = null;
-  }
-
-  function startRecordingLimitTimer(): void {
-    clearRecordingLimitTimer();
-    recordingStartedAtRef.current = Date.now();
-    setRecordingSecondsLeft(MAX_RECORDING_SECONDS);
-
-    recordingLimitIntervalRef.current = setInterval(() => {
-      const startedAt = recordingStartedAtRef.current;
-      if (startedAt === null) {
-        return;
-      }
-
-      const elapsedMs = Date.now() - startedAt;
-      const secondsLeft = Math.max(0, MAX_RECORDING_SECONDS - Math.ceil(elapsedMs / 1000));
-      setRecordingSecondsLeft(secondsLeft);
-
-      if (elapsedMs >= MAX_RECORDING_MS - RECORDING_LIMIT_BUFFER_MS) {
-        stopVoiceRecording();
-      }
-    }, RECORDING_LIMIT_CHECK_MS);
-  }
-
-  function stopVoiceRecording(): void {
-    clearRecordingLimitTimer();
-    setRecordingSecondsLeft(MAX_RECORDING_SECONDS);
-    const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state !== "inactive") {
-      try {
-        recorder.stop();
-      } catch {
-        mediaRecorderRef.current = null;
-        stopStreamTracks();
-        setIsListening(false);
-      }
-      return;
-    }
-
-    mediaRecorderRef.current = null;
-    stopStreamTracks();
-    setIsListening(false);
   }
 
   function openQuestion(index: number): void {
@@ -379,122 +349,14 @@ function Contest({
     await beginPracticeWithRoom(trimmedRoomId);
   }
 
-  async function transcribeAudio(itemIdAtStart: string, audioBlob: Blob): Promise<void> {
-    setIsTranscribing(true);
-    try {
-      const formData = new FormData();
-      const mimeType = audioBlob.type || "audio/webm";
-      const extension = fileExtensionFromMimeType(mimeType);
-      formData.append("audio", audioBlob, `microphone.${extension}`);
-      formData.append("language", (navigator.language || "en").split("-")[0]);
-
-      const res = await fetch(`${apiBase}/transcribe`, {
-        method: "POST",
-        body: formData,
-      });
-      const payload = (await res.json()) as { text?: string; error?: string };
-      if (!res.ok) {
-        throw new Error(payload.error ?? "Failed to transcribe audio.");
-      }
-
-      const finalTranscript = payload.text?.trim();
-      if (!finalTranscript) {
-        return;
-      }
-
-      if (!roomId) {
-        return;
-      }
-
-      collaborativeDraft.appendDraftText(
-        finalTranscript,
-        chapterSession.responses[itemIdAtStart]?.answer ?? "",
-      );
-    } catch (error: unknown) {
-      window.alert(errorMessage(error, "Failed to transcribe audio."));
-    } finally {
-      setIsTranscribing(false);
-    }
-  }
-
-  async function handleVoiceInput(): Promise<void> {
-    if (!currentItem) {
-      return;
-    }
-
-    if (isTranscribing) {
-      return;
-    }
-
-    if (isListening) {
-      stopVoiceRecording();
-      return;
-    }
-
-    const itemIdAtStart = currentItem.id;
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      window.alert("Voice input is not supported in this browser.");
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
-      const recorder = new MediaRecorder(stream);
-      const audioChunks: Blob[] = [];
-
-      recorder.ondataavailable = (event: BlobEvent) => {
-        if (event.data.size > 0) {
-          audioChunks.push(event.data);
-        }
-      };
-
-      recorder.onerror = () => {
-        if (mediaRecorderRef.current === recorder) {
-          mediaRecorderRef.current = null;
-        }
-        stream.getTracks().forEach((track) => track.stop());
-        if (mediaStreamRef.current === stream) {
-          mediaStreamRef.current = null;
-        }
-        setIsListening(false);
-        window.alert("Failed to record audio.");
-      };
-
-      recorder.onstop = () => {
-        if (mediaRecorderRef.current === recorder) {
-          mediaRecorderRef.current = null;
-        }
-        stream.getTracks().forEach((track) => track.stop());
-        if (mediaStreamRef.current === stream) {
-          mediaStreamRef.current = null;
-        }
-        setIsListening(false);
-        const audioBlob = new Blob(audioChunks, {
-          type: recorder.mimeType || "audio/webm",
-        });
-        if (audioBlob.size === 0) {
-          return;
-        }
-        void transcribeAudio(itemIdAtStart, audioBlob);
-      };
-
-      mediaRecorderRef.current = recorder;
-      setIsListening(true);
-      recorder.start();
-      startRecordingLimitTimer();
-    } catch {
-      stopStreamTracks();
-      window.alert("Microphone permission is required for voice input.");
-    }
-  }
-
   async function handleCheck(): Promise<void> {
     if (!roomId || !currentItem || !answerInput.trim()) {
       return;
     }
 
     setIsChecking(true);
+    setIsCheckPending(true);
+    collaborativeDraft.setAnswerChecking(true);
     const trimmedAnswer = answerInput.trim();
     const baseRevision = chapterSession.revisions[currentItem.id] ?? 0;
 
@@ -545,8 +407,13 @@ function Contest({
           drafts: nextDrafts,
         };
       });
+      setIsEditingLocally(false);
+      setIsCheckPending(false);
+      collaborativeDraft.setAnswerChecking(false);
       stopVoiceRecording();
     } catch (error: unknown) {
+      setIsCheckPending(false);
+      collaborativeDraft.setAnswerChecking(false);
       window.alert(errorMessage(error, "Request failed."));
     } finally {
       setIsChecking(false);
@@ -559,6 +426,7 @@ function Contest({
     }
 
     setIsEditingLocally(true);
+    setTimerEpoch((epoch) => epoch + 1);
     stopVoiceRecording();
   }
 
@@ -597,11 +465,11 @@ function Contest({
     onRoomAccessError(chapterSession.error);
   }, [isPracticeMode, roomId, chapterSession.loading, chapterSession.details, chapterSession.error, onRoomAccessError]);
 
+  // Stop recording when navigating between questions so a segment transcribed
+  // after navigation cannot leak into a different question's draft.
   useEffect(() => {
-    return () => {
-      stopVoiceRecording();
-    };
-  }, []);
+    stopVoiceRecording();
+  }, [currentItem?.id, stopVoiceRecording]);
 
   if (!chapterMeta) {
     return null;
@@ -709,8 +577,9 @@ function Contest({
           </div>
           <div className="timer-top-right">
             <Timer
-              resetKey={currentItem.id}
+              resetKey={`${currentItem.id}:${timerEpoch}`}
               initialSeconds={currentItem.type === "theory" ? 3 * 60 : 10 * 60}
+              paused={!isEditingLocally || isCheckInProgress}
             />
           </div>
         </div>
@@ -720,16 +589,13 @@ function Contest({
           response={currentResponse}
           isEditingLocally={isEditingLocally}
           answerInput={answerInput}
-          isChecking={isChecking}
+          isChecking={isCheckInProgress}
           isListening={isListening}
           isTranscribing={isTranscribing}
-          recordingSecondsLeft={recordingSecondsLeft}
           solutions={questionSolutions}
           answerTextareaRef={roomId ? collaborativeDraft.textareaRef : undefined}
           onAnswerInputChange={handleAnswerInputChange}
-          onVoiceInput={() => {
-            void handleVoiceInput();
-          }}
+          onVoiceInput={toggleVoiceRecording}
           onCheck={handleCheck}
           onTryAgain={handleTryAgain}
         />
