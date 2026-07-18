@@ -6,4 +6,3 @@ artifacts/
 .env.*
 .DS_Store
 .practice-validation/
-.cursor/
