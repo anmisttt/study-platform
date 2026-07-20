@@ -22,7 +22,7 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function parseClientMessage(raw: string): DraftClientMessage | null {
+export function parseClientMessage(raw: string): DraftClientMessage | null {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -147,7 +147,12 @@ export class DraftRelay {
 
   private subscribe(ws: WebSocket, roomId: string, questionId: string): void {
     const key = draftKey(roomId, questionId);
-    this.unsubscribe(ws);
+    // Only tear down the previous subscription when switching to a *different*
+    // question. Re-subscribing to the same question (e.g. a duplicate subscribe)
+    // must not remove this socket and discard the shared doc as the last leaver.
+    if (this.socketSubscriptions.get(ws) !== key) {
+      this.unsubscribe(ws);
+    }
 
     const doc = this.getOrCreateDoc(key);
     let roomSubscribers = this.subscribers.get(key);

@@ -50,7 +50,7 @@ function decodeUpdateBase64(updateBase64: string): Uint8Array {
   return bytes;
 }
 
-function parseServerMessage(raw: string): DraftServerMessage | null {
+export function parseServerMessage(raw: string): DraftServerMessage | null {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -593,6 +593,10 @@ export function useCollaborativeDraft({
         return;
       }
 
+      // A local edit owns its own caret; drop any cursor position captured for a
+      // remote update so a stale capture can't snap the caret back on re-render.
+      pendingCursorRestoreRef.current = null;
+
       doc.transact(() => {
         updateYText(ytext, value);
       });
@@ -613,6 +617,8 @@ export function useCollaborativeDraft({
 
       const current = ytext.toString() || existingFallback;
       const nextValue = current ? `${current} ${text}` : text;
+
+      pendingCursorRestoreRef.current = null;
 
       doc.transact(() => {
         updateYText(ytext, nextValue);

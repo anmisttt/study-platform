@@ -64,7 +64,7 @@ function QuestionCard({
   const isOverAnswerLimit = answerInput.length > MAX_ANSWER_LENGTH;
   const isCheckDisabled = isChecking || !answerInput.trim() || isOverAnswerLimit;
   const checkButtonTooltip = getCheckButtonTooltip(isChecking, answerInput, isOverAnswerLimit);
-  const showAnswer = isAnswerVisible || (!isEditingLocally && response?.result);
+  const showAnswer = !isChecking && (isAnswerVisible || (!isEditingLocally && response?.result));
   const showEditor = !isChecking && (isEditingLocally || !response?.result);
 
   return (
