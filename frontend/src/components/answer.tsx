@@ -1,4 +1,3 @@
-import type { PracticeSolution } from "@study-platform/shared";
 import FormattedText from "./formattedText";
 import type { QuestionItem, ResponseEntry } from "./contest-types";
 
@@ -14,11 +13,11 @@ type AnswerProps = {
   currentItem: QuestionItem;
   isEditingLocally: boolean;
   response: ResponseEntry | null;
-  solutions: string | PracticeSolution[];
+  answer: string;
   onTryAgain: () => void;
 };
 
-function Answer({ currentItem, isEditingLocally, response, solutions, onTryAgain }: AnswerProps) {
+function Answer({ currentItem, isEditingLocally, response, answer, onTryAgain }: AnswerProps) {
   const hasResult = Boolean(response?.result);
   const rating = response?.result?.rating;
   const ratingMeta =
@@ -64,26 +63,16 @@ function Answer({ currentItem, isEditingLocally, response, solutions, onTryAgain
         </>
       )}
 
-      {currentItem.type === "theory" ? (
-        <div className="result-reference">
-          <strong className="result-section-label">
-            {isEditingLocally ? "Reference answer:" : "Valid answer:"}
-          </strong>
-          <FormattedText text={typeof solutions === "string" ? solutions : ""} />
-        </div>
-      ) : (
-        <div className="result-reference">
-          <strong className="result-section-label">Reference solutions:</strong>
-          <ul className="solution-list">
-            {(Array.isArray(solutions) ? solutions : []).map((entry) => (
-              <li key={entry.quality}>
-                <strong>{entry.quality}:</strong>
-                <FormattedText text={entry.solution} />
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <div className="result-reference">
+        <strong className="result-section-label">
+          {isEditingLocally
+            ? "Reference answer:"
+            : currentItem.type === "theory"
+              ? "Valid answer:"
+              : "Reference answer:"}
+        </strong>
+        <FormattedText text={answer} />
+      </div>
 
       {!isEditingLocally && (
         <button type="button" className="secondary-button try-again-button" onClick={onTryAgain}>

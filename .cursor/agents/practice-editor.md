@@ -1,13 +1,13 @@
 ---
-  Improves a single practice item (task, description, solutions) using structured
+  Improves a single practice item (task, question, answer) using structured
   feedback from practice-solver and practice-grader. Use only after a failed
-  validation round. Must not paste full solutions into the student-facing description.
+  validation round. Must not paste the full answer into the student-facing question.
 name: practice-editor
 model: inherit
 description: >-
 ---
 
-You repair one practice item so a careful student can reproduce it from the description alone and so the perfect reference earns tutor score 5.
+You repair one practice item so a careful student can reproduce it from the question alone and so the stored `answer` earns tutor score 5.
 
 ## Edit scope
 
@@ -15,13 +15,13 @@ Allowed:
 
 - Fix broken/incomplete setup snippets (commands, filenames, missing stated prerequisites).
 - Clarify contradictory or underspecified requirements.
-- Fix bugs in `solutions` entries, especially `quality: "perfect"`.
-- Align task checklist with what the tutor/reference actually require.
+- Fix bugs in the `answer` field (the perfect reference solution).
+- Align the question checklist with what the tutor/reference actually require.
 - Small wording fixes in `task`.
 
 Forbidden:
 
-- Dumping the full perfect solution into `description`.
+- Dumping the full perfect solution into `question`.
 - Adding hints that only make sense after seeing grader comments (no “to get a 5, mention X” spoilers beyond what a good task would state).
 - Editing other practice items, theory, or unrelated files.
 - Changing chapter `number` / `name` / structure keys.
@@ -38,7 +38,7 @@ You receive:
 
 1. Read only that chapter file and locate `practice[practiceIndex]`.
 2. Apply the minimal diff that addresses the evidence.
-3. Keep `solutions` with `bad` / `good` / `perfect` qualities coherent (perfect must be complete enough for score 5).
+3. Keep a single `answer` string that is complete enough for tutor score 5.
 4. Re-read the item as a blind student: would setup run without extra knowledge?
 
 ## Output

@@ -242,6 +242,7 @@ describe("Contest", () => {
       initialSession: sessionWithRoom(),
     });
 
+    expect(screen.getByRole("heading", { name: "Theory 1" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Check" }));
 
     await waitFor(() => {
@@ -254,7 +255,7 @@ describe("Contest", () => {
     expect(draftApi.setAnswerChecking).toHaveBeenCalledWith(false);
     expect(voiceApi.stop).toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
-      `${API_BASE}/rooms/ABC123/questions/theory/0/check`,
+      `${API_BASE}/rooms/ABC123/questions/theory-0/check`,
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -263,6 +264,66 @@ describe("Contest", () => {
         }),
       }),
     );
+  });
+
+  it("posts Check to the practice question id currently shown", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ rating: 5, comment: "Nice.", revision: 1 }),
+    );
+
+    draftApi.answerInput = "Use an atomic integer.";
+    renderContest({
+      roomId: "ABC123",
+      questionRef: "practice-0",
+      initialSession: sessionWithRoom(),
+    });
+
+    expect(screen.getByRole("heading", { name: "Practice 1" })).toBeTruthy();
+    expect(screen.getByText("Implement a counter")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `${API_BASE}/rooms/ABC123/questions/practice-0/check`,
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            answer: "Use an atomic integer.",
+            baseRevision: 0,
+          }),
+        }),
+      );
+    });
+    expectResultField(/Rating:/, "5/5");
+  });
+
+  it("does not post a theory check URL while viewing a practice question", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ rating: 5, comment: "ok", revision: 1 }),
+    );
+
+    draftApi.answerInput = "practice answer";
+    renderContest({
+      roomId: "ABC123",
+      questionRef: "practice-0",
+      initialSession: sessionWithRoom(),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    const checkCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes("/check"),
+    );
+    expect(checkCalls).toHaveLength(1);
+    expect(String(checkCalls[0][0])).toBe(
+      `${API_BASE}/rooms/ABC123/questions/practice-0/check`,
+    );
+    expect(String(checkCalls[0][0])).not.toContain("theory");
   });
 
   it("applies a 409 conflict room payload and alerts", async () => {

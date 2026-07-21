@@ -20,8 +20,8 @@ export function roomApiPath(roomId: string): string {
   return `/rooms/${roomId}`;
 }
 
-export function roomQuestionCheckApiPath(roomId: string, type: QuestionType, questionIndex: number): string {
-  return `/rooms/${roomId}/questions/${type}/${questionIndex}/check`;
+export function roomQuestionCheckApiPath(roomId: string, questionRef: string): string {
+  return `/rooms/${roomId}/questions/${questionRef}/check`;
 }
 
 export function createRoomApiPath(): string {

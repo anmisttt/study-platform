@@ -9,14 +9,14 @@ import { DraftRelay } from "./drafts/draftRelay";
 import { assertRoomChapter, getRoomDetails } from "./db/roomContext";
 import { RoomsDb } from "./db/roomsDb";
 import { ConflictError, NotFoundError, UserError } from "./errors";
-import { resolveChapter, resolveQuestionIndex } from "./http/chapterContext";
+import { resolveChapter } from "./http/chapterContext";
 import { readParam, readQueryParam } from "./http/params";
+import { resolveChapterQuestion } from "./http/resolveChapterQuestion";
 import { respondWithError } from "./http/respondWithError";
 import { ensureAnswer, ensureBaseRevision } from "./http/validation";
 import { Tutor } from "./services/tutor";
 import { systemPrompt } from "./prompts/system-prompt";
-import { userPromptForTheory } from "./prompts/theory-user-prompt";
-import { userPromptForPractice } from "./prompts/practice-user-prompt";
+import { userPromptForItem } from "./prompts/user-prompt";
 import { assertMaxRecordingDuration, AudioDurationError } from "./services/audioDuration";
 import { Transcriber } from "./services/transcriber";
 
@@ -89,68 +89,34 @@ app.get("/rooms/:roomId", (req: Request, res: Response): void => {
   }
 });
 
-app.post("/rooms/:roomId/questions/theory/:questionId/check", async (req: Request, res: Response): Promise<void> => {
+app.post("/rooms/:roomId/questions/:questionId/check", async (req: Request, res: Response): Promise<void> => {
   const roomId = readParam(req.params.roomId);
 
   try {
     const answer = ensureAnswer(req.body?.answer);
     const baseRevision = ensureBaseRevision(req.body?.baseRevision);
     const room = getRoomDetails(roomId, roomsDb);
-    const questionIndex = resolveQuestionIndex(readParam(req.params.questionId), "Theory question not found.");
-    const chapter = getChapterById(room.chapterId);
+    const questionId = readParam(req.params.questionId);
+    if (!questionId) {
+      throw new NotFoundError("Question not found.");
+    }
 
+    const chapter = getChapterById(room.chapterId);
     if (!chapter) {
       throw new NotFoundError("Chapter not found for room.");
     }
 
-    const theoryItem = chapter.theory[questionIndex];
-    if (!theoryItem) {
-      throw new NotFoundError("Theory question not found.");
+    const resolved = resolveChapterQuestion(chapter, questionId);
+    if (!resolved) {
+      throw new NotFoundError("Question not found.");
     }
 
-    const result = await tutor.evaluateAnswer(userPromptForTheory(answer, theoryItem));
+    const result = await tutor.evaluateAnswer(userPromptForItem(answer, resolved.item));
 
-    const revision = roomsDb.updateTheoryAnswer({
+    const revision = roomsDb.updateAnswer({
       roomId: room.roomId,
-      questionIndex,
-      user_answer: answer,
-      rating: result.rating,
-      comment: result.comment,
-      baseRevision,
-    });
-
-    res.json({ ...result, revision });
-  } catch (error: unknown) {
-    respondWithError(res, error, "Failed to evaluate answer.", {
-      room: error instanceof ConflictError ? getRoomDetails(roomId, roomsDb) : undefined,
-    });
-  }
-});
-
-app.post("/rooms/:roomId/questions/practice/:questionId/check", async (req: Request, res: Response): Promise<void> => {
-  const roomId = readParam(req.params.roomId);
-
-  try {
-    const answer = ensureAnswer(req.body?.answer);
-    const baseRevision = ensureBaseRevision(req.body?.baseRevision);
-    const room = getRoomDetails(roomId, roomsDb);
-    const questionIndex = resolveQuestionIndex(readParam(req.params.questionId), "Practice task not found.");
-    const chapter = getChapterById(room.chapterId);
-
-    if (!chapter) {
-      throw new NotFoundError("Chapter not found for room.");
-    }
-
-    const practiceItem = chapter.practice[questionIndex];
-    if (!practiceItem) {
-      throw new NotFoundError("Practice task not found.");
-    }
-
-    const result = await tutor.evaluateAnswer(userPromptForPractice(answer, practiceItem));
-
-    const revision = roomsDb.updatePracticeAnswer({
-      roomId: room.roomId,
-      questionIndex,
+      type: resolved.type,
+      questionIndex: resolved.index,
       user_answer: answer,
       rating: result.rating,
       comment: result.comment,

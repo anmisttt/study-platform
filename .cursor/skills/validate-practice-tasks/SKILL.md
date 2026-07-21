@@ -3,14 +3,14 @@ name: validate-practice-tasks
 description: >-
   Orchestrates a blind solve → tutor grade → repair loop for chapter practice
   items using practice-solver, practice-grader, and practice-editor subagents.
-  Use when validating practice tasks, checking setups/reference solutions,
+  Use when validating practice tasks, checking setups/reference answers,
   improving practice JSON until tutor score 5, or when the user mentions
   practice validation / reproducibility.
 ---
 
 # Validate practice tasks
 
-Goal: each practice item is reproducible from `task` + `description` alone, and both a blind solution and the stored `perfect` reference get tutor score 5 (majority of trials).
+Goal: each practice item is reproducible from `task` + `question` alone, and both a blind solution and the stored `answer` get tutor score 5 (majority of trials).
 
 ## Subagents
 
@@ -43,14 +43,14 @@ For each `(chapterId, practiceIndex)`:
 npm run grade-practice -- --chapter <id> --index <n> --dump-brief
 ```
 
-Create workdir from `workdirHint` (under `.practice-validation/`, gitignored). Write `brief.json` there with **only** `task` and `description`.
+Create workdir from `workdirHint` (under `.practice-validation/`, gitignored). Write `brief.json` there with **only** `task` and `question`.
 
 ### 2. Solver
 
 Delegate to **practice-solver** with:
 
 - Absolute workdir
-- Pasted `task` + `description` only (no solutions, no chapter path, no prior repair notes)
+- Pasted `task` + `question` only (no `answer`, no chapter path, no prior repair notes)
 
 If `status` is `setup_failed` or `blocked` → skip grader; go to editor with solver JSON (still run the artifact check below).
 
@@ -94,14 +94,14 @@ After 5 failed rounds, stop and report remaining issues for human review. Do not
 
 ## Isolation rules (parent must enforce)
 
-- Never let practice-solver read `backend/src/data/*.json` or solution text.
-- Never put tutor comments or reference solutions into the solver prompt.
+- Never let practice-solver read `backend/src/data/*.json` or answer text.
+- Never put tutor comments or reference answers into the solver prompt.
 - practice-editor may read/write only the target practice item.
 - After each solver turn, run the artifact check (step 2b). Repo-root leftovers like `etcd-data/` must be deleted before the next round or final report.
 
 ## Success criteria
 
 1. Blind agent answer: majority of `--trials` ratings ≥ 5.
-2. Stored perfect reference: majority of `--trials` ratings ≥ 5.
-3. Solver did not need steps absent from the description.
+2. Stored reference `answer`: majority of `--trials` ratings ≥ 5.
+3. Solver did not need steps absent from the question.
 4. No leftover runtime artifacts outside the workdir (e.g. no `etcd-data/` at repo root, no leftover `etcd-dev` container).

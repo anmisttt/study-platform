@@ -17,7 +17,7 @@ export function flattenItems(chapter: Chapter): QuestionItem[] {
     questionId: index,
     title: `Practice ${index + 1}`,
     prompt: item.task,
-    details: item.description,
+    details: item.question,
   }));
 
   return [...theoryItems, ...practiceItems];

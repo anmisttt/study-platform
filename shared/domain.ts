@@ -1,23 +1,12 @@
-export enum PracticeQuality {
-  bad = 0,
-  good = 1,
-  perfect = 2,
-}
-
 export type TheoryItem = {
   question: string;
   answer: string;
 };
 
-export type PracticeSolution = {
-  quality: keyof typeof PracticeQuality;
-  solution: string;
-};
-
 export type PracticeItem = {
   task: string;
-  description: string;
-  solutions: PracticeSolution[];
+  question: string;
+  answer: string;
 };
 
 export type Chapter = {

@@ -1,4 +1,4 @@
-import { MAX_ANSWER_LENGTH, type PracticeSolution } from "@study-platform/shared";
+import { MAX_ANSWER_LENGTH } from "@study-platform/shared";
 import { type KeyboardEvent, type RefObject, useEffect, useState } from "react";
 import Answer from "./answer";
 import FormattedText from "./formattedText";
@@ -32,7 +32,7 @@ type QuestionCardProps = {
   isChecking: boolean;
   isListening: boolean;
   isTranscribing: boolean;
-  solutions: string | PracticeSolution[];
+  answer: string;
   answerTextareaRef?: RefObject<HTMLTextAreaElement | null>;
   onAnswerInputChange: (value: string) => void;
   onVoiceInput: () => void;
@@ -48,7 +48,7 @@ function QuestionCard({
   isChecking,
   isListening,
   isTranscribing,
-  solutions,
+  answer,
   answerTextareaRef,
   onAnswerInputChange,
   onVoiceInput,
@@ -233,7 +233,7 @@ function QuestionCard({
               currentItem={currentItem}
               isEditingLocally={isEditingLocally}
               response={response}
-              solutions={solutions}
+              answer={answer}
               onTryAgain={() => {
                 setIsAnswerVisible(false);
                 onTryAgain();

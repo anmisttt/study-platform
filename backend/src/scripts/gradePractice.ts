@@ -1,10 +1,10 @@
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
-import { PracticeQuality, type PracticeItem } from "@study-platform/shared";
+import type { PracticeItem } from "@study-platform/shared";
 import { chapters, getChapterById } from "../chapters";
 import { systemPrompt } from "../prompts/system-prompt";
-import { userPromptForPractice } from "../prompts/practice-user-prompt";
+import { userPromptForItem } from "../prompts/user-prompt";
 import { Tutor } from "../services/tutor";
 
 dotenv.config({ path: path.join(__dirname, "../../.env") });
@@ -98,17 +98,9 @@ function parseArgs(argv: string[]) {
 function clonePracticeItem(item: PracticeItem): PracticeItem {
   return {
     task: item.task,
-    description: item.description,
-    solutions: item.solutions.map((s) => ({ ...s })),
+    question: item.question,
+    answer: item.answer,
   };
-}
-
-function perfectSolution(item: PracticeItem): string {
-  const ranked = [...item.solutions].sort(
-    (a, b) => PracticeQuality[b.quality] - PracticeQuality[a.quality],
-  );
-  if (!ranked[0]) throw new Error("No solutions found for practice item");
-  return ranked[0].solution;
 }
 
 function aggregateTrials(trials: Trial[]): Aggregate {
@@ -124,7 +116,7 @@ function aggregateTrials(trials: Trial[]): Aggregate {
 async function runTrials(tutor: Tutor, item: PracticeItem, answer: string, trials: number): Promise<Trial[]> {
   const results: Trial[] = [];
   for (let i = 0; i < trials; i++) {
-    const prompt = userPromptForPractice(answer, clonePracticeItem(item));
+    const prompt = userPromptForItem(answer, clonePracticeItem(item));
     const result = await tutor.evaluateAnswer(prompt);
     results.push({ rating: result.rating, comment: result.comment });
   }
@@ -140,7 +132,11 @@ async function main(): Promise<void> {
       number: c.number,
       name: c.name,
       practiceCount: c.practice.length,
-      practice: c.practice.map((p, index) => ({ index, task: p.task })),
+      practice: c.practice.map((p, index) => ({
+        index,
+        task: p.task,
+        question: p.question.slice(0, 80),
+      })),
     }));
     console.log(JSON.stringify(payload, null, 2));
     return;
@@ -167,7 +163,7 @@ async function main(): Promise<void> {
       chapterId: chapter.id,
       practiceIndex: args.index,
       task: item.task,
-      description: item.description,
+      question: item.question,
       workdirHint: path.join(
         repoRoot,
         ".practice-validation",
@@ -221,8 +217,7 @@ async function main(): Promise<void> {
   }
 
   if (args.reference) {
-    const answer = perfectSolution(item);
-    const trials = await runTrials(tutor, item, answer, args.trials);
+    const trials = await runTrials(tutor, item, item.answer, args.trials);
     const agg = aggregateTrials(trials);
     report.reference = { trials, aggregate: agg };
     report.pass = report.pass && agg.pass;

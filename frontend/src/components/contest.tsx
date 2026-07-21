@@ -4,7 +4,6 @@ import Timer from "./timer";
 import type { ChapterMeta, RoomDetails } from "@study-platform/shared";
 import {
   createRoomApiPath,
-  type PracticeSolution,
   roomApiPath,
   roomQuestionCheckApiPath,
 } from "@study-platform/shared";
@@ -54,27 +53,20 @@ function getDotRatingClass(response: ResponseEntry | undefined): string {
   return `rating-${normalizedRating}`;
 }
 
-function getQuestionSolutions(
-  chapterSession: ChapterSession,
-  item: QuestionItem | null,
-): string | PracticeSolution[] {
+function getQuestionAnswer(chapterSession: ChapterSession, item: QuestionItem | null): string {
   if (!chapterSession.details || !item) {
-    return item?.type === "practice" ? [] : "Answer is unavailable for this question.";
+    return "Answer is unavailable for this question.";
   }
 
   const chapter = chapterSession.details;
+  const content =
+    item.type === "theory"
+      ? chapter.theory[item.questionId]
+      : chapter.practice[item.questionId];
 
-  if (item.type === "theory") {
-    const theoryItem = chapter.theory[item.questionId];
-    if (!theoryItem?.answer?.length) {
-      return "Answer is unavailable for this question.";
-    }
-
-    return theoryItem.answer;
-  }
-
-  const practiceItem = chapter.practice[item.questionId];
-  return practiceItem?.solutions ?? [];
+  return content?.answer?.length
+    ? content.answer
+    : "Answer is unavailable for this question.";
 }
 
 function findQuestionIndex(items: QuestionItem[], questionRef: string | undefined): number {
@@ -114,7 +106,7 @@ function Contest({
   const currentIndex = items.length === 0 ? 0 : findQuestionIndex(items, questionRef);
   const currentItem = isPracticeMode ? (items[currentIndex] ?? null) : null;
   const currentResponse = currentItem ? chapterSession.responses[currentItem.id] : null;
-  const questionSolutions = getQuestionSolutions(chapterSession, currentItem);
+  const questionAnswer = getQuestionAnswer(chapterSession, currentItem);
   const collaborativeDraft = useCollaborativeDraft({
     apiBase,
     roomId,
@@ -361,7 +353,7 @@ function Contest({
     const baseRevision = chapterSession.revisions[currentItem.id] ?? 0;
 
     try {
-      const endpoint = `${apiBase}${roomQuestionCheckApiPath(roomId, currentItem.type, currentItem.questionId)}`;
+      const endpoint = `${apiBase}${roomQuestionCheckApiPath(roomId, currentItem.id)}`;
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -628,7 +620,7 @@ function Contest({
           isChecking={isCheckInProgress}
           isListening={isListening}
           isTranscribing={isTranscribing}
-          solutions={questionSolutions}
+          answer={questionAnswer}
           answerTextareaRef={roomId ? collaborativeDraft.textareaRef : undefined}
           onAnswerInputChange={handleAnswerInputChange}
           onVoiceInput={toggleVoiceRecording}

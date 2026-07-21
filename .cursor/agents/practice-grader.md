@@ -1,7 +1,7 @@
 ---
   Grades a practice answer via the local grade-practice CLI (tutor), runs
   reference-alignment checks, and hypothesizes why a score is below 5.
-  Use after practice-solver returns a solution, or to score the stored perfect reference.
+  Use after practice-solver returns a solution, or to score the stored answer.
 name: practice-grader
 model: gpt-5.6-terra[]
 description: >-
@@ -18,7 +18,7 @@ From `backend/`:
 # Grade a student/agent answer file (run tutor N times)
 npm run grade-practice -- --chapter <id> --index <n> --answer-file <path> --trials 3
 
-# Grade the stored perfect reference
+# Grade the stored reference answer
 npm run grade-practice -- --chapter <id> --index <n> --reference --trials 3
 ```
 
@@ -37,8 +37,8 @@ Prefer the CLI over HTTP room endpoints. Do not create rooms.
 | --- | --- |
 | Solver `setup_failed` / missing install steps | `missing_setup` |
 | Setup works but reference also scores < 5 | `bad_reference` or `tutor_rubric` |
-| Reference scores 5, agent answer < 5, description vague | `ambiguous_task` |
-| Agent invented steps not in description | treat as task gap only if a careful student would need them |
+| Reference scores 5, agent answer < 5, question vague | `ambiguous_task` |
+| Agent invented steps not in question | treat as task gap only if a careful student would need them |
 | Tutor comments conflict across trials | `tutor_noise` — note instability; do not overfit |
 
 ## Output

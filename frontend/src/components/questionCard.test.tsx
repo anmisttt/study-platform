@@ -15,7 +15,7 @@ function renderCard(
     isChecking: false,
     isListening: false,
     isTranscribing: false,
-    solutions: "A process is a running program.",
+    answer: "A process is a running program.",
     onAnswerInputChange: vi.fn(),
     onVoiceInput: vi.fn(),
     onCheck: vi.fn(async () => undefined),
@@ -94,7 +94,7 @@ describe("QuestionCard", () => {
         answer: "Submitted answer",
         result: { rating: 4, comment: "Nice work." },
       },
-      solutions: [{ quality: "good", solution: "Use atomics." }],
+      answer: "Use atomics.",
     });
 
     expect(screen.getByText(/Rating:/).parentElement).toHaveTextContent("4/5");
@@ -108,7 +108,7 @@ describe("QuestionCard", () => {
   it("toggles the reference answer while editing", () => {
     renderCard({
       answerInput: "draft",
-      solutions: "Reference theory answer.",
+      answer: "Reference theory answer.",
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Show reference answer" }));

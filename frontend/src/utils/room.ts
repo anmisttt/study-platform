@@ -10,10 +10,10 @@ export function roomDetailsToChapterSession(
     number: data.number,
     name: data.name,
     theory: data.theory.map(({ question, answer }) => ({ question, answer })),
-    practice: data.practice.map(({ task, description, solutions }) => ({
+    practice: data.practice.map(({ task, question, answer }) => ({
       task,
-      description,
-      solutions,
+      question,
+      answer,
     })),
   };
 

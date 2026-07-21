@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import type { QuestionType } from "@study-platform/shared";
 import { ConflictError, NotFoundError, ServerError } from "../errors";
 import { Db } from "./db";
 import { ROOMS_TABLE_SCHEMA } from "./schemas";
@@ -6,6 +7,11 @@ import type { AnswerFieldsJson, RoomsRow } from "./typings";
 
 const ROOM_ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 const ROOM_ID_LENGTH = 6;
+
+const ANSWER_COLUMNS: Record<QuestionType, "theory_answers" | "practice_answers"> = {
+  theory: "theory_answers",
+  practice: "practice_answers",
+};
 
 export class RoomsDb extends Db {
   constructor(dbPath?: string) {
@@ -38,8 +44,9 @@ export class RoomsDb extends Db {
     return this.get("SELECT * FROM rooms WHERE id = ?", [roomId]);
   }
 
-  updateTheoryAnswer({
+  updateAnswer({
     roomId,
+    type,
     questionIndex,
     user_answer,
     rating,
@@ -47,6 +54,7 @@ export class RoomsDb extends Db {
     baseRevision,
   }: {
     roomId: string;
+    type: QuestionType;
     questionIndex: number;
     user_answer: string;
     rating: number;
@@ -58,60 +66,21 @@ export class RoomsDb extends Db {
       throw new NotFoundError("Room not found.");
     }
 
-    const theoryAnswers = JSON.parse(room.theory_answers) as AnswerFieldsJson[];
-    const currentRevision = this.getItemRevision(theoryAnswers[questionIndex]);
+    const column = ANSWER_COLUMNS[type];
+    const answers = JSON.parse(room[column]) as AnswerFieldsJson[];
+    const currentRevision = this.getItemRevision(answers[questionIndex]);
     this.assertRevisionMatch(currentRevision, baseRevision);
 
     const nextRevision = currentRevision + 1;
-    theoryAnswers[questionIndex] = {
+    answers[questionIndex] = {
       user_answer,
       rating,
       comment,
       revision: nextRevision,
     };
 
-    this.run("UPDATE rooms SET theory_answers = ?, updated_at = datetime('now') WHERE id = ?", [
-      JSON.stringify(theoryAnswers),
-      roomId,
-    ]);
-
-    return nextRevision;
-  }
-
-  updatePracticeAnswer({
-    roomId,
-    questionIndex,
-    user_answer,
-    rating,
-    comment,
-    baseRevision,
-  }: {
-    roomId: string;
-    questionIndex: number;
-    user_answer: string;
-    rating: number;
-    comment: string;
-    baseRevision: number;
-  }): number {
-    const room = this.getRoom(roomId);
-    if (!room) {
-      throw new NotFoundError("Room not found.");
-    }
-
-    const practiceAnswers = JSON.parse(room.practice_answers) as AnswerFieldsJson[];
-    const currentRevision = this.getItemRevision(practiceAnswers[questionIndex]);
-    this.assertRevisionMatch(currentRevision, baseRevision);
-
-    const nextRevision = currentRevision + 1;
-    practiceAnswers[questionIndex] = {
-      user_answer,
-      rating,
-      comment,
-      revision: nextRevision,
-    };
-
-    this.run("UPDATE rooms SET practice_answers = ?, updated_at = datetime('now') WHERE id = ?", [
-      JSON.stringify(practiceAnswers),
+    this.run(`UPDATE rooms SET ${column} = ?, updated_at = datetime('now') WHERE id = ?`, [
+      JSON.stringify(answers),
       roomId,
     ]);
 

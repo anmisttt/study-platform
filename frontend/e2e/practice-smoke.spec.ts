@@ -23,8 +23,8 @@ const roomDetails = {
   practice: [
     {
       task: "Implement a counter",
-      description: "Write a thread-safe counter.",
-      solutions: [{ quality: "good", solution: "Use an atomic integer." }],
+      question: "Write a thread-safe counter.",
+      answer: "Use an atomic integer.",
       revision: 0,
     },
   ],
@@ -113,7 +113,7 @@ async function mockBackend(page: Page): Promise<void> {
       return;
     }
 
-    if (request.method() === "POST" && path === "/rooms/ABC123/questions/theory/0/check") {
+    if (request.method() === "POST" && path === "/rooms/ABC123/questions/theory-0/check") {
       await fulfillJson(route, {
         rating: 4,
         comment: "Solid answer.",

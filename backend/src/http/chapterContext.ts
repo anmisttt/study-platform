@@ -14,16 +14,3 @@ export function resolveChapter(chapterId: string | null): { chapterId: string; c
 
   return { chapterId, chapter };
 }
-
-export function resolveQuestionIndex(questionId: string | null, notFoundMessage: string): number {
-  if (!questionId) {
-    throw new UserError("Invalid route params.");
-  }
-
-  const index = Number.parseInt(questionId, 10);
-  if (!Number.isInteger(index) || index < 0) {
-    throw new NotFoundError(notFoundMessage);
-  }
-
-  return index;
-}
