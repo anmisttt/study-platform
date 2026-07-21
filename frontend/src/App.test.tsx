@@ -83,11 +83,12 @@ describe("App routing", () => {
   it("redirects / to /chapters and shows the index welcome", async () => {
     renderApp("/");
 
-    expect(await screen.findByText(/free platform to practice/i)).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Study Platform" })).toBeTruthy();
+    expect(screen.getByText(/for practicing software engineering concepts/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /1\. Introduction/ })).toBeTruthy();
   });
 
-  it("opens a chapter overview from the table of contents", async () => {
+  it("opens a chapter overview from the home chapter list", async () => {
     renderApp(chaptersPath());
 
     fireEvent.click(await screen.findByRole("button", { name: /1\. Introduction/ }));

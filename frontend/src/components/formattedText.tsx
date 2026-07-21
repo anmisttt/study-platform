@@ -1,8 +1,37 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 type ParagraphBlock = { kind: "paragraph"; text: string };
 type CodeBlock = { kind: "code"; text: string };
 type ContentBlock = ParagraphBlock | CodeBlock;
+
+const NUMBERED_LINE_PATTERN = /^(\d+)\.\s+(.*)$/;
+function renderInlineText(text: string): ReactNode {
+  const nodes: ReactNode[] = [];
+  const inlineCodePattern = /`([^`]+)`/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null = inlineCodePattern.exec(text);
+  let key = 0;
+
+  while (match) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+    nodes.push(
+      <code key={`inline-code-${key}`} className="formatted-text__inline-code">
+        {match[1]}
+      </code>,
+    );
+    key += 1;
+    lastIndex = match.index + match[0].length;
+    match = inlineCodePattern.exec(text);
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+
+  return nodes.length > 0 ? nodes : text;
+}
 
 function parseFormattedText(text: string): ContentBlock[] {
   const blocks: ContentBlock[] = [];
@@ -33,14 +62,99 @@ function parseFormattedText(text: string): ContentBlock[] {
   return blocks;
 }
 
+function renderParagraphContent(
+  text: string,
+  blockKey: number,
+  takeEmphasisClass: () => string | undefined,
+): ReactNode {
+  const lines = text.split("\n");
+  const elements: ReactNode[] = [];
+  let index = 0;
+  let part = 0;
+
+  while (index < lines.length) {
+    const numberedMatch = NUMBERED_LINE_PATTERN.exec(lines[index] ?? "");
+    if (numberedMatch) {
+      const items: Array<{ number: string; text: string }> = [];
+      while (index < lines.length) {
+        const match = NUMBERED_LINE_PATTERN.exec(lines[index] ?? "");
+        if (!match) {
+          break;
+        }
+        items.push({ number: match[1], text: match[2] });
+        index += 1;
+      }
+
+      elements.push(
+        <ol key={`${blockKey}-list-${part}`} className="formatted-text__numbered-list">
+          {items.map((item) => (
+            <li
+              key={`${item.number}-${item.text.slice(0, 24)}`}
+              className="formatted-text__numbered-item"
+              value={Number(item.number)}
+            >
+              <span className="formatted-text__numbered-badge" aria-hidden="true">
+                {item.number}
+              </span>
+              <span className="formatted-text__numbered-body">{renderInlineText(item.text)}</span>
+            </li>
+          ))}
+        </ol>,
+      );
+      part += 1;
+      continue;
+    }
+
+    const paragraphLines: string[] = [];
+    while (index < lines.length && !NUMBERED_LINE_PATTERN.test(lines[index] ?? "")) {
+      const line = lines[index] ?? "";
+      if (line.trim() === "") {
+        index += 1;
+        if (paragraphLines.some((entry) => entry.trim())) {
+          break;
+        }
+        continue;
+      }
+      paragraphLines.push(line);
+      index += 1;
+    }
+
+    const paragraphText = paragraphLines.join("\n");
+    if (paragraphText.trim()) {
+      const emphasisClass = takeEmphasisClass();
+      elements.push(
+        <p
+          key={`${blockKey}-paragraph-${part}`}
+          className={["formatted-text__paragraph", emphasisClass].filter(Boolean).join(" ")}
+        >
+          {renderInlineText(paragraphText)}
+        </p>,
+      );
+      part += 1;
+    }
+  }
+
+  return elements;
+}
+
 type FormattedTextProps = {
   text: string;
   className?: string;
+  emphasizeFirstParagraph?: boolean;
 };
 
-function FormattedText({ text, className }: FormattedTextProps) {
+function FormattedText({ text, className, emphasizeFirstParagraph = false }: FormattedTextProps) {
   const blocks = parseFormattedText(text);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  let pendingFirstParagraphEmphasis = emphasizeFirstParagraph;
+
+  function takeEmphasisClass(): string | undefined {
+    if (!pendingFirstParagraphEmphasis) {
+      return undefined;
+    }
+    pendingFirstParagraphEmphasis = false;
+    return "formatted-text__paragraph--emphasis";
+  }
 
   useEffect(() => {
     if (copiedIndex === null) {
@@ -142,9 +256,9 @@ function FormattedText({ text, className }: FormattedTextProps) {
             </pre>
           </div>
         ) : (
-          <p key={index} className="formatted-text__paragraph">
-            {block.text}
-          </p>
+          <div key={index} className="formatted-text__section">
+            {renderParagraphContent(block.text, index, takeEmphasisClass)}
+          </div>
         ),
       )}
     </div>

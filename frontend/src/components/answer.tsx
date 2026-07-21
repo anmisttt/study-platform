@@ -2,6 +2,14 @@ import type { PracticeSolution } from "@study-platform/shared";
 import FormattedText from "./formattedText";
 import type { QuestionItem, ResponseEntry } from "./contest-types";
 
+const RATING_META: Record<number, { color: string; label: string }> = {
+  1: { color: "#EF4444", label: "Off topic" },
+  2: { color: "#F97316", label: "Needs work" },
+  3: { color: "#F59E0B", label: "Partial" },
+  4: { color: "#22C55E", label: "Good" },
+  5: { color: "#10B981", label: "Excellent" },
+};
+
 type AnswerProps = {
   currentItem: QuestionItem;
   isEditingLocally: boolean;
@@ -12,31 +20,60 @@ type AnswerProps = {
 
 function Answer({ currentItem, isEditingLocally, response, solutions, onTryAgain }: AnswerProps) {
   const hasResult = Boolean(response?.result);
+  const rating = response?.result?.rating;
+  const ratingMeta =
+    typeof rating === "number" ? RATING_META[Math.max(1, Math.min(5, Math.round(rating)))] : null;
 
   return (
     <div className="result-card">
-      {hasResult && response && (
+      {hasResult && response && ratingMeta && typeof rating === "number" && (
         <>
-          <p>
-            <strong>Rating:</strong> {response.result.rating}/5
-          </p>
-          <p>
-            <strong>Your answer:</strong> {response.answer}
-          </p>
-          <p>
-            <strong>Comment:</strong> {response.result.comment}
-          </p>
+          <div className="result-rating">
+            <div className="result-rating-dots" aria-hidden="true">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <div
+                  key={n}
+                  className="result-rating-dot"
+                  style={{ backgroundColor: n <= rating ? ratingMeta.color : "#E5E7EB" }}
+                />
+              ))}
+            </div>
+            <span
+              className="result-rating-badge"
+              style={{
+                backgroundColor: `${ratingMeta.color}20`,
+                color: ratingMeta.color,
+              }}
+            >
+              {rating}/5 · {ratingMeta.label}
+            </span>
+            <span className="visually-hidden">
+              <strong>Rating:</strong> {rating}/5
+            </span>
+          </div>
+
+          <div>
+            <strong className="result-section-label">Your answer:</strong>
+            <p className="result-your-answer">{response.answer}</p>
+          </div>
+
+          <div className="result-comment">
+            <strong className="result-section-label">Comment:</strong>
+            <p className="result-comment-text">{response.result.comment}</p>
+          </div>
         </>
       )}
 
       {currentItem.type === "theory" ? (
-        <div>
-          <strong>Valid answer:</strong>
+        <div className="result-reference">
+          <strong className="result-section-label">
+            {isEditingLocally ? "Reference answer:" : "Valid answer:"}
+          </strong>
           <FormattedText text={typeof solutions === "string" ? solutions : ""} />
         </div>
       ) : (
-        <div>
-          <strong>Reference solutions:</strong>
+        <div className="result-reference">
+          <strong className="result-section-label">Reference solutions:</strong>
           <ul className="solution-list">
             {(Array.isArray(solutions) ? solutions : []).map((entry) => (
               <li key={entry.quality}>
@@ -49,7 +86,7 @@ function Answer({ currentItem, isEditingLocally, response, solutions, onTryAgain
       )}
 
       {!isEditingLocally && (
-        <button type="button" className="secondary-button" onClick={onTryAgain}>
+        <button type="button" className="secondary-button try-again-button" onClick={onTryAgain}>
           Try again
         </button>
       )}

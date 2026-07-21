@@ -31,14 +31,20 @@ type ChapterRouteProps = {
   onResetProgress: (roomId: string) => void;
 };
 
-function ChaptersIndexPage() {
+function ChaptersIndexPage({ chapters }: { chapters: ChapterMeta[] }) {
+  const navigate = useNavigate();
+
   return (
     <div className="chapters-index-page">
       <div className="chapters-index-card">
-        <h1 className="chapters-index-message">
-          <span className="chapters-index-welcome">Hi! It&apos;s a free platform to practice different SWE topics.</span>
-          <span className="chapters-index-lead">To start practicing, select a chapter from the table of contents.</span>
-          <a className="chapters-index-github-link" href={GITHUB_REPO_URL} target="_blank" rel="noreferrer" aria-label="View source on GitHub">
+        <div className="chapters-index-brand">
+          <a
+            className="chapters-index-github-link"
+            href={GITHUB_REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="View source on GitHub"
+          >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path
                 fill="currentColor"
@@ -46,7 +52,46 @@ function ChaptersIndexPage() {
               />
             </svg>
           </a>
-        </h1>
+          <h1 className="chapters-index-title">Study Platform</h1>
+        </div>
+
+        <p className="chapters-index-lead">For practicing software engineering concepts</p>
+
+        <div className="chapters-index-list">
+          {chapters.map((chapter) => (
+            <button
+              key={chapter.id}
+              type="button"
+              className="chapters-index-item"
+              aria-label={`${chapter.number}. ${chapter.name}`}
+              onClick={() => {
+                navigate(chapterOverviewPath(chapter.id));
+              }}
+            >
+              <span>
+                <span className="chapters-index-item-number">{chapter.number}. </span>
+                {chapter.name}
+              </span>
+              <span className="chapters-index-item-meta" aria-hidden="true">
+                <span className="chapters-index-item-counts">
+                  {chapter.theoryCount}T · {chapter.practiceCount}P
+                </span>
+                <svg
+                  className="chapters-index-item-arrow"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -172,6 +217,7 @@ function App() {
   const [searchParams] = useSearchParams();
   const activeChapterId = activeChapterIdFromPath(location.pathname);
   const roomId = roomIdFromSearch(searchParams.toString());
+  const isHomeRoute = location.pathname === chaptersPath() || location.pathname === "/";
   const isPracticeRoute = /^\/chapters\/[^/]+\/questions\//.test(location.pathname);
 
   useEffect(() => {
@@ -244,8 +290,8 @@ function App() {
   }
 
   return (
-    <div className="layout">
-      <TableOfContents chapters={chaptersList} activeChapterId={activeChapterId} />
+    <div className={isHomeRoute ? "layout-home" : "layout"}>
+      {!isHomeRoute && <TableOfContents chapters={chaptersList} activeChapterId={activeChapterId} />}
 
       <main className="content">
         {roomId && isPracticeRoute && (
@@ -256,7 +302,7 @@ function App() {
         )}
         <Routes>
           <Route path="/" element={<Navigate to={chaptersPath()} replace />} />
-          <Route path="/chapters" element={<ChaptersIndexPage />} />
+          <Route path="/chapters" element={<ChaptersIndexPage chapters={chaptersList} />} />
           <Route path="/chapters/:chapterId" element={<ChapterIdRedirect />} />
           <Route path="/chapters/:chapterId/overview" element={<ChapterOverviewPage {...routeProps} />} />
           <Route path="/chapters/:chapterId/questions/:questionRef" element={<ChapterQuestionPage {...routeProps} />} />

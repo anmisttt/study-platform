@@ -546,34 +546,70 @@ function Contest({
     return null;
   }
 
+  const theoryItems = items.filter((item) => item.type === "theory");
+  const practiceItems = items.filter((item) => item.type === "practice");
+
+  function renderProgressDot(item: QuestionItem, index: number) {
+    return (
+      <button
+        key={item.id}
+        type="button"
+        className={`dot ${index === currentIndex ? "active" : ""} ${getDotRatingClass(chapterSession.responses[item.id])}`}
+        onClick={() => openQuestion(index)}
+        aria-label={`Open question ${index + 1}`}
+      />
+    );
+  }
+
   return (
     <div className="practice-layout">
       <div className="practice-header">
-        <p className="practice-chapter-number">Chapter {chapterMeta.number}</p>
-        <h1 className="practice-chapter-title">{chapterMeta.name}</h1>
-        {roomId && (
-          <div className="room-id-inline">
-            <span>Room ID:</span>
-            <code>{roomId}</code>
-          </div>
-        )}
-        <button type="button" className="secondary-button reset-progress-button" onClick={handleResetProgress}>
-          Start again
-        </button>
+        <div className="practice-header-spacer" />
+        <div className="practice-header-center">
+          <p className="practice-chapter-number">Chapter {chapterMeta.number}</p>
+          <h1 className="practice-chapter-title">{chapterMeta.name}</h1>
+          {roomId && (
+            <div className="room-id-inline">
+              <span>Room ID:</span>
+              <code>{roomId}</code>
+            </div>
+          )}
+          <button type="button" className="reset-progress-button" onClick={handleResetProgress}>
+            <svg
+              className="reset-progress-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 4v6h6" />
+              <path d="M21 20v-6h-6" />
+              <path d="M5.5 15a7.5 7.5 0 0 0 12.8 2.2L21 14.5" />
+              <path d="M18.5 9A7.5 7.5 0 0 0 5.7 6.8L3 9.5" />
+            </svg>
+            Start again
+          </button>
+        </div>
+        <div className="practice-header-spacer" />
       </div>
 
       <div className="practice-card">
-        <div className="progress-row">
+        <div className="practice-card-header">
           <div className="progress">
-            {items.map((item, index) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`dot ${index === currentIndex ? "active" : ""} ${getDotRatingClass(chapterSession.responses[item.id])}`}
-                onClick={() => openQuestion(index)}
-                aria-label={`Open question ${index + 1}`}
-              />
-            ))}
+            <div className="progress-group">
+              {theoryItems.map((item) => renderProgressDot(item, items.indexOf(item)))}
+            </div>
+            {practiceItems.length > 0 && (
+              <>
+                <div className="progress-divider" aria-hidden="true" />
+                <div className="progress-group">
+                  {practiceItems.map((item) => renderProgressDot(item, items.indexOf(item)))}
+                </div>
+              </>
+            )}
           </div>
           <div className="timer-top-right">
             <Timer
@@ -600,55 +636,6 @@ function Contest({
           onTryAgain={handleTryAgain}
         />
 
-        <div className="navigation">
-          <button
-            type="button"
-            className="nav-arrow-button"
-            onClick={() => openQuestion(currentIndex - 1)}
-            disabled={currentIndex === 0}
-            aria-label="Previous question"
-            title="Previous"
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <line x1="19" y1="12" x2="5" y2="12" />
-              <polyline points="12 19 5 12 12 5" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className="nav-arrow-button"
-            onClick={() => openQuestion(currentIndex + 1)}
-            disabled={currentIndex === items.length - 1}
-            aria-label="Next question"
-            title="Next"
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <line x1="5" y1="12" x2="19" y2="12" />
-              <polyline points="12 5 19 12 12 19" />
-            </svg>
-          </button>
-        </div>
-
         {allAnswered && (
           <div className="summary-card">
             <h3>Summary score</h3>
@@ -658,6 +645,58 @@ function Contest({
             <p>Average: {summary.average.toFixed(2)} / 5</p>
           </div>
         )}
+      </div>
+
+      <div className="navigation">
+        <button
+          type="button"
+          className="nav-arrow-button"
+          onClick={() => openQuestion(currentIndex - 1)}
+          disabled={currentIndex === 0}
+          aria-label="Previous question"
+          title="Previous"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <line x1="19" y1="12" x2="5" y2="12" />
+            <polyline points="12 19 5 12 12 5" />
+          </svg>
+        </button>
+        <span className="nav-position">
+          {currentIndex + 1} / {items.length}
+        </span>
+        <button
+          type="button"
+          className="nav-arrow-button"
+          onClick={() => openQuestion(currentIndex + 1)}
+          disabled={currentIndex === items.length - 1}
+          aria-label="Next question"
+          title="Next"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <line x1="5" y1="12" x2="19" y2="12" />
+            <polyline points="12 5 19 12 12 19" />
+          </svg>
+        </button>
       </div>
     </div>
   );
