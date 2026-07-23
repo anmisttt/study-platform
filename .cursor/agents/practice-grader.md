@@ -1,10 +1,10 @@
 ---
-  Grades a practice answer via the local grade-practice CLI (tutor), runs
-  reference-alignment checks, and hypothesizes why a score is below 5.
-  Use after practice-solver returns a solution, or to score the stored answer.
 name: practice-grader
 model: gpt-5.6-terra[]
 description: >-
+  Grades a practice answer via the local grade-practice CLI (tutor), runs
+  reference-alignment checks, and hypothesizes why a score is below 5.
+  Use after practice-solver returns a solution, or to score the stored answer.
 readonly: true
 ---
 

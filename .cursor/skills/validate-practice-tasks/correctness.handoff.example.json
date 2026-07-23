@@ -1,0 +1,45 @@
+{
+  "status": "fail",
+  "chapterId": "tenth_chapter",
+  "practiceIndex": 0,
+  "handOff": "practice-editor",
+  "checks": [
+    { "id": "answer_covers_tasks", "pass": true, "detail": "Answer implements tasks 1–4" },
+    {
+      "id": "answer_correct",
+      "pass": false,
+      "detail": "linearizable_read returns local replica value without leadership check"
+    },
+    { "id": "setup_answer_consistent", "pass": true, "detail": "Same LeaderlessStore module and entrypoint" },
+    { "id": "no_contradictions", "pass": true, "detail": "Tasks agree with each other" },
+    {
+      "id": "commands_and_prereqs",
+      "pass": true,
+      "detail": "Python 3.10+ stdlib matches answer"
+    },
+    {
+      "id": "no_hidden_requirements",
+      "pass": false,
+      "detail": "Answer uses an epoch fence never mentioned in the question"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "error",
+      "id": "answer_correct",
+      "where": "answer",
+      "location": "LeaderStore.linearizable_read",
+      "finding": "Read path never verifies the caller is the current leader",
+      "fix": "Reject or redirect non-leader reads; only the leader may serve linearizable_read"
+    },
+    {
+      "severity": "error",
+      "id": "no_hidden_requirements",
+      "where": "question+answer",
+      "location": "task 3 / answer epoch fence",
+      "finding": "Reference relies on an epoch fence the brief never requires",
+      "fix": "Either state the epoch-fence requirement in a numbered task or remove it from the answer"
+    }
+  ],
+  "feedbackForEditor": "1) Make linearizable_read leadership-aware in the answer. 2) Either document the epoch fence in the numbered tasks or drop it from the reference so question and answer match."
+}

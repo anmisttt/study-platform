@@ -1,0 +1,51 @@
+{
+  "status": "fail",
+  "chapterId": "tenth_chapter",
+  "practiceIndex": 0,
+  "handOff": "practice-editor",
+  "checks": [
+    { "id": "reproducible", "pass": true, "detail": "Hands-on Python exercise with clear run steps" },
+    { "id": "fenced_code", "pass": true, "detail": "Setup and answer code are fenced" },
+    { "id": "numbered_steps", "pass": true, "detail": "Tasks 1–5 numbered" },
+    {
+      "id": "no_md_decoration",
+      "pass": false,
+      "detail": "answer opens with markdown heading '# Solution'"
+    },
+    { "id": "full_answer", "pass": true, "detail": "Answer is full script from setup plus changes" },
+    {
+      "id": "setup_with_comments",
+      "pass": false,
+      "detail": "Setup has no comments marking features the tasks require"
+    },
+    {
+      "id": "prereqs_install",
+      "pass": false,
+      "detail": "No Prerequisites section; Python assumed silently"
+    }
+  ],
+  "violations": [
+    {
+      "rule": 4,
+      "id": "no_md_decoration",
+      "where": "answer",
+      "snippet": "# Solution",
+      "fix": "Replace headings with plain prose labels; keep code in fences only"
+    },
+    {
+      "rule": 6,
+      "id": "setup_with_comments",
+      "where": "question",
+      "snippet": "class LeaderlessStore:",
+      "fix": "Add comments in the setup that mark LeaderStore / linearizable_read as the required features"
+    },
+    {
+      "rule": 7,
+      "id": "prereqs_install",
+      "where": "question",
+      "snippet": "Build a tiny 3-replica register",
+      "fix": "Add Prerequisites: Python 3.10+ (stdlib only); no extra packages"
+    }
+  ],
+  "feedbackForEditor": "1) Strip '# Solution' / '## Write-up' from answer; use plain prose. 2) Comment the setup where LeaderStore and linearizable_read belong. 3) Add an explicit Prerequisites line with install/runtime guidance."
+}
