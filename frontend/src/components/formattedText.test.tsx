@@ -60,4 +60,30 @@ describe("FormattedText", () => {
     expect(paragraphs[0]).toHaveClass("formatted-text__paragraph--emphasis");
     expect(paragraphs[1]).not.toHaveClass("formatted-text__paragraph--emphasis");
   });
+
+  it("syntax-highlights fenced code when a language tag is present", () => {
+    render(
+      <FormattedText
+        text={["Before", "```sql", "SELECT 1;", "```", "After"].join("\n")}
+      />,
+    );
+
+    const code = document.querySelector(".formatted-text__code code");
+    expect(code).toHaveClass("hljs");
+    expect(code).toHaveClass("language-sql");
+    expect(code?.querySelector(".hljs-keyword")).toBeTruthy();
+    expect(code?.textContent).toBe("SELECT 1;");
+  });
+
+  it("escapes unlabeled fenced code without token spans", () => {
+    render(
+      <FormattedText text={["```", "SELECT <id>", "```"].join("\n")} />,
+    );
+
+    const code = document.querySelector(".formatted-text__code code");
+    expect(code).toHaveClass("hljs");
+    expect(code).not.toHaveClass("language-sql");
+    expect(code?.querySelector(".hljs-keyword")).toBeNull();
+    expect(code?.innerHTML).toBe("SELECT &lt;id&gt;");
+  });
 });

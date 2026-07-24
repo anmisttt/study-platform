@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { highlightCode } from "../lib/highlightCode";
 
 type ParagraphBlock = { kind: "paragraph"; text: string };
-type CodeBlock = { kind: "code"; text: string };
+type CodeBlock = { kind: "code"; text: string; language?: string };
 type ContentBlock = ParagraphBlock | CodeBlock;
 
 const NUMBERED_LINE_PATTERN = /^(\d+)\.\s+(.*)$/;
@@ -35,7 +36,7 @@ function renderInlineText(text: string): ReactNode {
 
 function parseFormattedText(text: string): ContentBlock[] {
   const blocks: ContentBlock[] = [];
-  const fencePattern = /```(?:[\w-]*)?\n?([\s\S]*?)```/g;
+  const fencePattern = /```([\w-]*)?\n?([\s\S]*?)```/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null = fencePattern.exec(text);
 
@@ -47,7 +48,12 @@ function parseFormattedText(text: string): ContentBlock[] {
       }
     }
 
-    blocks.push({ kind: "code", text: match[1].replace(/\n$/, "") });
+    const language = match[1]?.trim().toLowerCase() || undefined;
+    blocks.push({
+      kind: "code",
+      text: match[2].replace(/\n$/, ""),
+      ...(language ? { language } : {}),
+    });
     lastIndex = match.index + match[0].length;
     match = fencePattern.exec(text);
   }
@@ -193,74 +199,86 @@ function FormattedText({ text, className, emphasizeFirstParagraph = false }: For
 
   return (
     <div className={["formatted-text", className].filter(Boolean).join(" ")}>
-      {blocks.map((block, index) =>
-        block.kind === "code" ? (
-          <div key={index} className="formatted-text__code-block">
-            <button
-              type="button"
-              className={[
-                "formatted-text__code-copy-button",
-                copiedIndex === index ? "copied" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              onClick={() => void copyToClipboard(block.text, index)}
-              aria-label={copiedIndex === index ? "Code copied" : "Copy code block"}
-              title={copiedIndex === index ? "Copied" : "Copy"}
-            >
-              {copiedIndex === index ? (
-                <svg
-                  className="formatted-text__code-copy-icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M5 13L10 18L19 7"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              ) : (
-                <svg
-                  className="formatted-text__code-copy-icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <rect
-                    x="9"
-                    y="9"
-                    width="10"
-                    height="10"
-                    rx="2"
-                    ry="2"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  />
-                  <path
-                    d="M7 15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-            </button>
-            <pre className="formatted-text__code">
-              <code>{block.text}</code>
-            </pre>
-          </div>
-        ) : (
+      {blocks.map((block, index) => {
+        if (block.kind === "code") {
+          const highlighted = highlightCode(block.text, block.language);
+          return (
+            <div key={index} className="formatted-text__code-block">
+              <button
+                type="button"
+                className={[
+                  "formatted-text__code-copy-button",
+                  copiedIndex === index ? "copied" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                onClick={() => void copyToClipboard(block.text, index)}
+                aria-label={copiedIndex === index ? "Code copied" : "Copy code block"}
+                title={copiedIndex === index ? "Copied" : "Copy"}
+              >
+                {copiedIndex === index ? (
+                  <svg
+                    className="formatted-text__code-copy-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M5 13L10 18L19 7"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    className="formatted-text__code-copy-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <rect
+                      x="9"
+                      y="9"
+                      width="10"
+                      height="10"
+                      rx="2"
+                      ry="2"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                    <path
+                      d="M7 15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
+              </button>
+              <pre className="formatted-text__code">
+                <code
+                  className={
+                    highlighted.language
+                      ? `language-${highlighted.language} hljs`
+                      : "hljs"
+                  }
+                  dangerouslySetInnerHTML={{ __html: highlighted.html }}
+                />
+              </pre>
+            </div>
+          );
+        }
+
+        return (
           <div key={index} className="formatted-text__section">
             {renderParagraphContent(block.text, index, takeEmphasisClass)}
           </div>
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }

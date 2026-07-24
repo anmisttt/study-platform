@@ -631,6 +631,104 @@
   max-width: 100%;
 }
 
+.formatted-text__code .hljs {
+  display: block;
+  padding: 0;
+  background: transparent;
+  color: #24292e;
+  overflow: visible;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.formatted-text__code .hljs-doctag,
+.formatted-text__code .hljs-keyword,
+.formatted-text__code .hljs-meta .hljs-keyword,
+.formatted-text__code .hljs-template-tag,
+.formatted-text__code .hljs-template-variable,
+.formatted-text__code .hljs-type,
+.formatted-text__code .hljs-variable.language_ {
+  color: #d73a49;
+}
+
+.formatted-text__code .hljs-title,
+.formatted-text__code .hljs-title.class_,
+.formatted-text__code .hljs-title.class_.inherited__,
+.formatted-text__code .hljs-title.function_ {
+  color: #6f42c1;
+}
+
+.formatted-text__code .hljs-attr,
+.formatted-text__code .hljs-attribute,
+.formatted-text__code .hljs-literal,
+.formatted-text__code .hljs-meta,
+.formatted-text__code .hljs-number,
+.formatted-text__code .hljs-operator,
+.formatted-text__code .hljs-variable,
+.formatted-text__code .hljs-selector-attr,
+.formatted-text__code .hljs-selector-class,
+.formatted-text__code .hljs-selector-id {
+  color: #005cc5;
+}
+
+.formatted-text__code .hljs-regexp,
+.formatted-text__code .hljs-string,
+.formatted-text__code .hljs-meta .hljs-string {
+  color: #032f62;
+}
+
+.formatted-text__code .hljs-built_in,
+.formatted-text__code .hljs-symbol {
+  color: #e36209;
+}
+
+.formatted-text__code .hljs-comment,
+.formatted-text__code .hljs-code,
+.formatted-text__code .hljs-formula {
+  color: #6a737d;
+}
+
+.formatted-text__code .hljs-name,
+.formatted-text__code .hljs-quote,
+.formatted-text__code .hljs-selector-tag,
+.formatted-text__code .hljs-selector-pseudo {
+  color: #22863a;
+}
+
+.formatted-text__code .hljs-subst {
+  color: #24292e;
+}
+
+.formatted-text__code .hljs-section {
+  color: #005cc5;
+  font-weight: bold;
+}
+
+.formatted-text__code .hljs-bullet {
+  color: #735c0f;
+}
+
+.formatted-text__code .hljs-emphasis {
+  color: #24292e;
+  font-style: italic;
+}
+
+.formatted-text__code .hljs-strong {
+  color: #24292e;
+  font-weight: bold;
+}
+
+.formatted-text__code .hljs-addition {
+  color: #22863a;
+  background-color: #f0fff4;
+}
+
+.formatted-text__code .hljs-deletion {
+  color: #b31d28;
+  background-color: #ffeef0;
+}
+
 .formatted-text__code-copy-button {
   position: absolute;
   top: 8px;
