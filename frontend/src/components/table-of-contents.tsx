@@ -104,7 +104,7 @@ function TableOfContents({ chapters, activeChapterId }: TableOfContentsProps) {
                 className={`chapter-button ${chapter.id === activeChapterId ? "active" : ""}`}
                 onClick={() => {
                   setIsOpen(false);
-                  navigate(chapterOverviewPath(chapter.id));
+                  navigate(chapterOverviewPath(chapter.number));
                 }}
               >
                 {chapter.number}. {chapter.name}

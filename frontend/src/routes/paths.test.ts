@@ -1,39 +1,63 @@
 import { describe, expect, it } from "vitest";
+import type { ChapterMeta } from "@study-platform/shared";
 import {
-  activeChapterIdFromPath,
+  canonicalChapterPath,
+  chapterKeyFromPath,
   chapterOverviewPath,
   chapterQuestionPath,
   chaptersPath,
+  resolveChapterMeta,
   roomIdFromSearch,
 } from "./paths";
 
+const chapterMeta: ChapterMeta = {
+  id: "first_chapter",
+  number: 1,
+  name: "Introduction",
+  theoryCount: 1,
+  practiceCount: 1,
+};
+
+const chaptersById = new Map([[chapterMeta.id, chapterMeta]]);
+
 describe("routes/paths", () => {
-  it("builds chapter paths and preserves roomId in the query string", () => {
+  it("builds chapter paths from chapter number and preserves roomId", () => {
     expect(chaptersPath()).toBe("/chapters");
-    expect(chapterOverviewPath("first_chapter")).toBe("/chapters/first_chapter/overview");
-    expect(chapterOverviewPath("first_chapter", "ABC123")).toBe(
-      "/chapters/first_chapter/overview?roomId=ABC123",
-    );
-    expect(chapterQuestionPath("first_chapter", "theory-0")).toBe(
-      "/chapters/first_chapter/questions/theory-0",
-    );
-    expect(chapterQuestionPath("first_chapter", "practice-0", "ABC123")).toBe(
-      "/chapters/first_chapter/questions/practice-0?roomId=ABC123",
+    expect(chapterOverviewPath(1)).toBe("/chapters/1/overview");
+    expect(chapterOverviewPath(1, "ABC123")).toBe("/chapters/1/overview?roomId=ABC123");
+    expect(chapterQuestionPath(1, "theory-0")).toBe("/chapters/1/questions/theory-0");
+    expect(chapterQuestionPath(11, "practice-0", "ABC123")).toBe(
+      "/chapters/11/questions/practice-0?roomId=ABC123",
     );
   });
 
   it("encodes room ids in query params", () => {
-    expect(chapterQuestionPath("ch", "theory-0", "A B")).toBe(
-      "/chapters/ch/questions/theory-0?roomId=A%20B",
+    expect(chapterQuestionPath(1, "theory-0", "A B")).toBe(
+      "/chapters/1/questions/theory-0?roomId=A%20B",
     );
   });
 
-  it("extracts the active chapter id from the pathname", () => {
-    expect(activeChapterIdFromPath("/chapters")).toBe("");
-    expect(activeChapterIdFromPath("/chapters/first_chapter/overview")).toBe("first_chapter");
-    expect(activeChapterIdFromPath("/chapters/first_chapter/questions/theory-0")).toBe(
-      "first_chapter",
+  it("extracts the chapter key from the pathname", () => {
+    expect(chapterKeyFromPath("/chapters")).toBe("");
+    expect(chapterKeyFromPath("/chapters/1/overview")).toBe("1");
+    expect(chapterKeyFromPath("/chapters/first_chapter/questions/theory-0")).toBe("first_chapter");
+  });
+
+  it("resolves chapters by number or legacy id", () => {
+    expect(resolveChapterMeta("1", chaptersById)).toEqual(chapterMeta);
+    expect(resolveChapterMeta("first_chapter", chaptersById)).toEqual(chapterMeta);
+    expect(resolveChapterMeta("99", chaptersById)).toBeNull();
+    expect(resolveChapterMeta("missing", chaptersById)).toBeNull();
+  });
+
+  it("canonicalizes legacy id paths to chapter numbers", () => {
+    expect(canonicalChapterPath("/chapters/first_chapter/overview", chapterMeta)).toBe(
+      "/chapters/1/overview",
     );
+    expect(
+      canonicalChapterPath("/chapters/first_chapter/questions/theory-0", chapterMeta),
+    ).toBe("/chapters/1/questions/theory-0");
+    expect(canonicalChapterPath("/chapters/1/overview", chapterMeta)).toBeNull();
   });
 
   it("parses roomId from the search string", () => {

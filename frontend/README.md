@@ -31,8 +31,8 @@ React + Vite single-page app for the Study Platform. It renders a chapter table 
 ## Routes
 
 - `/chapters` - landing page / table of contents
-- `/chapters/:chapterId/overview?roomId=...` - chapter overview
-- `/chapters/:chapterId/questions/:questionRef?roomId=...` - practice a question (a `roomId` is required)
+- `/chapters/:chapterNumber/overview?roomId=...` - chapter overview
+- `/chapters/:chapterNumber/questions/:questionRef?roomId=...` - practice a question (a `roomId` is required)
 
 ## Run locally
 

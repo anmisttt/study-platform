@@ -111,7 +111,7 @@ describe("App routing", () => {
       return Promise.reject(new Error(`Unexpected fetch: ${url}`));
     });
 
-    renderApp(chapterQuestionPath(chapterMeta.id, "theory-0", "ABC123"));
+    renderApp(chapterQuestionPath(chapterMeta.number, "theory-0", "ABC123"));
 
     expect(await screen.findByText("Theory 1")).toBeTruthy();
     expect(screen.getByText("What is a process?")).toBeTruthy();
@@ -122,7 +122,7 @@ describe("App routing", () => {
   });
 
   it("redirects practice routes without a roomId back to overview with an error", async () => {
-    renderApp(chapterQuestionPath(chapterMeta.id, "theory-0"));
+    renderApp(chapterQuestionPath(chapterMeta.number, "theory-0"));
 
     expect(await screen.findByText("A room ID is required to practice.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Generate new room" })).toBeTruthy();
@@ -144,7 +144,7 @@ describe("App routing", () => {
       return Promise.reject(new Error(`Unexpected fetch: ${url}`));
     });
 
-    renderApp(chapterOverviewPath(chapterMeta.id));
+    renderApp(chapterOverviewPath(chapterMeta.number));
 
     fireEvent.click(await screen.findByRole("button", { name: "Generate new room" }));
 
@@ -166,11 +166,30 @@ describe("App routing", () => {
       return Promise.reject(new Error(`Unexpected fetch: ${url}`));
     });
 
-    renderApp(chapterQuestionPath(chapterMeta.id, "theory-99", "ABC123"));
+    renderApp(chapterQuestionPath(chapterMeta.number, "theory-99", "ABC123"));
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Generate new room" })).toBeTruthy();
     });
     expect(screen.queryByText("Theory 1")).toBeNull();
+  });
+
+  it("redirects legacy chapter id URLs to chapter number URLs", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/chapters") && !url.includes("/rooms")) {
+        return Promise.resolve(jsonResponse([chapterMeta]));
+      }
+      if (url.includes("/rooms/ABC123")) {
+        return Promise.resolve(jsonResponse(roomDetails));
+      }
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+    });
+
+    renderApp(`/chapters/${chapterMeta.id}/questions/theory-0?roomId=ABC123`);
+
+    expect(await screen.findByText("Theory 1")).toBeTruthy();
+    expect(screen.getByText("What is a process?")).toBeTruthy();
   });
 });

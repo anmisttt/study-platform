@@ -8,10 +8,12 @@ import { parseQuestionRef, type ChapterMeta } from "@study-platform/shared";
 import type { ChapterSession } from "./components/contest-types";
 import { createInitialChapterSession } from "./components/contest-types";
 import {
-  activeChapterIdFromPath,
+  canonicalChapterPath,
+  chapterKeyFromPath,
   chapterOverviewPath,
   chapterQuestionPath,
   chaptersPath,
+  resolveChapterMeta,
   roomIdFromSearch,
 } from "./routes/paths";
 import { clearRoomDraftUpdates } from "./utils/draftStorage";
@@ -30,6 +32,19 @@ type ChapterRouteProps = {
   onSessionChange: (roomId: string, updater: (session: ChapterSession) => ChapterSession) => void;
   onResetProgress: (roomId: string) => void;
 };
+
+function useResolvedChapter(chapters: Map<string, ChapterMeta>): {
+  chapterMeta: ChapterMeta | null;
+  legacyRedirectTo: string | null;
+} {
+  const { chapterId: chapterKey } = useParams();
+  const location = useLocation();
+  const chapterMeta = chapterKey ? resolveChapterMeta(chapterKey, chapters) : null;
+  const canonicalPath = chapterMeta ? canonicalChapterPath(location.pathname, chapterMeta) : null;
+  const legacyRedirectTo = canonicalPath ? `${canonicalPath}${location.search}` : null;
+
+  return { chapterMeta, legacyRedirectTo };
+}
 
 function ChaptersIndexPage({ chapters }: { chapters: ChapterMeta[] }) {
   const navigate = useNavigate();
@@ -65,7 +80,7 @@ function ChaptersIndexPage({ chapters }: { chapters: ChapterMeta[] }) {
               className="chapters-index-item"
               aria-label={`${chapter.number}. ${chapter.name}`}
               onClick={() => {
-                navigate(chapterOverviewPath(chapter.id));
+                navigate(chapterOverviewPath(chapter.number));
               }}
             >
               <span>
@@ -98,13 +113,16 @@ function ChaptersIndexPage({ chapters }: { chapters: ChapterMeta[] }) {
 }
 
 function ChapterOverviewPage({ chapters, roomSessions, roomId, onSessionChange, onResetProgress }: ChapterRouteProps) {
-  const { chapterId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const chapterMeta = chapterId ? (chapters.get(chapterId) ?? null) : null;
+  const { chapterMeta, legacyRedirectTo } = useResolvedChapter(chapters);
   const roomError = (location.state as { roomError?: string } | null)?.roomError ?? "";
 
-  if (!chapterId || !chapterMeta) {
+  if (legacyRedirectTo) {
+    return <Navigate to={legacyRedirectTo} replace state={location.state} />;
+  }
+
+  if (!chapterMeta) {
     return <Navigate to={chaptersPath()} replace />;
   }
 
@@ -116,10 +134,10 @@ function ChapterOverviewPage({ chapters, roomSessions, roomId, onSessionChange, 
       roomId={roomId}
       initialError={roomError}
       onQuestionNavigate={(questionRef, activeRoomId) => {
-        navigate(chapterQuestionPath(chapterId, questionRef, activeRoomId));
+        navigate(chapterQuestionPath(chapterMeta.number, questionRef, activeRoomId));
       }}
       onRoomAccessError={(message) => {
-        navigate(chapterOverviewPath(chapterId), { replace: true, state: { roomError: message } });
+        navigate(chapterOverviewPath(chapterMeta.number), { replace: true, state: { roomError: message } });
       }}
       onSessionChange={(updater) => {
         if (!roomId) {
@@ -138,19 +156,20 @@ function ChapterOverviewPage({ chapters, roomSessions, roomId, onSessionChange, 
 }
 
 function ChapterQuestionPage({ chapters, roomSessions, roomId, onSessionChange, onResetProgress }: ChapterRouteProps) {
-  const { chapterId, questionRef } = useParams();
+  const { questionRef } = useParams();
   const navigate = useNavigate();
-  const chapterMeta = chapterId ? (chapters.get(chapterId) ?? null) : null;
+  const location = useLocation();
+  const { chapterMeta, legacyRedirectTo } = useResolvedChapter(chapters);
   const chapterSession = roomId ? (roomSessions[roomId] ?? createInitialChapterSession()) : createInitialChapterSession();
   const items = useMemo(() => (chapterSession.details ? flattenItems(chapterSession.details) : []), [chapterSession.details]);
 
   useEffect(() => {
-    if (!chapterId) {
+    if (!chapterMeta || legacyRedirectTo) {
       return;
     }
 
     if (!roomId) {
-      navigate(chapterOverviewPath(chapterId), {
+      navigate(chapterOverviewPath(chapterMeta.number), {
         replace: true,
         state: { roomError: "A room ID is required to practice." },
       });
@@ -158,16 +177,24 @@ function ChapterQuestionPage({ chapters, roomSessions, roomId, onSessionChange, 
     }
 
     if (!questionRef || !parseQuestionRef(questionRef)) {
-      navigate(chapterOverviewPath(chapterId, roomId), { replace: true });
+      navigate(chapterOverviewPath(chapterMeta.number, roomId), { replace: true });
       return;
     }
 
     if (items.length > 0 && !items.some((item) => item.id === questionRef)) {
-      navigate(chapterOverviewPath(chapterId, roomId), { replace: true });
+      navigate(chapterOverviewPath(chapterMeta.number, roomId), { replace: true });
     }
-  }, [chapterId, roomId, questionRef, items, navigate]);
+  }, [chapterMeta, legacyRedirectTo, roomId, questionRef, items, navigate]);
 
-  if (!chapterId || !chapterMeta || !roomId || !questionRef || !parseQuestionRef(questionRef)) {
+  if (legacyRedirectTo) {
+    return <Navigate to={legacyRedirectTo} replace state={location.state} />;
+  }
+
+  if (!chapterMeta) {
+    return <Navigate to={chaptersPath()} replace />;
+  }
+
+  if (!roomId || !questionRef || !parseQuestionRef(questionRef)) {
     return null;
   }
 
@@ -180,32 +207,33 @@ function ChapterQuestionPage({ chapters, roomSessions, roomId, onSessionChange, 
       roomId={roomId}
       questionRef={questionRef}
       onQuestionNavigate={(nextQuestionRef, activeRoomId) => {
-        navigate(chapterQuestionPath(chapterId, nextQuestionRef, activeRoomId));
+        navigate(chapterQuestionPath(chapterMeta.number, nextQuestionRef, activeRoomId));
       }}
       onRoomAccessError={(message) => {
-        navigate(chapterOverviewPath(chapterId), { replace: true, state: { roomError: message } });
+        navigate(chapterOverviewPath(chapterMeta.number), { replace: true, state: { roomError: message } });
       }}
       onSessionChange={(updater) => {
         onSessionChange(roomId, updater);
       }}
       onResetProgress={() => {
         onResetProgress(roomId);
-        navigate(chapterOverviewPath(chapterId, roomId));
+        navigate(chapterOverviewPath(chapterMeta.number, roomId));
       }}
     />
   );
 }
 
-function ChapterIdRedirect() {
-  const { chapterId } = useParams();
+function ChapterIdRedirect({ chapters }: { chapters: Map<string, ChapterMeta> }) {
+  const { chapterId: chapterKey } = useParams();
   const location = useLocation();
   const roomId = roomIdFromSearch(location.search);
+  const chapterMeta = chapterKey ? resolveChapterMeta(chapterKey, chapters) : null;
 
-  if (!chapterId) {
+  if (!chapterMeta) {
     return <Navigate to={chaptersPath()} replace />;
   }
 
-  return <Navigate to={chapterOverviewPath(chapterId, roomId ?? undefined)} replace />;
+  return <Navigate to={chapterOverviewPath(chapterMeta.number, roomId ?? undefined)} replace />;
 }
 
 function App() {
@@ -215,7 +243,8 @@ function App() {
   const [roomSessions, setRoomSessions] = useState<Record<string, ChapterSession>>({});
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const activeChapterId = activeChapterIdFromPath(location.pathname);
+  const activeChapterKey = chapterKeyFromPath(location.pathname);
+  const activeChapterId = resolveChapterMeta(activeChapterKey, chapters)?.id ?? "";
   const roomId = roomIdFromSearch(searchParams.toString());
   const isHomeRoute = location.pathname === chaptersPath() || location.pathname === "/";
   const isPracticeRoute = /^\/chapters\/[^/]+\/questions\//.test(location.pathname);
@@ -303,7 +332,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to={chaptersPath()} replace />} />
           <Route path="/chapters" element={<ChaptersIndexPage chapters={chaptersList} />} />
-          <Route path="/chapters/:chapterId" element={<ChapterIdRedirect />} />
+          <Route path="/chapters/:chapterId" element={<ChapterIdRedirect chapters={chapters} />} />
           <Route path="/chapters/:chapterId/overview" element={<ChapterOverviewPage {...routeProps} />} />
           <Route path="/chapters/:chapterId/questions/:questionRef" element={<ChapterQuestionPage {...routeProps} />} />
           <Route path="*" element={<Navigate to={chaptersPath()} replace />} />
