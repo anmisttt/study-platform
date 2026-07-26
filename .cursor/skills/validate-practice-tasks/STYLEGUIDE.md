@@ -12,8 +12,14 @@ Fields: `task` (short title), `question` (student-facing brief), `answer` (perfe
 ## 2. Fenced code blocks
 
 - Every code or shell snippet in `question` and `answer` must be wrapped in triple-backtick fences (```).
-- Prefer a language tag when helpful (`python`, `bash`, `sql`, …).
 - Do not leave multi-line code as indented plain text outside fences.
+- Put a language tag on the opening fence when the block is one of the supported highlight languages. The UI highlights from the fence tag only (no content auto-detect); unlabeled or unknown tags render as plain escaped text.
+- Supported highlight languages (and aliases):
+  - `sql` — also `pgsql`, `postgres`, `postgresql`, `plpgsql`
+  - `python` — also `py`
+  - `bash` — also `sh`, `shell`, `zsh`
+  - `json`
+- Example: use ` ```sql ` / ` ```python ` / ` ```bash ` / ` ```json `, not a bare ` ``` `.
 
 ## 3. Numbered task steps
 
@@ -88,7 +94,7 @@ psql --version
 | # | Rule | Where |
 | --- | --- | --- |
 | 1 | Hands-on, reproducible from brief alone | `question` |
-| 2 | All multi-line code in ``` fences | `question`, `answer` |
+| 2 | All multi-line code in ``` fences; tag with a supported language when applicable | `question`, `answer` |
 | 3 | Numbered steps `1.` `2.` … | `question` |
 | 4 | No `#` headings / decorative markdown outside fences | `task`, `question`, `answer` |
 | 5 | Full setup+changes in reference, not a fragment | `answer` |
