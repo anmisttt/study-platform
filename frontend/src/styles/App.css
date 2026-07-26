@@ -321,6 +321,10 @@
   box-shadow: 0 1px 2px rgba(17, 17, 24, 0.04);
 }
 
+.practice-card {
+  max-width: 52rem;
+}
+
 .start-card {
   margin-top: 96px;
 }
@@ -413,7 +417,7 @@
 
 .practice-layout {
   width: 100%;
-  max-width: 42rem;
+  max-width: 52rem;
   display: flex;
   flex-direction: column;
   padding: 24px 32px 40px;
@@ -1140,11 +1144,17 @@
   align-items: center;
   gap: 6px;
   color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.reference-toggle-label-short {
+  display: none;
 }
 
 .reference-toggle-icon {
   width: 16px;
   height: 16px;
+  flex-shrink: 0;
 }
 
 .reference-panel {
@@ -1488,30 +1498,36 @@
     margin: 24px 16px;
     max-width: none;
     width: auto;
+    box-sizing: border-box;
     padding: 24px 20px;
   }
 
   .start-card-room-panel {
+    flex-direction: column;
     flex-wrap: nowrap;
-    gap: 6px;
+    align-items: stretch;
+    gap: 10px;
     width: 100%;
   }
 
   .start-card-room-panel .start-card-button {
-    padding: 8px 10px;
-    font-size: 12px;
+    width: 100%;
+    padding: 10px 16px;
+    font-size: 14px;
   }
 
   .start-card-room-or {
-    font-size: 12px;
+    font-size: 13px;
     flex: 0 0 auto;
+    text-align: center;
   }
 
   .room-id-input {
-    flex: 1 1 auto;
-    min-width: 5.5rem;
-    padding: 8px;
-    font-size: 12px;
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    padding: 10px 12px;
+    font-size: 14px;
   }
 
   .chapters-index-page {
@@ -1532,6 +1548,31 @@
   .practice-card-header {
     padding-left: 16px;
     padding-right: 16px;
+  }
+
+  .answer-actions {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .answer-actions .primary-button,
+  .answer-actions .secondary-button {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .answer-actions .voice-button {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+  }
+
+  .reference-toggle-label-long {
+    display: none;
+  }
+
+  .reference-toggle-label-short {
+    display: inline;
   }
 
   .summary-card {

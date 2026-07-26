@@ -179,6 +179,7 @@ function QuestionCard({
                 type="button"
                 className="secondary-button reference-toggle-button"
                 onClick={() => setIsAnswerVisible((prev) => !prev)}
+                aria-label={`${isAnswerVisible ? "Hide" : "Show"} ${response?.result ? "previous" : "reference"} answer`}
               >
                 {isAnswerVisible ? (
                   <svg
@@ -210,7 +211,12 @@ function QuestionCard({
                     <circle cx="12" cy="12" r="3" />
                   </svg>
                 )}
-                {`${isAnswerVisible ? "Hide" : "Show"} ${response?.result ? "previous" : "reference"} answer`}
+                <span className="reference-toggle-label-long">
+                  {`${isAnswerVisible ? "Hide" : "Show"} ${response?.result ? "previous" : "reference"} answer`}
+                </span>
+                <span className="reference-toggle-label-short">
+                  {isAnswerVisible ? "Hide answer" : "Show answer"}
+                </span>
               </button>
             </div>
           </div>
