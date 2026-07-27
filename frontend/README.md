@@ -36,7 +36,7 @@ React + Vite single-page app for the Study Platform. It renders a chapter table 
 
 ## Run locally
 
-Requires Node.js 20. Build the shared package first (see the root `README.md`), then:
+Requires Node.js 20. Build the shared package first (see the root `CONTRIBUTING.md`), then:
 
 ```bash
 npm install
@@ -59,4 +59,4 @@ The dev server runs on `http://localhost:5173`. API and WebSocket requests to `/
 
 ## Deployment
 
-This app is built into `frontend/dist` and served as static files. See the root `README.md` for the bundle/VM deployment flow.
+This app is built into `frontend/dist` and served as static files. See the root `CONTRIBUTING.md` for the bundle/VM deployment flow.
