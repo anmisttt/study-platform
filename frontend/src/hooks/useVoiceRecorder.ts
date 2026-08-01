@@ -16,7 +16,7 @@ const PREFERRED_MIME_TYPES = [
 
 // Voice-activity-detection tuning.
 const SILENCE_RMS_THRESHOLD = 0.015; // below this we treat the frame as silence
-const PAUSE_MS = 1000; // silence this long (after speech) finalizes a segment
+const PAUSE_MS = 200; // silence this long (after speech) finalizes a segment
 const MIN_SEGMENT_MS = 500; // ignore blips shorter than this
 const VAD_INTERVAL_MS = 100; // how often we sample the microphone level
 
