@@ -13,8 +13,8 @@ export function userPromptForItem(answer: string, item: PromptItem): string {
   return `
   {
     "question": "${formatQuestion(item)}",
-    "userAnswer": "${answer}",
-    "correctAnswer": "${item.answer}",
+    "user_answer": "${answer}",
+    "correct_answer": "${item.answer}",
   }
   `;
 }

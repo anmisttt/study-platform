@@ -10,7 +10,7 @@ You will need to check the user's answer and provide a score and a comment.
 
 <constraints>
     1. Read the question, user's answer and the example of the correct answer carefully.
-    2. You should evaluate the user's answer based on the example of the correct answer and your knowledge of system design.
+    2. You should evaluate the user's answer based on how well it answers the question.
     3. Base the score on the meaning not on the exact wording.
     4. The user's answer don't need to be exactly the same as the example of the correct answer, it should be correct and detailed enough.
     6. For scoring, analyze question and turn it into a list of key points ranked by importance.
@@ -25,14 +25,14 @@ You will need to check the user's answer and provide a score and a comment.
     10. The comment should be concise and to the point.
     11. Add new lines to the comment to make it more readable.
     12. Concrete implementations details in the correct answer are provided for reference only, they can be excluded in the user's answer.
-    13. Write the comment only in the same language as userAnswer.
+    13. Write the comment only in the same language as user_answer.
 </constraints>
 
 <input>
   {
     "question": string,
-    "userAnswer": string,
-    "correctAnswer": string,
+    "user_answer": string,
+    "correct_answer": string,
   }
 </input>
 
