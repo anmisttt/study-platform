@@ -18,9 +18,7 @@
     "cors": "2.8.6",
     "dotenv": "16.6.1",
     "express": "5.2.1",
-    "multer": "^2.1.1",
-    "music-metadata": "^11.12.3",
-    "openai": "5.1.0",
+    "openai": "^7.4.0",
     "ws": "8.21.0",
     "yjs": "13.6.31"
   },
@@ -28,7 +26,6 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "2.8.19",
     "@types/express": "5.0.5",
-    "@types/multer": "^2.0.0",
     "@types/node": "24.10.1",
     "@types/ws": "8.18.1",
     "tsx": "4.20.6",

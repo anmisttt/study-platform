@@ -2,13 +2,12 @@ import cors, { type CorsOptions } from "cors";
 import dotenv from "dotenv";
 import express, { Request, Response } from "express";
 import { createServer } from "node:http";
-import multer from "multer";
-import { roomDraftsWebSocketPath } from "@study-platform/shared";
+import { realtimeTranscriptionTokenPath, roomDraftsWebSocketPath } from "@study-platform/shared";
 import { chapters, getChapterById } from "./chapters";
 import { DraftRelay } from "./drafts/draftRelay";
 import { assertRoomChapter, getRoomDetails } from "./db/roomContext";
 import { RoomsDb } from "./db/roomsDb";
-import { ConflictError, NotFoundError, UserError } from "./errors";
+import { ConflictError, NotFoundError } from "./errors";
 import { resolveChapter } from "./http/chapterContext";
 import { readParam, readQueryParam } from "./http/params";
 import { resolveChapterQuestion } from "./http/resolveChapterQuestion";
@@ -17,24 +16,22 @@ import { ensureAnswer, ensureBaseRevision } from "./http/validation";
 import { Tutor } from "./services/tutor";
 import { systemPrompt } from "./prompts/system-prompt";
 import { userPromptForItem } from "./prompts/user-prompt";
-import { assertMaxRecordingDuration, AudioDurationError } from "./services/audioDuration";
 import { Transcriber } from "./services/transcriber";
 
 dotenv.config();
 
-const tutor = new Tutor({ systemPrompt, model: "gpt-5.5", apiKey: process.env.OPENAI_API_KEY ?? "", temperature: 1});
-const transcriber = new Transcriber({
-  apiKey: process.env.OPENAI_API_KEY ?? "",
-  model: process.env.OPENAI_TRANSCRIBE_MODEL ?? "gpt-4o-mini-transcribe",
-});
+if (!process.env.OPENAI_API_KEY) {
+  throw new Error("OPENAI_API_KEY is not set");
+}
+
+const openaiApiKey = process.env.OPENAI_API_KEY;
+
+const tutor = new Tutor({ systemPrompt, model: "gpt-5.5", apiKey: openaiApiKey, temperature: 1});
+const transcriber = new Transcriber({ apiKey: openaiApiKey });
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 const HOST = process.env.HOST ?? "127.0.0.1";
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }, // enough for 13 minutes audio
-});
 const roomsDb = new RoomsDb();
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -131,41 +128,27 @@ app.post("/rooms/:roomId/questions/:questionId/check", async (req: Request, res:
   }
 });
 
-app.post("/transcribe", upload.single("audio"), async (req: Request, res: Response): Promise<void> => {
-  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
+app.post(realtimeTranscriptionTokenPath(), async (req: Request, res: Response): Promise<void> => {
   try {
-    if (!req.file) {
-      throw new UserError("Request must include an audio file in 'audio' field.");
-    }
+    const languages = Array.isArray(req.body?.languages)
+      ? req.body.languages.filter((value: unknown): value is string => typeof value === "string")
+      : typeof req.body?.language === "string"
+        ? [req.body.language]
+        : undefined;
+    const safetyIdentifier =
+      typeof req.body?.safetyIdentifier === "string" && req.body.safetyIdentifier.trim()
+        ? req.body.safetyIdentifier.trim()
+        : typeof req.body?.roomId === "string" && req.body.roomId.trim()
+          ? req.body.roomId.trim()
+          : undefined;
 
-    // eslint-disable-next-line no-console
-    console.log(
-      `[Transcribe:${requestId}] Incoming audio (mime=${req.file.mimetype}, size=${req.file.size}, language=${typeof req.body?.language === "string" ? req.body.language : "unknown"})`,
-    );
-
-    const durationSeconds = await assertMaxRecordingDuration(req.file.buffer, req.file.mimetype);
-    // eslint-disable-next-line no-console
-    console.log(
-      `[Transcribe:${requestId}] Duration ${durationSeconds !== null ? `${durationSeconds.toFixed(1)}s` : "unknown"}`,
-    );
-
-    const text = await transcriber.transcribeAudio({
-      audioBuffer: req.file.buffer,
-      mimeType: req.file.mimetype,
-      language: typeof req.body?.language === "string" ? req.body.language : undefined,
+    const secret = await transcriber.createTranscriptionClientSecret({
+      languages,
+      safetyIdentifier,
     });
-    // eslint-disable-next-line no-console
-    console.log(`[Transcribe:${requestId}] Success (textLength=${text.length})`);
-    res.json({ text });
+    res.json(secret);
   } catch (error: unknown) {
-    // eslint-disable-next-line no-console
-    console.error(`[Transcribe:${requestId}] Failed`, error);
-    if (error instanceof AudioDurationError) {
-      respondWithError(res, new UserError(error.message));
-      return;
-    }
-    respondWithError(res, error, "Failed to transcribe audio.");
+    respondWithError(res, error, "Failed to create transcription token.");
   }
 });
 

@@ -120,6 +120,7 @@ function Contest({
     stop: stopVoiceRecording,
   } = useVoiceRecorder({
     apiBase,
+    safetyIdentifier: roomId ?? undefined,
     onTranscript: (text: string) => {
       if (!roomId || !currentItem) {
         return;
@@ -457,8 +458,8 @@ function Contest({
     onRoomAccessError(chapterSession.error);
   }, [isPracticeMode, roomId, chapterSession.loading, chapterSession.details, chapterSession.error, onRoomAccessError]);
 
-  // Stop recording when navigating between questions so a segment transcribed
-  // after navigation cannot leak into a different question's draft.
+  // Stop the realtime session when navigating between questions so a late
+  // transcript cannot leak into a different question's draft.
   useEffect(() => {
     stopVoiceRecording();
   }, [currentItem?.id, stopVoiceRecording]);

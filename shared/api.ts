@@ -1,10 +1,6 @@
 import type { PracticeItem, TheoryItem } from "./domain";
 
 export const MAX_ANSWER_LENGTH = 10000;
-// Per-segment safety cap. Recording length is otherwise unlimited: audio is
-// split into segments at natural pauses, and this bounds any single segment
-// (and therefore any single upload) so it can't exceed the OpenAI 25 MB limit.
-export const MAX_SEGMENT_SECONDS = 60;
 
 export type CheckResult = {
   rating: number;

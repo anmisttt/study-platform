@@ -31,3 +31,7 @@ export function createRoomApiPath(): string {
 export function roomDraftsWebSocketPath(): string {
   return "/drafts/ws";
 }
+
+export function realtimeTranscriptionTokenPath(): string {
+  return "/realtime/transcription-token";
+}
