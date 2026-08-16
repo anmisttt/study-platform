@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { realtimeTranscriptionTokenPath } from "@study-platform/shared";
 
 const OPENAI_REALTIME_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
+export const TRANSCRIPTION_DRAIN_TIMEOUT_MS = 3000;
 
 type UseVoiceRecorderOptions = {
   apiBase: string;
@@ -82,6 +83,8 @@ export function useVoiceRecorder({
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const drainTimeoutRef = useRef<number | null>(null);
+  const isDrainingRef = useRef(false);
 
   useEffect(() => {
     onTranscriptRef.current = onTranscript;
@@ -96,6 +99,12 @@ export function useVoiceRecorder({
     typeof RTCPeerConnection !== "undefined";
 
   const cleanupSession = useCallback((): void => {
+    isDrainingRef.current = false;
+    if (drainTimeoutRef.current !== null) {
+      window.clearTimeout(drainTimeoutRef.current);
+      drainTimeoutRef.current = null;
+    }
+
     const dataChannel = dataChannelRef.current;
     dataChannelRef.current = null;
     if (dataChannel) {
@@ -128,19 +137,49 @@ export function useVoiceRecorder({
     if (action.kind === "final") {
       setIsTranscribing(false);
       onTranscriptRef.current(action.text);
+      if (isDrainingRef.current) {
+        cleanupSession();
+      }
       return;
     }
     if (action.kind === "partial") {
       // Partials are intentionally not written into the collaborative draft.
       setIsTranscribing(true);
     }
-  }, []);
+  }, [cleanupSession]);
 
   const stop = useCallback((): void => {
     startGenerationRef.current += 1;
     cleanupSession();
     setIsListening(false);
     setIsTranscribing(false);
+  }, [cleanupSession]);
+
+  const stopListening = useCallback((): void => {
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+
+    const dataChannel = dataChannelRef.current;
+    if (dataChannel?.readyState === "open") {
+      try {
+        dataChannel.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+      } catch {
+        // Ignore close races during teardown.
+      }
+    }
+
+    setIsListening(false);
+    setIsTranscribing(true);
+    isDrainingRef.current = true;
+
+    if (drainTimeoutRef.current !== null) {
+      window.clearTimeout(drainTimeoutRef.current);
+    }
+    drainTimeoutRef.current = window.setTimeout(() => {
+      drainTimeoutRef.current = null;
+      cleanupSession();
+      setIsTranscribing(false);
+    }, TRANSCRIPTION_DRAIN_TIMEOUT_MS);
   }, [cleanupSession]);
 
   const stopRef = useRef(stop);
@@ -252,11 +291,11 @@ export function useVoiceRecorder({
 
   const toggle = useCallback((): void => {
     if (isListening) {
-      stop();
+      stopListening();
     } else {
       void start();
     }
-  }, [isListening, start, stop]);
+  }, [isListening, start, stopListening]);
 
   useEffect(() => {
     return () => {
