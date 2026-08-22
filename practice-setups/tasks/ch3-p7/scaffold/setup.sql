@@ -1,4 +1,4 @@
--- OrientDB SQL — run in DBeaver (Driver: OrientDB) against demodb (Docker: localhost:2424, root/root).
+-- OrientDB SQL — run in the OrientDB console (or DBeaver, Driver: OrientDB) against demodb (localhost:2424, root/root).
 -- On a fresh empty DB you can skip the DROP CLASS lines; IF EXISTS avoids errors on first run.
 
 DROP CLASS FOLLOWS IF EXISTS UNSAFE;

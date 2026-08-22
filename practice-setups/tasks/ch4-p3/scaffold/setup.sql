@@ -1,4 +1,4 @@
--- ch4_orders_uuid_setup.sql
+-- setup.sql — orders table with a random UUIDv4 clustered primary key
 CREATE DATABASE IF NOT EXISTS ch4_lab;
 USE ch4_lab;
 

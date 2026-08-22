@@ -1,19 +1,21 @@
--- ch4_orders_uuid_setup.sql
-CREATE DATABASE IF NOT EXISTS ch4_lab;
+-- ch4_orders_diag.sql
 USE ch4_lab;
 
-DROP TABLE IF EXISTS orders;
+-- Primary signal: table size vs data — large free_mb / gap vs expected row bytes => bloat
+SELECT table_name, engine,
+       ROUND(data_length / 1024 / 1024, 2) AS data_mb,
+       ROUND(index_length / 1024 / 1024, 2) AS index_mb,
+       ROUND(data_free / 1024 / 1024, 2) AS free_mb,
+       table_rows
+FROM information_schema.tables
+WHERE table_schema = 'ch4_lab' AND table_name = 'orders';
 
-CREATE TABLE orders (
-  -- TODO: replace random UUIDv4 clustered PK with a monotonic key
-  --       (UUIDv7 / ULID / BIGINT AUTO_INCREMENT); dual-write the new id first
-  id            BINARY(16)    NOT NULL PRIMARY KEY,   -- stores a UUIDv4 (random leaf inserts)
-  customer_id   BIGINT        NOT NULL,
-  status        VARCHAR(32)   NOT NULL,
-  total_amount  DECIMAL(10,2) NOT NULL,
-  created_at    DATETIME(6)   NOT NULL,
-  notes         VARCHAR(500)  NULL
-) ENGINE = InnoDB;
+-- Optional page-split counters (often disabled until you turn the monitors on)
+SET GLOBAL innodb_monitor_enable = 'module_index';
+SELECT name, count
+FROM information_schema.innodb_metrics
+WHERE name IN ('index_page_splits', 'index_page_merge_attempts')
+ORDER BY name;
 
-CREATE INDEX orders_customer_recent_idx ON orders (customer_id, created_at);
-CREATE INDEX orders_status_idx ON orders (status);
+SHOW ENGINE INNODB STATUS\G
+-- Look under FILE I/O / buffer pool sections and compare insert latency from the harness printout.

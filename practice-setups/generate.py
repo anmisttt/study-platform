@@ -381,7 +381,24 @@ def write_compose_task(spec: TaskSpec) -> None:
     write_delivery_task(spec, pip_install=bool(spec.pip_packages))
 
 
+def drop_seed_mount(yml: str) -> str:
+    """Templates mount ./seed.sql; drop it when the task has no seed to copy."""
+    out: list[str] = []
+    for line in yml.splitlines():
+        if "./seed.sql:/docker-entrypoint-initdb.d" in line:
+            if out and out[-1].strip() == "volumes:":
+                out.pop()
+            continue
+        out.append(line)
+    return "\n".join(out) + "\n"
+
+
 def compose_for(spec: TaskSpec) -> str:
+    yml = compose_template(spec)
+    return yml if spec.seed_sql else drop_seed_mount(yml)
+
+
+def compose_template(spec: TaskSpec) -> str:
     db = spec.db or "lab"
     if "kafka" in spec.tag or any("kafka" in f for f in spec.scaffold_files):
         if spec.db and "eos" in spec.db:
@@ -635,7 +652,8 @@ def build_specs() -> list[TaskSpec]:
                 sql_blocks = extract_sql_blocks(question)
                 if sql_blocks:
                     spec.seed_sql = sql_blocks[0].strip()
-                spec.compose_yml = compose_for(spec)
+                if kind == "compose-stack":
+                    spec.compose_yml = compose_for(spec)
                 if "ch9-p" in tag:
                     spec.cap_add = ["NET_ADMIN"]
             specs.append(spec)

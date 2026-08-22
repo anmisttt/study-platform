@@ -1,0 +1,16 @@
+CONNECT remote:localhost/demodb root root
+CREATE CLASS Person EXTENDS V
+CREATE CLASS FOLLOWS EXTENDS E
+CREATE VERTEX Person SET name='Alice', city='Berlin'
+CREATE VERTEX Person SET name='Bob', city='London'
+CREATE VERTEX Person SET name='Carol', city='Berlin'
+CREATE VERTEX Person SET name='Dan', city='Amsterdam'
+CREATE VERTEX Person SET name='Eve', city='Berlin'
+CREATE VERTEX Person SET name='Frank', city='London'
+CREATE EDGE FOLLOWS FROM (SELECT FROM Person WHERE name='Alice') TO (SELECT FROM Person WHERE name='Bob')
+CREATE EDGE FOLLOWS FROM (SELECT FROM Person WHERE name='Alice') TO (SELECT FROM Person WHERE name='Carol')
+CREATE EDGE FOLLOWS FROM (SELECT FROM Person WHERE name='Bob') TO (SELECT FROM Person WHERE name='Dan')
+CREATE EDGE FOLLOWS FROM (SELECT FROM Person WHERE name='Carol') TO (SELECT FROM Person WHERE name='Dan')
+CREATE EDGE FOLLOWS FROM (SELECT FROM Person WHERE name='Dan') TO (SELECT FROM Person WHERE name='Eve')
+CREATE EDGE FOLLOWS FROM (SELECT FROM Person WHERE name='Eve') TO (SELECT FROM Person WHERE name='Frank')
+exit

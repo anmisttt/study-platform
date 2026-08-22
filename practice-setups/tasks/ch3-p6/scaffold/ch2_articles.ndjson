@@ -1,0 +1,10 @@
+{"index":{}}
+{"title":"PostgreSQL Performance Tips","body":"Indexes, vacuuming, and query planning for high-throughput workloads. Connection pooling with PgBouncer.","tags":["sql","performance"],"author":"Alice Chen","views":1240}
+{"index":{}}
+{"title":"Redis Caching Strategies","body":"Redis data structures, pub/sub, and caching strategies for web applications. Scaling read-heavy workloads with in-memory storage.","tags":["redis","caching","scaling"],"author":"Bob Smith","views":890}
+{"index":{}}
+{"title":"Elasticsearch at Scale","body":"Sharding, replication, and cluster management for large search workloads. Index lifecycle policies and query caching.","tags":["elasticsearch","scaling","search"],"author":"Carol Jones","views":2100}
+{"index":{}}
+{"title":"Graph Databases Explained","body":"Property graphs, Cypher queries, and when to use a graph database over relational databases for connected data.","tags":["graph","neo4j"],"author":"Dan Lee","views":850}
+{"index":{}}
+{"title":"Database Normalization","body":"First, second, and third normal forms explained with practical relational schema design examples.","tags":["sql","normalization"],"author":"Alice Chen","views":430}

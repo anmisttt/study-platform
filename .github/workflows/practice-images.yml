@@ -6,6 +6,10 @@ on:
     paths:
       - "practice-setups/**"
       - ".github/workflows/practice-images.yml"
+  pull_request:
+    paths:
+      - "practice-setups/**"
+      - ".github/workflows/practice-images.yml"
   workflow_dispatch:
 
 permissions:
@@ -58,13 +62,14 @@ jobs:
           workdir: practice-setups
           files: docker-bake.hcl
           targets: default
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           set: |
             *.platform=${{ matrix.platform }}
             *.args.TAG_SUFFIX=-${{ matrix.suffix }}-${{ github.sha }}
             variable.TAG_SUFFIX=-${{ matrix.suffix }}-${{ github.sha }}
 
   merge:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     steps:

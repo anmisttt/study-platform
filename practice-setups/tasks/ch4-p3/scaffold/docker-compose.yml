@@ -1,10 +1,16 @@
 services:
-  postgres:
-    image: postgres:16-bookworm
+  mysql:
+    image: mysql:8.0
     environment:
-      POSTGRES_PASSWORD: lab
-      POSTGRES_DB: lab
+      MYSQL_ROOT_PASSWORD: lab
+      MYSQL_DATABASE: ch4_lab
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
       - ./seed.sql:/docker-entrypoint-initdb.d/01-seed.sql:ro
+  lab:
+    image: ghcr.io/anmisttt/ddia-practice:ch4-p3
+    entrypoint: ["sleep", "infinity"]
+    working_dir: /work
+    volumes:
+      - .:/work

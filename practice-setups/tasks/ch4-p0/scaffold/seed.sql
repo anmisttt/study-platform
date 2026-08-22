@@ -1,4 +1,4 @@
--- oltp.sql — PostgreSQL operational schema (stubs)
+-- setup.sql — PostgreSQL operational schema (stubs)
 DROP TABLE IF EXISTS order_items CASCADE;
 DROP TABLE IF EXISTS orders CASCADE;
 DROP TABLE IF EXISTS products CASCADE;

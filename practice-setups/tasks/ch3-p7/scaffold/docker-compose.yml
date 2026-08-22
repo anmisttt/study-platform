@@ -1,10 +1,10 @@
 services:
-  postgres:
-    image: postgres:16-bookworm
-    environment:
-      POSTGRES_PASSWORD: lab
-      POSTGRES_DB: lab
+  orientdb:
+    image: orientdb:3.2.55
     ports:
-      - "5432:5432"
+      - "2424:2424"
+      - "2480:2480"
+    environment:
+      ORIENTDB_ROOT_PASSWORD: root
     volumes:
-      - ./seed.sql:/docker-entrypoint-initdb.d/01-seed.sql:ro
+      - ./:/lab

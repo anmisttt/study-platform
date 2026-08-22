@@ -1,4 +1,4 @@
--- events_setup.sql — clickstream analytics stub
+-- setup.sql — clickstream analytics stub
 DROP TABLE IF EXISTS events;
 DROP TABLE IF EXISTS events_daily_country_device;
 

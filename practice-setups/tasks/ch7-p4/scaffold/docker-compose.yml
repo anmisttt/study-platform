@@ -1,10 +1,18 @@
+x-citus: &citus
+  image: citusdata/citus:13.2.0
+  environment:
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: citus
+    POSTGRES_HOST_AUTH_METHOD: trust
+
 services:
-  postgres:
-    image: postgres:16-bookworm
-    environment:
-      POSTGRES_PASSWORD: lab
-      POSTGRES_DB: lab
-    ports:
-      - "5432:5432"
-    volumes:
-      - ./seed.sql:/docker-entrypoint-initdb.d/01-seed.sql:ro
+  coordinator:
+    <<: *citus
+    container_name: ch7-schema-coordinator
+    ports: ["5433:5432"]
+  worker1:
+    <<: *citus
+    container_name: ch7-schema-worker1
+  worker2:
+    <<: *citus
+    container_name: ch7-schema-worker2

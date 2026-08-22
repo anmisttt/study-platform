@@ -1,10 +1,6 @@
 services:
-  postgres:
-    image: postgres:16-bookworm
-    environment:
-      POSTGRES_PASSWORD: lab
-      POSTGRES_DB: lab
+  rabbitmq:
+    image: rabbitmq:3.13-management
     ports:
-      - "5432:5432"
-    volumes:
-      - ./seed.sql:/docker-entrypoint-initdb.d/01-seed.sql:ro
+      - "5672:5672"
+      - "15672:15672"

@@ -1,4 +1,4 @@
--- ch7_rls_projects.sql
+-- setup.sql
 DROP SCHEMA IF EXISTS rls_lab CASCADE;
 CREATE SCHEMA rls_lab;
 

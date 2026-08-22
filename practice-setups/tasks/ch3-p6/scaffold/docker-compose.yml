@@ -1,10 +1,9 @@
 services:
-  postgres:
-    image: postgres:16-bookworm
-    environment:
-      POSTGRES_PASSWORD: lab
-      POSTGRES_DB: lab
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
     ports:
-      - "5432:5432"
-    volumes:
-      - ./seed.sql:/docker-entrypoint-initdb.d/01-seed.sql:ro
+      - "9200:9200"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"

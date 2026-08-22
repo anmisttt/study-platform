@@ -12,4 +12,10 @@ if [ "${1:-}" = "init" ]; then
   exit 0
 fi
 
-exec docker-entrypoint.sh "$@"
+# Postgres images wrap startup in docker-entrypoint.sh; the python lab images
+# have no such wrapper, so run the command directly there.
+if command -v docker-entrypoint.sh >/dev/null 2>&1; then
+  exec docker-entrypoint.sh "$@"
+fi
+
+exec "$@"

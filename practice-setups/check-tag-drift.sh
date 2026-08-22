@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-refs=$(rg -o 'ghcr\.io/anmisttt/ddia-practice:ch[0-9]+-p[0-9]+' backend/src/data \
+refs=$(grep -rhoE 'ghcr\.io/anmisttt/ddia-practice:ch[0-9]+-p[0-9]+' backend/src/data \
   | sed 's/.*://' | sort -u)
 
 missing=0
