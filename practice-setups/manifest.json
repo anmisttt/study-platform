@@ -1,0 +1,388 @@
+{
+  "registry": "ghcr.io/anmisttt",
+  "taskPackage": "ddia-practice",
+  "basePackage": "ddia-practice-base",
+  "bases": {
+    "pg16": {
+      "path": "bases/pg16",
+      "description": "PostgreSQL 16 with lab entrypoint"
+    }
+  },
+  "tasks": {
+    "ch8-p0": {
+      "chapter": 8,
+      "index": 0,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "ch8_txns",
+      "port": 5432,
+      "containerName": "lab-ch8-p0"
+    },
+    "ch8-p1": {
+      "chapter": 8,
+      "index": 1,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "lab",
+      "port": 5432,
+      "containerName": "lab-ch8-p1"
+    },
+    "ch8-p2": {
+      "chapter": 8,
+      "index": 2,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "ch8_seats",
+      "port": 5432,
+      "containerName": "lab-ch8-p2"
+    },
+    "ch8-p3": {
+      "chapter": 8,
+      "index": 3,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "lab",
+      "port": 5432,
+      "containerName": "lab-ch8-p3"
+    },
+    "ch8-p4": {
+      "chapter": 8,
+      "index": 4,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "lab",
+      "port": 5432,
+      "containerName": "lab-ch8-p4"
+    },
+    "ch8-p5": {
+      "chapter": 8,
+      "index": 5,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "ch8_2pc_lab",
+      "port": 5432,
+      "containerName": "lab-ch8-p5"
+    },
+    "ch11-p2": {
+      "chapter": 11,
+      "index": 2,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "batch_join_lab",
+      "port": 5432,
+      "containerName": "lab-ch11-p2"
+    },
+    "ch11-p4": {
+      "chapter": 11,
+      "index": 4,
+      "kind": "python-lab",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch11-p4"
+    },
+    "ch5-p0": {
+      "chapter": 5,
+      "index": 0,
+      "kind": "python-lab",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch5-p0"
+    },
+    "ch5-p1": {
+      "chapter": 5,
+      "index": 1,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "lab",
+      "port": 5432,
+      "containerName": "lab-ch5-p1"
+    },
+    "ch5-p2": {
+      "chapter": 5,
+      "index": 2,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "lab",
+      "port": 5432,
+      "containerName": "lab-ch5-p2"
+    },
+    "ch5-p5": {
+      "chapter": 5,
+      "index": 5,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "lab",
+      "port": 5432,
+      "containerName": "lab-ch5-p5"
+    },
+    "ch1-p0": {
+      "chapter": 1,
+      "index": 0,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "retail_lab",
+      "port": 5432,
+      "containerName": "lab-ch1-p0"
+    },
+    "ch4-p0": {
+      "chapter": 4,
+      "index": 0,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch4-p0"
+    },
+    "ch4-p1": {
+      "chapter": 4,
+      "index": 1,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "messages_index_lab",
+      "port": 5432,
+      "containerName": "lab-ch4-p1"
+    },
+    "ch4-p2": {
+      "chapter": 4,
+      "index": 2,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "index_shape_lab",
+      "port": 5432,
+      "containerName": "lab-ch4-p2"
+    },
+    "ch4-p3": {
+      "chapter": 4,
+      "index": 3,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch4-p3"
+    },
+    "ch4-p4": {
+      "chapter": 4,
+      "index": 4,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch4-p4"
+    },
+    "ch9-p0": {
+      "chapter": 9,
+      "index": 0,
+      "kind": "python-lab",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch9-p0",
+      "capAdd": [
+        "NET_ADMIN"
+      ]
+    },
+    "ch9-p1": {
+      "chapter": 9,
+      "index": 1,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch9-p1",
+      "capAdd": [
+        "NET_ADMIN"
+      ]
+    },
+    "ch7-p4": {
+      "chapter": 7,
+      "index": 4,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch7-p4"
+    },
+    "ch7-p5": {
+      "chapter": 7,
+      "index": 5,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch7-p5"
+    },
+    "ch7-p6": {
+      "chapter": 7,
+      "index": 6,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "ch7_rls_lab",
+      "port": 5432,
+      "containerName": "lab-ch7-p6"
+    },
+    "ch6-p3": {
+      "chapter": 6,
+      "index": 3,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "lab",
+      "port": 5432,
+      "containerName": "lab-ch6-p3"
+    },
+    "ch6-p4": {
+      "chapter": 6,
+      "index": 4,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "lab",
+      "port": 5432,
+      "containerName": "lab-ch6-p4"
+    },
+    "ch10-p5": {
+      "chapter": 10,
+      "index": 5,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch10-p5"
+    },
+    "ch3-p1": {
+      "chapter": 3,
+      "index": 1,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "lab",
+      "port": 5432,
+      "containerName": "lab-ch3-p1"
+    },
+    "ch3-p2": {
+      "chapter": 3,
+      "index": 2,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "lab",
+      "port": 5432,
+      "containerName": "lab-ch3-p2"
+    },
+    "ch3-p3": {
+      "chapter": 3,
+      "index": 3,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "lab",
+      "port": 5432,
+      "containerName": "lab-ch3-p3"
+    },
+    "ch3-p4": {
+      "chapter": 3,
+      "index": 4,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "lab",
+      "port": 5432,
+      "containerName": "lab-ch3-p4"
+    },
+    "ch3-p5": {
+      "chapter": 3,
+      "index": 5,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "lab",
+      "port": 5432,
+      "containerName": "lab-ch3-p5"
+    },
+    "ch3-p6": {
+      "chapter": 3,
+      "index": 6,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch3-p6"
+    },
+    "ch3-p7": {
+      "chapter": 3,
+      "index": 7,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch3-p7"
+    },
+    "ch13-p0": {
+      "chapter": 13,
+      "index": 0,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch13-p0"
+    },
+    "ch13-p1": {
+      "chapter": 13,
+      "index": 1,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "ch13_idem_lab",
+      "port": 0,
+      "containerName": "lab-ch13-p1"
+    },
+    "ch13-p2": {
+      "chapter": 13,
+      "index": 2,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch13-p2"
+    },
+    "ch12-p0": {
+      "chapter": 12,
+      "index": 0,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch12-p0"
+    },
+    "ch12-p1": {
+      "chapter": 12,
+      "index": 1,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "lab",
+      "port": 0,
+      "containerName": "lab-ch12-p1"
+    },
+    "ch12-p2": {
+      "chapter": 12,
+      "index": 2,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "ch12_cdc_lab",
+      "port": 5432,
+      "containerName": "lab-ch12-p2"
+    },
+    "ch12-p3": {
+      "chapter": 12,
+      "index": 3,
+      "kind": "postgres-baked",
+      "base": "pg16",
+      "db": "ch12_views_lab",
+      "port": 5432,
+      "containerName": "lab-ch12-p3"
+    },
+    "ch12-p4": {
+      "chapter": 12,
+      "index": 4,
+      "kind": "compose-stack",
+      "base": "python-lab",
+      "db": "ch12_eos_lab",
+      "port": 0,
+      "containerName": "lab-ch12-p4"
+    }
+  }
+}

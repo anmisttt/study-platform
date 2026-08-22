@@ -1,0 +1,4 @@
+services:
+  netlab:
+    image: alpine:3.20
+    command: ["sleep", "infinity"]

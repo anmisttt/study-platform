@@ -1,0 +1,10 @@
+services:
+  postgres:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_PASSWORD: lab
+      POSTGRES_DB: ch12_eos_lab
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./seed.sql:/docker-entrypoint-initdb.d/01-seed.sql:ro

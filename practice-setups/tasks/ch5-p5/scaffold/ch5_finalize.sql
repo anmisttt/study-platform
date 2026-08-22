@@ -1,0 +1,4 @@
+-- ch5_finalize.sql — apply after the backfill loop reports 0 updated rows.
+-- TODO: verify zero NULLs and mismatches.
+-- TODO: validate the temporary check, set the column NOT NULL, then drop the check.
+-- TODO: create ch5_projects_normalized_name_idx concurrently and run ANALYZE.

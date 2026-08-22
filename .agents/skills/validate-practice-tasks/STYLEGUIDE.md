@@ -71,7 +71,7 @@ Tasks:
 - If nothing beyond a common language runtime is needed, say so explicitly in one prose line (e.g. `Prerequisites: Python 3.10+`) and skip the install block.
 - When install or start steps are required, put them in **one** fenced code block (prefer `bash`) — not as inline prose commands. Use `#` comments to label OS/platform variants and confirm steps.
 
-Example:
+Example (native install):
 
 ````
 Prerequisites: PostgreSQL 16+ with `psql` on your PATH.
@@ -89,6 +89,34 @@ psql --version
 ```
 ````
 
+## 8. Docker-backed setups (GHCR)
+
+Tasks that need databases, brokers, or pip-heavy tooling should use a published lab image instead of brew/apt install steps.
+
+- Prerequisites line: `Prerequisites: Docker Engine 24+ (or Docker Desktop).`
+- Put **one** fenced `bash` block with: `docker run` (start lab or `init`), scaffold copy (`docker run --rm -v "$PWD:/out" IMAGE init`), connect/exec step, and **teardown** (`docker rm -f …` or `docker compose down -v`).
+- Image reference: `ghcr.io/anmisttt/ddia-practice:ch<N>-p<I>` (matches question id `practice-<I>` in chapter `<N>`).
+- Bulk seed data lives in the image; keep **DDL and stub comments inline** in `question` so the grading tutor still sees schema and edit sites. Do not paste large `INSERT` dumps in the brief when the image is pre-seeded.
+- Multi-service labs: `init` copies `docker-compose.yml`; student runs `docker compose up -d` on the host.
+- Every docker brief must include an explicit teardown command so solvers leave no orphaned containers.
+
+Example:
+
+````
+Prerequisites: Docker Engine 24+ (or Docker Desktop).
+
+```bash
+docker run -d --name lab-ch1-p0 -p 5432:5432 ghcr.io/anmisttt/ddia-practice:ch1-p0
+docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/ddia-practice:ch1-p0 init
+docker exec -it lab-ch1-p0 psql -U postgres -d retail_lab
+
+# Teardown
+docker rm -f lab-ch1-p0
+```
+````
+
+Stdlib-only Python tasks (no broker/DB) stay on native Python prerequisites and do **not** need a lab image.
+
 ## Quick checklist
 
 | # | Rule | Where |
@@ -100,3 +128,4 @@ psql --version
 | 5 | Full setup+changes in reference, not a fragment | `answer` |
 | 6 | Setup present, runnable as given, with inline implement-here comments at edit sites | `question` |
 | 7 | Prerequisites listed; non-trivial installs in one commented fenced block | `question` |
+| 8 | Docker tasks: GHCR image, init/scaffold/teardown in one bash block; no bulk INSERT in brief | `question` |

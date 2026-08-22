@@ -92,6 +92,14 @@ npm run grade-practice -- --chapter <id> --index <n> --dump-brief
 
 Create workdir from `workdirHint` (under `.practice-validation/`, gitignored). Write `brief.json` there with **only** `task` and `question`.
 
+If the brief references `ghcr.io/anmisttt/ddia-practice:`, build the tag locally first so the solver can run the brief verbatim (Docker prefers the local image when present):
+
+```bash
+cd practice-setups && ./build.sh <tag>   # e.g. ch1-p0
+```
+
+For compose-stack tasks, run `init` and `docker compose up -d` in the workdir after the solver copies scaffold files.
+
 ### 2. Solver
 
 Delegate to **practice-solver** with:
@@ -110,8 +118,12 @@ After every solver turn — pass or fail — verify the solver left **no runtime
 ```bash
 # From the repo root
 test ! -e etcd-data && test ! -e default.etcd
+# Lab containers from docker-backed briefs:
+docker ps -a --filter name=lab-ch --format '{{.Names}}'   # expect empty
 # If the task used Docker etcd:
 docker ps -a --filter name=etcd-dev --format '{{.Names}}'   # expect empty
+# Compose projects started from scaffold:
+docker compose ls -a   # expect no leftover lab stacks
 ```
 
 Also scan the repo root (and the solver's reported cwd, if different) for other unexpected dirs/files created by the run (WAL/snap stores, orphaned containers, leftover background etcd processes).
