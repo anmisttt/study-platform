@@ -671,7 +671,8 @@ def write_task_files(spec: TaskSpec) -> None:
 
 def generate_bake_hcl(specs: list[TaskSpec]) -> str:
     lines = [
-        'variable "REGISTRY" { default = "ghcr.io/anmisttt" }',
+        'variable "REGISTRY" { default = "ghcr.io" }',
+        'variable "IMAGE_OWNER" { default = "anmisttt" }',
         'variable "BASE_PKG" { default = "ddia-practice-base" }',
         'variable "TASK_PKG" { default = "ddia-practice" }',
         'variable "TAG_SUFFIX" { default = "" }',
@@ -688,7 +689,7 @@ def generate_bake_hcl(specs: list[TaskSpec]) -> str:
             'target "base-pg16" {',
             '  context = "bases/pg16"',
             '  dockerfile = "Dockerfile"',
-            '  tags = ["${REGISTRY}/${BASE_PKG}:pg16${TAG_SUFFIX}"]',
+            '  tags = ["${REGISTRY}/${IMAGE_OWNER}/${BASE_PKG}:pg16${TAG_SUFFIX}"]',
             "}",
             "",
         ]
@@ -712,7 +713,7 @@ def generate_bake_hcl(specs: list[TaskSpec]) -> str:
                 f'target "task-{spec.tag}" {{',
                 f'  context = "{ctx}"',
                 '  dockerfile = "Dockerfile"',
-                f'  tags = ["${{REGISTRY}}/${{TASK_PKG}}:{spec.tag}${{TAG_SUFFIX}}"]',
+                f'  tags = ["${{REGISTRY}}/${{IMAGE_OWNER}}/${{TASK_PKG}}:{spec.tag}${{TAG_SUFFIX}}"]',
                 args.rstrip(),
                 "}",
                 "",
