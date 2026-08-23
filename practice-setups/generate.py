@@ -700,9 +700,11 @@ def generate_bake_hcl(specs: list[TaskSpec]) -> str:
             args = textwrap.dedent(
                 """\
                   args = {
-                    BASE_IMAGE = "${REGISTRY}/${BASE_PKG}:pg16"
+                    BASE_IMAGE = "base"
                   }
-                  depends_on = ["base-pg16"]
+                  contexts = {
+                    base = "target:base-pg16"
+                  }
                 """
             )
         lines.extend(

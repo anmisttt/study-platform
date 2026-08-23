@@ -59,7 +59,9 @@ jobs:
       - name: Bake and push platform images
         uses: docker/bake-action@v6
         with:
-          workdir: practice-setups
+          # v6 loads bake files from the Git context by default; workdir is
+          # ignored, so pin the remote subdirectory that contains docker-bake.hcl.
+          source: "{{defaultContext}}:practice-setups"
           files: docker-bake.hcl
           targets: default
           push: ${{ github.event_name != 'pull_request' }}
