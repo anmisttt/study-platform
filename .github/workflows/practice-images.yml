@@ -58,6 +58,10 @@ jobs:
 
       - name: Bake and push platform images
         uses: docker/bake-action@v6
+        env:
+          # HCL variables are overridden by env of the same name; --set
+          # variable.FOO is parsed as a target named "variable".
+          TAG_SUFFIX: -${{ matrix.suffix }}-${{ github.sha }}
         with:
           # v6 loads bake files from the Git context by default; workdir is
           # ignored, so pin the remote subdirectory that contains docker-bake.hcl.
@@ -67,8 +71,6 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           set: |
             *.platform=${{ matrix.platform }}
-            *.args.TAG_SUFFIX=-${{ matrix.suffix }}-${{ github.sha }}
-            variable.TAG_SUFFIX=-${{ matrix.suffix }}-${{ github.sha }}
 
   merge:
     if: github.event_name != 'pull_request'
