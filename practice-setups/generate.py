@@ -156,6 +156,136 @@ def classify_kind(question: str, task_title: str) -> str:
     return "python-lab"
 
 
+SEED_KEEP_KEYWORDS = {
+    "drop",
+    "create",
+    "alter",
+    "insert",
+    "copy",
+    "comment",
+    "grant",
+    "revoke",
+    "truncate",
+    "set",
+    "reset",
+    "begin",
+    "commit",
+    "start",
+    "savepoint",
+    "release",
+    "lock",
+    "analyze",
+    "vacuum",
+    "cluster",
+    "reindex",
+    "do",
+    "call",
+    "update",
+    "delete",
+}
+
+
+def split_sql_statements(sql: str) -> list[str]:
+    """Split SQL on semicolons, respecting quotes, comments, and $tag$ bodies."""
+    stmts: list[str] = []
+    buf: list[str] = []
+    i = 0
+    n = len(sql)
+    in_single = False
+    in_line_comment = False
+    in_block_comment = False
+    dollar_tag: str | None = None
+    while i < n:
+        c = sql[i]
+        nxt = sql[i + 1] if i + 1 < n else ""
+        if in_line_comment:
+            buf.append(c)
+            if c == "\n":
+                in_line_comment = False
+            i += 1
+            continue
+        if in_block_comment:
+            buf.append(c)
+            if c == "*" and nxt == "/":
+                buf.append(nxt)
+                in_block_comment = False
+                i += 2
+                continue
+            i += 1
+            continue
+        if dollar_tag is not None:
+            if sql.startswith(dollar_tag, i):
+                buf.append(dollar_tag)
+                i += len(dollar_tag)
+                dollar_tag = None
+                continue
+            buf.append(c)
+            i += 1
+            continue
+        if in_single:
+            buf.append(c)
+            if c == "'":
+                if nxt == "'":
+                    buf.append(nxt)
+                    i += 2
+                    continue
+                in_single = False
+            i += 1
+            continue
+        if c == "-" and nxt == "-":
+            buf.extend(("-", "-"))
+            in_line_comment = True
+            i += 2
+            continue
+        if c == "/" and nxt == "*":
+            buf.extend(("/", "*"))
+            in_block_comment = True
+            i += 2
+            continue
+        if c == "'":
+            in_single = True
+            buf.append(c)
+            i += 1
+            continue
+        if c == "$":
+            m = re.match(r"\$[A-Za-z0-9_]*\$", sql[i:])
+            if m:
+                dollar_tag = m.group(0)
+                buf.append(dollar_tag)
+                i += len(dollar_tag)
+                continue
+        if c == ";":
+            buf.append(c)
+            stmts.append("".join(buf))
+            buf = []
+            i += 1
+            continue
+        buf.append(c)
+        i += 1
+    tail = "".join(buf)
+    if tail.strip():
+        stmts.append(tail)
+    return stmts
+
+
+def first_sql_keyword(stmt: str) -> str:
+    s = re.sub(r"/\*.*?\*/", " ", stmt, flags=re.S)
+    s = "\n".join(line.split("--", 1)[0] for line in s.splitlines())
+    m = re.search(r"[A-Za-z]+", s)
+    return m.group(0).lower() if m else ""
+
+
+def sql_seed_ddl_only(sql: str) -> str:
+    """Keep schema/data statements; drop standalone SELECT/WITH student stubs.
+
+    Image builds apply seed.sql with ON_ERROR_STOP, so exercise placeholders
+    (NULL columns compared to integers, incomplete CTEs) must not run there.
+    Scaffold copies keep the full file for students.
+    """
+    kept = [stmt.strip() for stmt in split_sql_statements(sql) if first_sql_keyword(stmt) in SEED_KEEP_KEYWORDS]
+    return ("\n\n".join(kept) + "\n") if kept else ""
+
+
 def sql_without_bulk_inserts(sql: str) -> str:
     lines = sql.splitlines()
     result: list[str] = []
@@ -297,14 +427,14 @@ def write_postgres_task(spec: TaskSpec) -> None:
     task_dir = TASKS_DIR / spec.tag
     task_dir.mkdir(parents=True, exist_ok=True)
     sql = spec.seed_sql or spec.scaffold_files.get("setup.sql", "")
-    (task_dir / "seed.sql").write_text(sql.strip() + "\n")
+    (task_dir / "seed.sql").write_text(sql_seed_ddl_only(sql) if sql.strip() else "")
     scaffold_dir = task_dir / "scaffold"
     scaffold_dir.mkdir(exist_ok=True)
     named = {n: c for n, c in spec.scaffold_files.items() if n != "setup.sql"}
     for name, content in named.items():
         (scaffold_dir / name).write_text(content)
-    # The copied file must restore the state the image was built with, so it
-    # carries the seed rows too; stripping them would wipe the pre-seeded data.
+    # Scaffold keeps the full file (stubs included) so students can edit it.
+    # seed.sql applied at image build is schema/data only.
     if sql and not any(c.strip() == sql.strip() for c in named.values()):
         (scaffold_dir / "setup.sql").write_text(sql.strip() + "\n")
     copy_entrypoint(task_dir)

@@ -1,5 +1,6 @@
 -- PostgreSQL
 DROP TABLE IF EXISTS ch2_notif_relational CASCADE;
+
 DROP TABLE IF EXISTS ch2_notif_document  CASCADE;
 
 CREATE TABLE ch2_notif_relational (
@@ -32,24 +33,13 @@ INSERT INTO ch2_notif_document (user_id, type, payload) VALUES
 
 -- Part A: schema-on-write — add priority with a default for every existing row
 ALTER TABLE ch2_notif_relational
-  ADD COLUMN IF NOT EXISTS priority TEXT;  -- implement: use NOT NULL DEFAULT 'normal' instead of nullable TEXT
+  ADD COLUMN IF NOT EXISTS priority TEXT;
+
+-- implement: use NOT NULL DEFAULT 'normal' instead of nullable TEXT
 
 UPDATE ch2_notif_relational
 SET    priority = priority  -- implement: set priority = 'high'
-WHERE  FALSE;               -- implement: type = 'sms'
-
-SELECT id, user_id, type, message, created_at
-       -- implement: also select priority
-FROM   ch2_notif_relational;
-
--- Part B: schema-on-read — return message and a consistent priority for every JSONB row
-SELECT
-  id,
-  type,
-  payload->>'message' AS message,
-  -- implement COALESCE for missing priority (default 'normal')
-  NULL AS priority
-FROM ch2_notif_document;
+WHERE  FALSE;
 
 -- Part C: patch only push rows with ttl_seconds = 86400 via JSONB || merge
 UPDATE ch2_notif_document
@@ -58,8 +48,3 @@ WHERE  type = 'push';
 
 INSERT INTO ch2_notif_document (user_id, type, payload) VALUES
   (2, 'push', '{"message": "New message from Sarah", "device_token": "tok_xyz", "badge": 3}');
-  -- implement: include "ttl_seconds": 3600 in the payload JSON above
-
-SELECT type, payload->>'message' AS message
-       -- implement: also select payload->>'ttl_seconds' AS ttl
-FROM   ch2_notif_document;

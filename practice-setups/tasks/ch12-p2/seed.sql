@@ -1,5 +1,6 @@
 -- ch12_cdc_setup.sql — CDC lab: orders -> changelog -> search index
 DROP SCHEMA IF EXISTS cdc CASCADE;
+
 CREATE SCHEMA cdc;
 
 CREATE TABLE cdc.orders (
@@ -32,6 +33,7 @@ CREATE TABLE cdc.cdc_consumer_offset (
   consumer_name TEXT PRIMARY KEY,
   last_seq      BIGINT NOT NULL
 );
+
 INSERT INTO cdc.cdc_consumer_offset (consumer_name, last_seq)
 VALUES ('orders_search', 0);
 
@@ -77,4 +79,5 @@ $$;
 
 -- Dual-write race demo tables (do not use CDC here)
 CREATE TABLE cdc.dual_db (order_id BIGINT PRIMARY KEY, status TEXT NOT NULL);
+
 CREATE TABLE cdc.dual_search (order_id BIGINT PRIMARY KEY, status TEXT NOT NULL);

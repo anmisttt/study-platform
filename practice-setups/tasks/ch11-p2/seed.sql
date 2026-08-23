@@ -1,5 +1,6 @@
 -- setup.sql — events × users for a sort-merge join lab
 DROP SCHEMA IF EXISTS batch CASCADE;
+
 CREATE SCHEMA batch;
 
 CREATE TABLE batch.users (
@@ -34,4 +35,5 @@ FROM generate_series(1, 20000) AS g;
 -- (users already ordered by its PRIMARY KEY on user_id)
 
 ANALYZE batch.users;
+
 ANALYZE batch.activity_events;

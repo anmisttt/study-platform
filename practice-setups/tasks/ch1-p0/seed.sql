@@ -1,5 +1,6 @@
 -- setup.sql — OLTP system of record + warehouse stubs for student work
 CREATE SCHEMA oltp;
+
 CREATE SCHEMA warehouse;
 
 CREATE TABLE oltp.customers (
@@ -53,25 +54,3 @@ INSERT INTO oltp.order_items (order_id, product_id, quantity, price) VALUES
   (3, 1, 1, 12.00),
   (3, 2, 1, 80.00),
   (4, 3, 4, 5.50);
-
--- Warehouse target (derived). Fill each -- implement site, then re-run those statements
--- (or DROP SCHEMA warehouse CASCADE; recreate and load) before verifying reports.
-
--- implement: dim_date (date_key, year, month) for monthly revenue reporting
--- CREATE TABLE warehouse.dim_date (...);
-
--- implement: dim_customer (customer_key, name, country)
--- CREATE TABLE warehouse.dim_customer (...);
-
--- implement: dim_product (product_key, name, category)
--- CREATE TABLE warehouse.dim_product (...);
-
--- implement: fact_order_items grain = one row per order line
---   (order_id, date_key, customer_key, product_key, quantity, revenue)
--- CREATE TABLE warehouse.fact_order_items (...);
-
--- implement: ETL load from oltp.* into warehouse.* (truncate+reload or idempotent upserts)
--- INSERT INTO warehouse.dim_date ...
--- INSERT INTO warehouse.dim_customer ...
--- INSERT INTO warehouse.dim_product ...
--- INSERT INTO warehouse.fact_order_items ...

@@ -2,7 +2,9 @@
 -- Lab: atomic loyalty-point redemption (DDIA ch8 transactions)
 
 DROP TABLE IF EXISTS redemptions CASCADE;
+
 DROP TABLE IF EXISTS loyalty_accounts CASCADE;
+
 DROP FUNCTION IF EXISTS redeem_points(INT, INT);
 
 CREATE TABLE loyalty_accounts (
@@ -69,9 +71,3 @@ BEGIN
   RAISE EXCEPTION 'NotImplemented: complete redeem_points lock/validate/write sites';
 END;
 $$;
-
--- Usage checks (run after implementing Task 3):
--- SELECT redeem_points(1, 100);
--- SELECT points FROM loyalty_accounts WHERE user_id = 1;   -- expect 400
--- SELECT count(*) FROM redemptions WHERE user_id = 1;      -- expect 1
--- SELECT redeem_points(2, 500);  -- expect ERROR: Insufficient points ...

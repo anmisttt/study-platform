@@ -1,5 +1,6 @@
 -- ch12_views_setup.sql — event log + empty materialized tables
 DROP SCHEMA IF EXISTS social CASCADE;
+
 CREATE SCHEMA social;
 
 CREATE TABLE social.event_log (
@@ -50,6 +51,7 @@ CREATE TABLE social.consumer_offset (
   name TEXT PRIMARY KEY,
   last_seq BIGINT NOT NULL
 );
+
 INSERT INTO social.consumer_offset VALUES ('materializers', 0);
 
 INSERT INTO social.event_log (event_type, payload) VALUES

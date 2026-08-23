@@ -3,6 +3,7 @@
 ALTER SYSTEM SET max_prepared_transactions = 10;
 
 DROP TABLE IF EXISTS passenger_charges;
+
 DROP TABLE IF EXISTS driver_earnings;
 
 -- Node A: earnings
@@ -10,6 +11,7 @@ CREATE TABLE driver_earnings (
   driver_id    INT     PRIMARY KEY,
   total_earned NUMERIC NOT NULL DEFAULT 0
 );
+
 INSERT INTO driver_earnings VALUES (7, 0);
 
 -- Node B: billing

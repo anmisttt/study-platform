@@ -1,6 +1,7 @@
 -- ch6_cart_siblings.sql
 -- Lab: version-number sibling detection for concurrent shopping-cart writes (DDIA ch6)
 DROP TABLE IF EXISTS ch6_cart_siblings CASCADE;
+
 DROP TABLE IF EXISTS ch6_cart_ops CASCADE;
 
 CREATE TABLE ch6_cart_siblings (

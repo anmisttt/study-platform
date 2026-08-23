@@ -30,16 +30,3 @@ SELECT
 FROM generate_series(1, 100000) AS g;
 
 ANALYZE messages;
-
--- Index section: leave empty until Tasks step 2.
--- implement Q1 covering/partial index
---   CREATE INDEX ... ON messages (channel_id, created_at DESC)
---   INCLUDE (id, author_id, body) WHERE deleted_at IS NULL;
-
--- implement Q2 composite
---   CREATE INDEX ... ON messages (channel_id, author_id, created_at DESC)
---   WHERE deleted_at IS NULL;
-
--- implement Q3 GIN tsvector
---   CREATE INDEX ... ON messages USING GIN (to_tsvector('english', body))
---   WHERE deleted_at IS NULL;

@@ -2,8 +2,11 @@
 -- Lab: multi-row "at least one admin" invariant (DDIA ch8)
 
 DROP MATERIALIZED VIEW IF EXISTS teams_without_admins;
+
 DROP TABLE IF EXISTS team_members CASCADE;
+
 DROP TABLE IF EXISTS teams CASCADE;
+
 DROP FUNCTION IF EXISTS check_team_admin_coverage();
 
 CREATE TABLE teams (
@@ -19,6 +22,7 @@ CREATE TABLE team_members (
 );
 
 INSERT INTO teams VALUES (1, 'Engineering');
+
 INSERT INTO team_members VALUES
   (10, 1, 'admin'),
   (11, 1, 'admin'),
@@ -44,8 +48,3 @@ $$;
 CREATE TRIGGER team_admin_coverage_check
 BEFORE UPDATE OR DELETE ON team_members
 FOR EACH ROW EXECUTE FUNCTION check_team_admin_coverage();
-
--- Task 4: audit view — teams with no admin
--- CREATE MATERIALIZED VIEW teams_without_admins AS
---   SELECT ... -- teams with no admin (team_id, name)
--- ;

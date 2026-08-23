@@ -1,11 +1,17 @@
 -- ch6_profile_ryw.sql
 -- Lab: async replica lag + read-your-writes routing for profiles (DDIA ch6)
 DROP TABLE IF EXISTS ch6_last_write CASCADE;
+
 DROP TABLE IF EXISTS ch6_profiles_replica CASCADE;
+
 DROP TABLE IF EXISTS ch6_profiles CASCADE;
+
 DROP FUNCTION IF EXISTS ch6_refresh_replica();
+
 DROP FUNCTION IF EXISTS ch6_write_profile(BIGINT, TEXT);
+
 DROP FUNCTION IF EXISTS ch6_read_profile(BIGINT);
+
 DROP FUNCTION IF EXISTS ch6_wait_replica_lsn(pg_lsn, INTERVAL);
 
 CREATE TABLE ch6_profiles (

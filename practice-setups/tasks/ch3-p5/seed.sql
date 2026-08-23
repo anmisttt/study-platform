@@ -1,5 +1,6 @@
 -- PostgreSQL
 DROP TABLE IF EXISTS ch2_products CASCADE;
+
 DROP TABLE IF EXISTS electronics CASCADE;
 
 CREATE TABLE ch2_products (
@@ -19,19 +20,7 @@ INSERT INTO ch2_products (name, type, price, attrs) VALUES
   ('Clean Code',                'book',          35.99, '{"author":"Robert C. Martin","pages":431,"isbn":"978-0-13-235088-4","year":2008}'),
   ('The Pragmatic Programmer',  'book',          49.99, '{"author":"David Thomas",     "pages":352,"isbn":"978-0-13-595705-9","year":2019}');
 
--- Part A: electronics with at least 16 GB RAM
-SELECT name,
-       NULL AS ram_gb,          -- implement: (attrs->>'ram_gb')::int
-       NULL AS display_inch     -- implement: (attrs->>'display_inch')::float
-FROM   ch2_products
-WHERE  type = 'electronics'
-  AND  FALSE;  -- implement: (attrs->>'ram_gb')::int >= 16
-
--- Part A: clothing available in size M
-SELECT name, price, attrs->'colors' AS colors
-FROM   ch2_products
-WHERE  type = 'clothing'
-  AND  FALSE;  -- implement: attrs->'sizes' ? 'M'
+-- implement: attrs->'sizes' ? 'M'
 
 -- Part B: merge in_stock:true onto every existing attrs document
 UPDATE ch2_products
@@ -41,23 +30,13 @@ WHERE  TRUE;
 -- Part B: insert out-of-stock book 'Refactoring' with in_stock:false in attrs
 INSERT INTO ch2_products (name, type, price, attrs) VALUES
   ('Refactoring', 'book', 44.99, '{}');
-  -- implement: attrs with book fields + in_stock:false (see Tasks)
 
--- Part B: verify in_stock on all rows
-SELECT name, type, attrs->>'in_stock' AS in_stock
-FROM   ch2_products
-ORDER BY name;
 -- implement: after UPDATE/INSERT, expect true for seed rows and false for Refactoring
 
 -- Part C: insert electronics product 'Mystery Gadget' with ram_gb but no cpu key
 INSERT INTO ch2_products (name, type, price, attrs)
 VALUES ('Mystery Gadget', 'electronics', 59.00, '{"ram_gb": 4}');
--- implement: keep ram_gb; leave cpu absent for silent-NULL demo
 
--- Part C: query cpu (and ram) for all electronics; observe silent NULL for Mystery Gadget
-SELECT name, attrs->>'cpu' AS cpu, attrs->>'ram_gb' AS ram
-FROM   ch2_products
-WHERE  type = 'electronics';
 -- implement: confirm Mystery Gadget cpu is NULL
 
 -- Part C: write equivalent relational CREATE TABLE electronics that enforces cpu NOT NULL

@@ -1,5 +1,6 @@
 -- setup.sql — flight seat booking (DDIA ch8)
 DROP TABLE IF EXISTS seat_reservations;
+
 DROP TABLE IF EXISTS flights;
 
 CREATE TABLE flights (
