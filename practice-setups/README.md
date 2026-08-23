@@ -11,18 +11,21 @@ docker run -d --name lab-ch1-p0 -p 5432:5432 ghcr.io/anmisttt/ddia-practice:ch1-
 # Copy stub files into your working directory
 docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/ddia-practice:ch1-p0 init
 
-# Connect
+# Connect / apply SQL inside the container (never bare host psql)
+docker exec -i lab-ch1-p0 psql -v ON_ERROR_STOP=1 -U postgres -d retail_lab < setup.sql
 docker exec -it lab-ch1-p0 psql -U postgres -d retail_lab
 
 # Teardown
 docker rm -f lab-ch1-p0
 ```
 
-Multi-service tasks (Kafka, RabbitMQ, Citus, etc.) use `docker compose`:
+Multi-service tasks (Kafka, RabbitMQ, Citus, ClickHouse, etc.) use `docker compose`. Client CLIs always go through `docker compose exec` — never a bare host `psql` / `clickhouse-client` / `mysql`:
 
 ```bash
-docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/ddia-practice:ch12-p0 init
+docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/ddia-practice:ch4-p4 init
 docker compose up -d
+docker compose exec -T clickhouse clickhouse-client --multiquery < setup.sql
+docker compose exec clickhouse clickhouse-client
 docker compose down -v   # teardown
 ```
 

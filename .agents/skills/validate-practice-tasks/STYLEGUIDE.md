@@ -99,8 +99,15 @@ Tasks that need databases, brokers, or pip-heavy tooling should use a published 
 - Bulk seed data lives in the image; keep **DDL and stub comments inline** in `question` so the grading tutor still sees schema and edit sites. Do not paste large `INSERT` dumps in the brief when the image is pre-seeded.
 - Multi-service labs: `init` copies `docker-compose.yml`; student runs `docker compose up -d` on the host.
 - Every docker brief must include an explicit teardown command so solvers leave no orphaned containers.
+- **Never** tell students to run DB/client CLIs on the host (`psql`, `clickhouse-client`, `mysql`, `mongosh`, `etcdctl`, …) when the lab runs in Docker. Always prefix with the container entrypoint:
+  - Single container: `docker exec -i lab-chN-pI …` (use `-i` for stdin redirects; `-it` for interactive).
+  - Compose stack: `docker compose exec -T <service> …` (use `-T` for stdin redirects / scripts; omit `-T` for interactive).
+  - Wrong: `clickhouse-client --multiquery < setup.sql`
+  - Right: `docker compose exec -T clickhouse clickhouse-client --multiquery < setup.sql`
+- Do not add a second Prerequisites line that asks for host `psql` / local Postgres / ClickHouse when the GHCR image or compose stack already provides the engine.
+- If a student script shells out to a client CLI, the subprocess must use `docker exec` / `docker compose exec` (or a language driver to the published port) — not a bare host binary.
 
-Example:
+Example (single container):
 
 ````
 Prerequisites: Docker Engine 24+ (or Docker Desktop).
@@ -108,10 +115,27 @@ Prerequisites: Docker Engine 24+ (or Docker Desktop).
 ```bash
 docker run -d --name lab-ch1-p0 -p 5432:5432 ghcr.io/anmisttt/ddia-practice:ch1-p0
 docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/ddia-practice:ch1-p0 init
+docker exec -i lab-ch1-p0 psql -v ON_ERROR_STOP=1 -U postgres -d retail_lab < setup.sql
 docker exec -it lab-ch1-p0 psql -U postgres -d retail_lab
 
 # Teardown
 docker rm -f lab-ch1-p0
+```
+````
+
+Example (compose / ClickHouse):
+
+````
+Prerequisites: Docker Engine 24+ (or Docker Desktop).
+
+```bash
+docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/ddia-practice:ch4-p4 init
+docker compose up -d
+docker compose exec -T clickhouse clickhouse-client --multiquery < setup.sql
+docker compose exec clickhouse clickhouse-client
+
+# Teardown
+docker compose down -v
 ```
 ````
 
@@ -128,4 +152,4 @@ Stdlib-only Python tasks (no broker/DB) stay on native Python prerequisites and 
 | 5 | Full setup+changes in reference, not a fragment | `answer` |
 | 6 | Setup present, runnable as given, with inline implement-here comments at edit sites | `question` |
 | 7 | Prerequisites listed; non-trivial installs in one commented fenced block | `question` |
-| 8 | Docker tasks: GHCR image, init/scaffold/teardown in one bash block; no bulk INSERT in brief | `question` |
+| 8 | Docker tasks: GHCR image, init/scaffold/teardown in one bash block; client CLIs via `docker exec` / `docker compose exec` only; no bulk INSERT in brief | `question` |

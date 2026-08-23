@@ -73,6 +73,10 @@ Valid JSON with chapter `number`, exact chapter title in `name`, plus `theory` a
 - Wrap coding blocks as ```` ```\n{content}\n``` ````.
 - Aim for ~1–5 practice items unless asked otherwise.
 - Follow [styleguide](../validate-practice-tasks/STYLEGUIDE.md)
+- Docker-backed labs: every client CLI in the brief (`psql`, `clickhouse-client`, `mysql`, …) must run via the container — never as a bare host command.
+  - Compose: `docker compose exec -T <service> clickhouse-client --multiquery < setup.sql` (not `clickhouse-client --multiquery < setup.sql`).
+  - Single container: `docker exec -i lab-chN-pI psql … < setup.sql`.
+  - Interactive sessions use `docker compose exec <service> …` or `docker exec -it …` without implying the binary is on the host PATH.
 
 ## General rules
 

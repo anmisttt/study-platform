@@ -369,12 +369,22 @@ def docker_block(spec: TaskSpec) -> str:
         lines.extend([
             f"docker run --rm -v \"$PWD:/out\" {image} init",
             "docker compose up -d",
+        ])
+        if spec.pip_packages:
+            lines.append(
+                f"# Python deps are preinstalled in the lab image; or: pip install {' '.join(spec.pip_packages)}"
+            )
+        # Client CLIs must go through compose — never bare host psql/clickhouse-client/mysql.
+        lines.extend([
+            "",
+            "# Apply SQL / open a client INSIDE the stack, e.g.:",
+            "# docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U postgres -d lab < setup.sql",
+            "# docker compose exec -T clickhouse clickhouse-client --multiquery < setup.sql",
+            "# docker compose exec postgres psql -U postgres -d lab",
             "",
             "# Teardown",
             "docker compose down -v",
         ])
-        if spec.pip_packages:
-            lines.insert(2, f"# Python deps are preinstalled in the lab image; or: pip install {' '.join(spec.pip_packages)}")
     elif spec.kind == "python-lab":
         lines.extend([
             f"docker run --rm -v \"$PWD:/out\" {image} init",
@@ -389,7 +399,10 @@ def docker_block(spec: TaskSpec) -> str:
             f"docker run --rm -v \"$PWD:/out\" {image} init",
         ])
         if spec.db:
-            lines.append(f"docker exec -it {name} psql -U postgres -d {spec.db}")
+            lines.extend([
+                f"docker exec -i {name} psql -v ON_ERROR_STOP=1 -U postgres -d {spec.db} < setup.sql",
+                f"docker exec -it {name} psql -U postgres -d {spec.db}",
+            ])
         lines.extend(["", "# Teardown", f"docker rm -f {name}"])
     return "\n".join(lines)
 
