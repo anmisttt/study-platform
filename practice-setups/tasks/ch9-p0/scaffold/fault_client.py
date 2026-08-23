@@ -1,5 +1,5 @@
-# fault_client.py — HTTP client for network fault injection lab
 #!/usr/bin/env python3
+"""fault_client.py — HTTP client for network fault injection lab."""
 from __future__ import annotations
 
 import argparse

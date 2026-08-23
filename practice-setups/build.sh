@@ -44,9 +44,19 @@ build_task() {
   fi
   local base
   base="$(python3 -c "import json; m=json.load(open('manifest.json')); print(m['tasks']['${task_tag}']['base'])")"
-  build_base "${base}"
   local image="${REGISTRY}/${TASK_PKG}:${task_tag}"
   echo "==> building task ${image}"
+  # Delivery images (python-lab, compose-stack) are self-contained; only the
+  # postgres tasks build FROM a shared base.
+  if ! grep -q '^ARG BASE_IMAGE' "${dir}/Dockerfile"; then
+    docker build \
+      --platform "${PLATFORM}" \
+      -t "${image}" \
+      -f "${dir}/Dockerfile" \
+      "${dir}"
+    return
+  fi
+  build_base "${base}"
   docker build \
     --platform "${PLATFORM}" \
     --build-arg "BASE_IMAGE=${REGISTRY}/${BASE_PKG}:${base}" \
