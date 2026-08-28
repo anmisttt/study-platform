@@ -31,35 +31,43 @@ docker compose down -v   # teardown
 
 ## Maintainer workflow
 
+Only exercises that need a containerized service or packaged dependencies appear here. Tasks that run with the standard library or existing local tools do not need an image.
+
 ```bash
 cd practice-setups
-chmod +x build.sh
 
-# Build pg16 base + one task locally (same tag as GHCR)
+# Build one Docker-backed task (a required shared base is automatic)
 ./build.sh ch1-p0
 
 # Smoke-test a postgres task
 ./build.sh verify ch1-p0
 
-# Convert not-yet-migrated tasks: generate task dirs + rewrite their briefs
-python3 generate.py
+# Build all configured practice images
+./build.sh all
 ```
 
-`generate.py` only touches practice items whose `question` does not yet start with `Prerequisites: Docker Engine 24+`. Once a brief is migrated, its `seed.sql` and `scaffold/` are the source of truth (the bulk seed no longer lives in the brief), so edit those and the brief by hand to match [STYLEGUIDE](../.agents/skills/validate-practice-tasks/STYLEGUIDE.md) §8.
+Task assets are the source of truth. There is no generated manifest or per-task Dockerfile: Docker Bake expands two compact task lists and uses the shared PostgreSQL or delivery Dockerfile. Edit task assets and the corresponding chapter brief together, following [STYLEGUIDE](../.agents/skills/validate-practice-tasks/STYLEGUIDE.md) §8.
 
 ## Layout
 
 | Path | Purpose |
 |------|---------|
 | `bases/pg16/` | Shared PostgreSQL 16 base with `init` entrypoint |
-| `tasks/chN-pI/` | Per-task Dockerfile, `seed.sql`, `scaffold/` |
-| `manifest.json` | Tag → metadata (kind, db, port) |
-| `docker-bake.hcl` | Bake targets for CI and local multi-arch builds |
-| `generate.py` | Extract seeds from chapter JSON and rewrite briefs |
+| `images/` | Shared PostgreSQL and delivery Dockerfiles |
+| `tasks/chN-pI/` | Per-task seed, requirements, and student scaffold |
+| `docker-bake.hcl` | Task inventory plus local/CI build configuration |
+
+## Adding an image
+
+Do this only when the exercise needs a containerized service or dependencies that should be packaged for the learner.
+
+1. Add `tasks/chN-pI/scaffold/` and the task-specific inputs: `seed.sql` for a PostgreSQL image and, when needed, `requirements.txt` for a delivery image.
+2. Add one object to `POSTGRES_TASKS` or `DELIVERY_TASKS` in `docker-bake.hcl`, including its database name or any OS packages.
+3. Run `./check-tag-drift.sh`, then `./build.sh chN-pI`.
 
 ## Image kinds
 
-- **postgres-baked** — Postgres 16 with seed data applied at build time (`PGDATA=/lab/pgdata`).
+- **postgres-baked** — PostgreSQL 16 with seed data applied at build time (`PGDATA=/lab/pgdata`).
 - **compose-stack** — Delivery image; `init` copies `docker-compose.yml` + seeds; student runs `docker compose up -d`.
 - **python-lab** — Python 3.12 with pip deps; `init` copies stub scripts.
 
@@ -67,7 +75,7 @@ Fifteen stdlib-only Python tasks have no image (unchanged briefs).
 
 ## CI
 
-`.github/workflows/practice-images.yml` builds and pushes to GHCR on changes under `practice-setups/`.
+`.github/workflows/practice-images.yml` builds and pushes to GHCR only when image inputs under `practice-setups/` change. A task-directory change builds that task, while shared image changes rebuild all images. Chapter JSON changes do not trigger image builds. Manual dispatch accepts an optional chapter number and zero-based practice index: blank chapter builds everything; chapter alone builds every image in it; chapter plus task builds only `chN-pI`.
 
 **One-time setup:** set the `ddia-practice` package visibility to **public** in GitHub → Packages so students can pull without login.
 

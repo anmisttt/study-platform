@@ -11,10 +11,20 @@ on:
       - "practice-setups/**"
       - ".github/workflows/practice-images.yml"
   workflow_dispatch:
+    inputs:
+      chapter:
+        description: "Chapter number; blank builds all chapters"
+        required: false
+        type: string
+      task:
+        description: "Zero-based practice index; blank builds all tasks in the chapter"
+        required: false
+        type: string
 
 permissions:
   contents: read
   packages: write
+  pull-requests: read
 
 env:
   REGISTRY: ghcr.io
@@ -23,7 +33,137 @@ env:
   TASK_PKG: ddia-practice
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      tags: ${{ steps.select.outputs.tags }}
+      targets: ${{ steps.select.outputs.targets }}
+      build_base: ${{ steps.select.outputs.build_base }}
+      run_drift: ${{ steps.select.outputs.run_drift }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find changed setup paths
+        if: github.event_name != 'workflow_dispatch'
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          list-files: json
+          filters: |
+            tasks:
+              - 'practice-setups/tasks/ch*-p*/**'
+            shared:
+              - 'practice-setups/images/**'
+              - 'practice-setups/bases/**'
+              - 'practice-setups/docker-bake.hcl'
+              - 'practice-setups/.dockerignore'
+              - '.github/workflows/practice-images.yml'
+            drift:
+              - 'practice-setups/check-tag-drift.sh'
+
+      - name: Select affected practice images
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_CHAPTER: ${{ inputs.chapter }}
+          DISPATCH_TASK: ${{ inputs.task }}
+          TASK_FILES: ${{ steps.filter.outputs.tasks_files }}
+          SHARED_CHANGED: ${{ steps.filter.outputs.shared }}
+          DRIFT_CHANGED: ${{ steps.filter.outputs.drift }}
+        run: |
+          set -euo pipefail
+          tags=""
+          build_base=false
+          run_drift=false
+
+          add_tag() {
+            local tag="$1"
+            if [[ "$tag" =~ ^ch[0-9]+-p[0-9]+$ && -d "practice-setups/tasks/$tag" ]]; then
+              tags+="$tag"$'\n'
+            fi
+          }
+
+          add_chapter() {
+            local chapter="$1"
+            local dir
+            for dir in practice-setups/tasks/ch"$chapter"-p*; do
+              if [[ -d "$dir" ]]; then
+                add_tag "${dir##*/}"
+              fi
+            done
+          }
+
+          add_all() {
+            local dir
+            for dir in practice-setups/tasks/ch*-p*; do
+              if [[ -d "$dir" ]]; then
+                add_tag "${dir##*/}"
+              fi
+            done
+          }
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ -n "$DISPATCH_CHAPTER" && ! "$DISPATCH_CHAPTER" =~ ^[1-9][0-9]*$ ]]; then
+              echo "chapter must be a positive integer" >&2
+              exit 1
+            elif [[ -n "$DISPATCH_TASK" && ! "$DISPATCH_TASK" =~ ^[0-9]+$ ]]; then
+              echo "task must be a non-negative integer" >&2
+              exit 1
+            elif [[ -n "$DISPATCH_TASK" && -z "$DISPATCH_CHAPTER" ]]; then
+              echo "task requires chapter" >&2
+              exit 1
+            elif [[ -n "$DISPATCH_TASK" ]]; then
+              tag="ch${DISPATCH_CHAPTER}-p${DISPATCH_TASK}"
+              if [[ ! -d "practice-setups/tasks/$tag" ]]; then
+                echo "no Docker image is configured for $tag" >&2
+                exit 1
+              fi
+              add_tag "$tag"
+            elif [[ -n "$DISPATCH_CHAPTER" ]]; then
+              add_chapter "$DISPATCH_CHAPTER"
+            else
+              add_all
+              build_base=true
+            fi
+          else
+            while IFS= read -r file; do
+              tag="${file#practice-setups/tasks/}"
+              add_tag "${tag%%/*}"
+            done < <(jq -r '.[]' <<< "${TASK_FILES:-[]}")
+
+            if [[ "$SHARED_CHANGED" == "true" ]]; then
+              add_all
+              build_base=true
+              run_drift=true
+            fi
+            if [[ "$DRIFT_CHANGED" == "true" ]]; then
+              run_drift=true
+            fi
+          fi
+
+          tags_json="$(printf '%s' "$tags" | sed '/^$/d' | sort -Vu \
+            | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          targets="$(jq -r '[.[] | "task-" + .] | join(",")' <<< "$tags_json")"
+          if [[ "$build_base" == "true" ]]; then
+            targets="base-pg16${targets:+,$targets}"
+          fi
+          if [[ "$tags_json" != "[]" ]]; then
+            run_drift=true
+          fi
+
+          echo "tags=$tags_json" >> "$GITHUB_OUTPUT"
+          echo "targets=$targets" >> "$GITHUB_OUTPUT"
+          echo "build_base=$build_base" >> "$GITHUB_OUTPUT"
+          echo "run_drift=$run_drift" >> "$GITHUB_OUTPUT"
+          jq -n --argjson tags "$tags_json" --arg targets "$targets" \
+            --arg buildBase "$build_base" --arg runDrift "$run_drift" \
+            '{tags: $tags, targets: $targets, buildBase: $buildBase, runDrift: $runDrift}'
+
   drift-check:
+    needs: changes
+    if: needs.changes.outputs.run_drift == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +171,8 @@ jobs:
         run: bash practice-setups/check-tag-drift.sh
 
   build:
-    needs: drift-check
+    needs: [changes, drift-check]
+    if: needs.changes.outputs.targets != ''
     strategy:
       fail-fast: false
       matrix:
@@ -67,14 +208,14 @@ jobs:
           # ignored, so pin the remote subdirectory that contains docker-bake.hcl.
           source: "{{defaultContext}}:practice-setups"
           files: docker-bake.hcl
-          targets: default
+          targets: ${{ needs.changes.outputs.targets }}
           push: ${{ github.event_name != 'pull_request' }}
           set: |
             *.platform=${{ matrix.platform }}
 
   merge:
-    if: github.event_name != 'pull_request'
-    needs: build
+    if: github.event_name != 'pull_request' && needs.changes.outputs.targets != ''
+    needs: [changes, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -90,16 +231,19 @@ jobs:
       - name: Merge multi-arch manifests
         env:
           SHA: ${{ github.sha }}
+          TAGS: ${{ needs.changes.outputs.tags }}
+          BUILD_BASE: ${{ needs.changes.outputs.build_base }}
         run: |
           set -euo pipefail
           cd practice-setups
-          tags=$(python3 -c "import json; print(' '.join(json.load(open('manifest.json'))['tasks'].keys()))")
-          for tag in $tags; do
+          jq -r '.[]' <<< "$TAGS" | while IFS= read -r tag; do
             docker buildx imagetools create -t "${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${tag}" \
               -t "${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${tag}-${SHA:0:7}" \
               "${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${tag}-amd64-${SHA}" \
               "${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${tag}-arm64-${SHA}"
           done
-          docker buildx imagetools create -t "${REGISTRY}/${IMAGE_OWNER}/${BASE_PKG}:pg16" \
-            "${REGISTRY}/${IMAGE_OWNER}/${BASE_PKG}:pg16-amd64-${SHA}" \
-            "${REGISTRY}/${IMAGE_OWNER}/${BASE_PKG}:pg16-arm64-${SHA}"
+          if [[ "$BUILD_BASE" == "true" ]]; then
+            docker buildx imagetools create -t "${REGISTRY}/${IMAGE_OWNER}/${BASE_PKG}:pg16" \
+              "${REGISTRY}/${IMAGE_OWNER}/${BASE_PKG}:pg16-amd64-${SHA}" \
+              "${REGISTRY}/${IMAGE_OWNER}/${BASE_PKG}:pg16-arm64-${SHA}"
+          fi

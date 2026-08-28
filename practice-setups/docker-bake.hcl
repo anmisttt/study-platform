@@ -4,51 +4,60 @@ variable "BASE_PKG" { default = "ddia-practice-base" }
 variable "TASK_PKG" { default = "ddia-practice" }
 variable "TAG_SUFFIX" { default = "" }
 
-group "default" {
-  targets = [
-    "base-pg16",
-    "task-ch8-p0",
-    "task-ch8-p1",
-    "task-ch8-p2",
-    "task-ch8-p3",
-    "task-ch8-p4",
-    "task-ch8-p5",
-    "task-ch11-p2",
-    "task-ch11-p4",
-    "task-ch5-p0",
-    "task-ch5-p1",
-    "task-ch5-p2",
-    "task-ch5-p5",
-    "task-ch1-p0",
-    "task-ch4-p0",
-    "task-ch4-p1",
-    "task-ch4-p2",
-    "task-ch4-p3",
-    "task-ch4-p4",
-    "task-ch9-p0",
-    "task-ch9-p1",
-    "task-ch7-p4",
-    "task-ch7-p5",
-    "task-ch7-p6",
-    "task-ch6-p3",
-    "task-ch6-p4",
-    "task-ch10-p5",
-    "task-ch3-p1",
-    "task-ch3-p2",
-    "task-ch3-p3",
-    "task-ch3-p4",
-    "task-ch3-p5",
-    "task-ch3-p6",
-    "task-ch3-p7",
-    "task-ch13-p0",
-    "task-ch13-p1",
-    "task-ch13-p2",
-    "task-ch12-p0",
-    "task-ch12-p1",
-    "task-ch12-p2",
-    "task-ch12-p3",
-    "task-ch12-p4",
+# These two lists are the complete image inventory.
+variable "POSTGRES_TASKS" {
+  default = [
+    { tag = "ch1-p0", db = "retail_lab" },
+    { tag = "ch3-p1", db = "lab" },
+    { tag = "ch3-p2", db = "lab" },
+    { tag = "ch3-p3", db = "lab" },
+    { tag = "ch3-p4", db = "lab" },
+    { tag = "ch3-p5", db = "lab" },
+    { tag = "ch4-p1", db = "messages_index_lab" },
+    { tag = "ch4-p2", db = "index_shape_lab" },
+    { tag = "ch5-p1", db = "lab" },
+    { tag = "ch5-p2", db = "lab" },
+    { tag = "ch5-p5", db = "lab" },
+    { tag = "ch6-p3", db = "lab" },
+    { tag = "ch6-p4", db = "lab" },
+    { tag = "ch7-p6", db = "ch7_rls_lab" },
+    { tag = "ch8-p0", db = "ch8_txns" },
+    { tag = "ch8-p1", db = "lab" },
+    { tag = "ch8-p2", db = "ch8_seats" },
+    { tag = "ch8-p3", db = "lab" },
+    { tag = "ch8-p4", db = "lab" },
+    { tag = "ch8-p5", db = "ch8_2pc_lab" },
+    { tag = "ch11-p2", db = "batch_join_lab" },
+    { tag = "ch12-p2", db = "ch12_cdc_lab" },
+    { tag = "ch12-p3", db = "ch12_views_lab" },
   ]
+}
+
+variable "DELIVERY_TASKS" {
+  default = [
+    { tag = "ch3-p6", apt = "" },
+    { tag = "ch3-p7", apt = "" },
+    { tag = "ch4-p0", apt = "" },
+    { tag = "ch4-p3", apt = "" },
+    { tag = "ch4-p4", apt = "" },
+    { tag = "ch5-p0", apt = "" },
+    { tag = "ch7-p4", apt = "" },
+    { tag = "ch7-p5", apt = "" },
+    { tag = "ch9-p0", apt = "iproute2 iptables curl procps" },
+    { tag = "ch9-p1", apt = "iproute2 tcpdump curl procps" },
+    { tag = "ch10-p5", apt = "" },
+    { tag = "ch11-p4", apt = "" },
+    { tag = "ch12-p0", apt = "" },
+    { tag = "ch12-p1", apt = "" },
+    { tag = "ch12-p4", apt = "" },
+    { tag = "ch13-p0", apt = "" },
+    { tag = "ch13-p1", apt = "" },
+    { tag = "ch13-p2", apt = "" },
+  ]
+}
+
+group "default" {
+  targets = ["base-pg16", "postgres-task", "delivery-task"]
 }
 
 target "base-pg16" {
@@ -57,405 +66,36 @@ target "base-pg16" {
   tags = ["${REGISTRY}/${IMAGE_OWNER}/${BASE_PKG}:pg16${TAG_SUFFIX}"]
 }
 
-target "task-ch8-p0" {
-  context = "tasks/ch8-p0"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch8-p0${TAG_SUFFIX}"]
+target "postgres-task" {
+  name = "task-${item.tag}"
+  matrix = {
+    item = POSTGRES_TASKS
+  }
+  context = "."
+  dockerfile = "images/postgres.Dockerfile"
   args = {
     BASE_IMAGE = "base"
+    POSTGRES_DB = item.db
   }
   contexts = {
     base = "target:base-pg16"
+    task = "tasks/${item.tag}"
   }
+  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${item.tag}${TAG_SUFFIX}"]
 }
 
-target "task-ch8-p1" {
-  context = "tasks/ch8-p1"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch8-p1${TAG_SUFFIX}"]
+target "delivery-task" {
+  name = "task-${item.tag}"
+  matrix = {
+    item = DELIVERY_TASKS
+  }
+  context = "."
+  dockerfile = "images/delivery.Dockerfile"
   args = {
-    BASE_IMAGE = "base"
+    APT_PACKAGES = item.apt
   }
   contexts = {
-    base = "target:base-pg16"
+    task = "tasks/${item.tag}"
   }
+  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${item.tag}${TAG_SUFFIX}"]
 }
-
-target "task-ch8-p2" {
-  context = "tasks/ch8-p2"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch8-p2${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch8-p3" {
-  context = "tasks/ch8-p3"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch8-p3${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch8-p4" {
-  context = "tasks/ch8-p4"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch8-p4${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch8-p5" {
-  context = "tasks/ch8-p5"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch8-p5${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch11-p2" {
-  context = "tasks/ch11-p2"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch11-p2${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch11-p4" {
-  context = "tasks/ch11-p4"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch11-p4${TAG_SUFFIX}"]
-
-}
-
-target "task-ch5-p0" {
-  context = "tasks/ch5-p0"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch5-p0${TAG_SUFFIX}"]
-
-}
-
-target "task-ch5-p1" {
-  context = "tasks/ch5-p1"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch5-p1${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch5-p2" {
-  context = "tasks/ch5-p2"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch5-p2${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch5-p5" {
-  context = "tasks/ch5-p5"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch5-p5${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch1-p0" {
-  context = "tasks/ch1-p0"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch1-p0${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch4-p0" {
-  context = "tasks/ch4-p0"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch4-p0${TAG_SUFFIX}"]
-
-}
-
-target "task-ch4-p1" {
-  context = "tasks/ch4-p1"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch4-p1${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch4-p2" {
-  context = "tasks/ch4-p2"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch4-p2${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch4-p3" {
-  context = "tasks/ch4-p3"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch4-p3${TAG_SUFFIX}"]
-
-}
-
-target "task-ch4-p4" {
-  context = "tasks/ch4-p4"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch4-p4${TAG_SUFFIX}"]
-
-}
-
-target "task-ch9-p0" {
-  context = "tasks/ch9-p0"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch9-p0${TAG_SUFFIX}"]
-
-}
-
-target "task-ch9-p1" {
-  context = "tasks/ch9-p1"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch9-p1${TAG_SUFFIX}"]
-
-}
-
-target "task-ch7-p4" {
-  context = "tasks/ch7-p4"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch7-p4${TAG_SUFFIX}"]
-
-}
-
-target "task-ch7-p5" {
-  context = "tasks/ch7-p5"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch7-p5${TAG_SUFFIX}"]
-
-}
-
-target "task-ch7-p6" {
-  context = "tasks/ch7-p6"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch7-p6${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch6-p3" {
-  context = "tasks/ch6-p3"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch6-p3${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch6-p4" {
-  context = "tasks/ch6-p4"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch6-p4${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch10-p5" {
-  context = "tasks/ch10-p5"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch10-p5${TAG_SUFFIX}"]
-
-}
-
-target "task-ch3-p1" {
-  context = "tasks/ch3-p1"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch3-p1${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch3-p2" {
-  context = "tasks/ch3-p2"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch3-p2${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch3-p3" {
-  context = "tasks/ch3-p3"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch3-p3${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch3-p4" {
-  context = "tasks/ch3-p4"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch3-p4${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch3-p5" {
-  context = "tasks/ch3-p5"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch3-p5${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch3-p6" {
-  context = "tasks/ch3-p6"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch3-p6${TAG_SUFFIX}"]
-
-}
-
-target "task-ch3-p7" {
-  context = "tasks/ch3-p7"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch3-p7${TAG_SUFFIX}"]
-
-}
-
-target "task-ch13-p0" {
-  context = "tasks/ch13-p0"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch13-p0${TAG_SUFFIX}"]
-
-}
-
-target "task-ch13-p1" {
-  context = "tasks/ch13-p1"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch13-p1${TAG_SUFFIX}"]
-
-}
-
-target "task-ch13-p2" {
-  context = "tasks/ch13-p2"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch13-p2${TAG_SUFFIX}"]
-
-}
-
-target "task-ch12-p0" {
-  context = "tasks/ch12-p0"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch12-p0${TAG_SUFFIX}"]
-
-}
-
-target "task-ch12-p1" {
-  context = "tasks/ch12-p1"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch12-p1${TAG_SUFFIX}"]
-
-}
-
-target "task-ch12-p2" {
-  context = "tasks/ch12-p2"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch12-p2${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch12-p3" {
-  context = "tasks/ch12-p3"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch12-p3${TAG_SUFFIX}"]
-  args = {
-    BASE_IMAGE = "base"
-  }
-  contexts = {
-    base = "target:base-pg16"
-  }
-}
-
-target "task-ch12-p4" {
-  context = "tasks/ch12-p4"
-  dockerfile = "Dockerfile"
-  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch12-p4${TAG_SUFFIX}"]
-
-}
-

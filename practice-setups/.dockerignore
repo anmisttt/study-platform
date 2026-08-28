@@ -1,0 +1,6 @@
+**
+!images/
+!images/*.Dockerfile
+!bases/
+!bases/common/
+!bases/common/lab-init-entrypoint.sh

@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# Fail CI if chapter JSON references a docker tag missing from docker-bake.hcl
+# Keep chapter image references, Bake entries, and task directories in sync.
 set -euo pipefail
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-refs=$(grep -rhoE 'ghcr\.io/anmisttt/ddia-practice:ch[0-9]+-p[0-9]+' backend/src/data \
-  | sed 's/.*://' | sort -u)
+refs="$(grep -rhoE 'ghcr\.io/anmisttt/ddia-practice:ch[0-9]+-p[0-9]+' backend/src/data \
+  | sed 's/.*://' | sort -u)"
+configured="$(sed -nE 's/.*tag = "(ch[0-9]+-p[0-9]+)".*/\1/p' \
+  practice-setups/docker-bake.hcl | sort -u)"
+directories="$(find practice-setups/tasks -mindepth 1 -maxdepth 1 -type d \
+  -exec basename {} \; | sort -u)"
 
-missing=0
-while IFS= read -r tag; do
-  [[ -z "$tag" ]] && continue
-  if ! grep -q "task-${tag}" practice-setups/docker-bake.hcl; then
-    echo "missing bake target for tag: ${tag}" >&2
-    missing=1
-  fi
-done <<< "$refs"
-
-if [[ "$missing" -ne 0 ]]; then
+if [[ "$refs" != "$configured" || "$refs" != "$directories" ]]; then
+  echo "practice image tags are out of sync" >&2
+  diff -u <(printf '%s\n' "$refs") <(printf '%s\n' "$configured") >&2 || true
+  diff -u <(printf '%s\n' "$refs") <(printf '%s\n' "$directories") >&2 || true
   exit 1
 fi
-count=$(echo "$refs" | grep -c . || true)
+
+count="$(printf '%s\n' "$refs" | grep -c . || true)"
 echo "drift check ok (${count} tags)"
