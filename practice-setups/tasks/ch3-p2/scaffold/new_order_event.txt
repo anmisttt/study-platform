@@ -1,0 +1,1 @@
+o4|{"event_id":"evt-005","event_type":"OrderPlaced","order_id":"o4","customer_id":"alice","total":30,"day":"2026-08-02"}

@@ -8,9 +8,6 @@ variable "TAG_SUFFIX" { default = "" }
 variable "POSTGRES_TASKS" {
   default = [
     { tag = "ch1-p0", db = "retail_lab" },
-    { tag = "ch3-p1", db = "lab" },
-    { tag = "ch3-p2", db = "lab" },
-    { tag = "ch3-p3", db = "lab" },
     { tag = "ch3-p4", db = "lab" },
     { tag = "ch3-p5", db = "lab" },
     { tag = "ch4-p1", db = "messages_index_lab" },
@@ -35,6 +32,8 @@ variable "POSTGRES_TASKS" {
 
 variable "DELIVERY_TASKS" {
   default = [
+    { tag = "ch3-p2", apt = "" },
+    { tag = "ch3-p3", apt = "" },
     { tag = "ch3-p6", apt = "" },
     { tag = "ch3-p7", apt = "" },
     { tag = "ch4-p0", apt = "" },
@@ -56,8 +55,14 @@ variable "DELIVERY_TASKS" {
   ]
 }
 
+variable "NODE_DELIVERY_TASKS" {
+  default = [
+    { tag = "ch3-p1" },
+  ]
+}
+
 group "default" {
-  targets = ["base-pg16", "postgres-task", "delivery-task"]
+  targets = ["base-pg16", "postgres-task", "delivery-task", "node-delivery-task"]
 }
 
 target "base-pg16" {
@@ -94,6 +99,19 @@ target "delivery-task" {
   args = {
     APT_PACKAGES = item.apt
   }
+  contexts = {
+    task = "tasks/${item.tag}"
+  }
+  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${item.tag}${TAG_SUFFIX}"]
+}
+
+target "node-delivery-task" {
+  name = "task-${item.tag}"
+  matrix = {
+    item = NODE_DELIVERY_TASKS
+  }
+  context = "."
+  dockerfile = "images/node-delivery.Dockerfile"
   contexts = {
     task = "tasks/${item.tag}"
   }

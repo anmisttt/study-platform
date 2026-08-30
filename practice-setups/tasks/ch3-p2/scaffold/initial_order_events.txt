@@ -1,0 +1,4 @@
+o1|{"event_id":"evt-001","event_type":"OrderPlaced","order_id":"o1","customer_id":"alice","total":100,"day":"2026-08-01"}
+o2|{"event_id":"evt-002","event_type":"OrderPlaced","order_id":"o2","customer_id":"alice","total":50,"day":"2026-08-01"}
+o3|{"event_id":"evt-003","event_type":"OrderPlaced","order_id":"o3","customer_id":"bob","total":70,"day":"2026-08-02"}
+o2|{"event_id":"evt-004","event_type":"OrderCancelled","order_id":"o2","customer_id":"alice","total":50,"day":"2026-08-01"}

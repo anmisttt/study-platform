@@ -46,14 +46,14 @@ cd practice-setups
 ./build.sh all
 ```
 
-Task assets are the source of truth. There is no generated manifest or per-task Dockerfile: Docker Bake expands two compact task lists and uses the shared PostgreSQL or delivery Dockerfile. Edit task assets and the corresponding chapter brief together, following [STYLEGUIDE](../.agents/skills/validate-practice-tasks/STYLEGUIDE.md) §8.
+Task assets are the source of truth. There is no generated manifest or per-task Dockerfile: Docker Bake expands compact PostgreSQL, Python-delivery, and Node-delivery task lists and uses their shared Dockerfiles. Edit task assets and the corresponding chapter brief together, following [STYLEGUIDE](../.agents/skills/validate-practice-tasks/STYLEGUIDE.md) §§8–9.
 
 ## Layout
 
 | Path | Purpose |
 |------|---------|
 | `bases/pg16/` | Shared PostgreSQL 16 base with `init` entrypoint |
-| `images/` | Shared PostgreSQL and delivery Dockerfiles |
+| `images/` | Shared PostgreSQL, Python-delivery, and Node-delivery Dockerfiles |
 | `tasks/chN-pI/` | Per-task seed, requirements, and student scaffold |
 | `docker-bake.hcl` | Task inventory plus local/CI build configuration |
 
@@ -61,8 +61,10 @@ Task assets are the source of truth. There is no generated manifest or per-task 
 
 Do this only when the exercise needs a containerized service or dependencies that should be packaged for the learner.
 
+Before writing setup assets, verify how practitioners perform the task using current official documentation: identify the real product, native client/API, configuration and data files, normal command sequence, and expected signals. Package and expose those same instruments in the lab. Reduce scale to fit a laptop, but do not replace a Docker-runnable real tool or workflow with a custom simulator, mock, or hand-written approximation.
+
 1. Add `tasks/chN-pI/scaffold/` and the task-specific inputs: `seed.sql` for a PostgreSQL image and, when needed, `requirements.txt` for a delivery image.
-2. Add one object to `POSTGRES_TASKS` or `DELIVERY_TASKS` in `docker-bake.hcl`, including its database name or any OS packages.
+2. Add one object to `POSTGRES_TASKS`, `DELIVERY_TASKS`, or `NODE_DELIVERY_TASKS` in `docker-bake.hcl`, including its database name or any OS packages when that image kind needs them.
 3. Run `./check-tag-drift.sh`, then `./build.sh chN-pI`.
 
 ## Image kinds
@@ -70,6 +72,7 @@ Do this only when the exercise needs a containerized service or dependencies tha
 - **postgres-baked** — PostgreSQL 16 with seed data applied at build time (`PGDATA=/lab/pgdata`).
 - **compose-stack** — Delivery image; `init` copies `docker-compose.yml` + seeds; student runs `docker compose up -d`.
 - **python-lab** — Python 3.12 with pip deps; `init` copies stub scripts.
+- **node-lab** — Node.js 24 with pinned npm deps; `init` copies stub scripts and Compose assets.
 
 Fifteen stdlib-only Python tasks have no image (unchanged briefs).
 

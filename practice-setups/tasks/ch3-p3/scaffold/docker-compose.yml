@@ -1,0 +1,58 @@
+name: ch3-package-dependencies
+
+services:
+  postgres:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_DB: lab
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres_seed.sql:/docker-entrypoint-initdb.d/10-package-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lab"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  orientdb:
+    image: orientdb:3.2.55
+    environment:
+      ORIENTDB_ROOT_PASSWORD: root
+    ports:
+      - "2424:2424"
+      - "2480:2480"
+    volumes:
+      - orientdb-data:/orientdb/databases
+      - ./:/lab:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ': >/dev/tcp/127.0.0.1/2424'"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  orient-init:
+    image: orientdb:3.2.55
+    depends_on:
+      orientdb:
+        condition: service_healthy
+    volumes:
+      - ./:/lab:ro
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        /orientdb/bin/console.sh /lab/orient_seed.osql
+        touch /tmp/orient-seeded
+        exec tail -f /dev/null
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/orient-seeded"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+volumes:
+  postgres-data:
+  orientdb-data:

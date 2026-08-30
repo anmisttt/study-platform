@@ -1,19 +1,14 @@
 # syntax=docker/dockerfile:1
 
-FROM python:3.12-slim-bookworm
+FROM node:24.20.0-bookworm-slim
 
-ARG APT_PACKAGES=""
-WORKDIR /work
-RUN if [ -n "${APT_PACKAGES}" ]; then \
-      apt-get update \
-      && apt-get install -y --no-install-recommends ${APT_PACKAGES} \
-      && rm -rf /var/lib/apt/lists/*; \
-    fi
+ENV NODE_ENV=production \
+    NODE_PATH=/opt/lab/node_modules
+WORKDIR /opt/lab
 
 RUN --mount=type=bind,from=task,source=.,target=/task \
-    if [ -s /task/requirements.txt ]; then \
-      pip install --no-cache-dir -r /task/requirements.txt; \
-    fi
+    cp /task/package.json ./ \
+    && npm install --omit=dev --ignore-scripts --no-audit --no-fund --no-package-lock
 COPY bases/common/lab-init-entrypoint.sh /usr/local/bin/lab-entrypoint.sh
 COPY --from=task scaffold/ /lab/scaffold/
 RUN --mount=type=bind,from=task,source=.,target=/task \

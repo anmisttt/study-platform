@@ -1,0 +1,9 @@
+-- PostgreSQL
+-- implement: denormalized rename
+-- implement: renamed-row check
+-- implement: lookup tables
+-- implement: normalized postings table
+-- implement: lookup migration
+-- implement: posting migration
+-- implement: lookup rename
+-- implement: normalized result query

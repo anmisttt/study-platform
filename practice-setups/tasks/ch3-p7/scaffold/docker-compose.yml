@@ -1,10 +1,49 @@
+name: ch3-document-lookup
+
 services:
-  orientdb:
-    image: orientdb:3.2.55
-    ports:
-      - "2424:2424"
-      - "2480:2480"
+  seed-assets:
+    image: ghcr.io/anmisttt/ddia-practice:ch3-p7
+    volumes:
+      - mongo-init:/seed-out
+    command:
+      - bash
+      - -c
+      - cp /lab/image/mongo_seed.js /seed-out/10-document-lookup.js
+
+  mongo:
+    image: mongo:8.0.29-noble
     environment:
-      ORIENTDB_ROOT_PASSWORD: root
+      MONGO_INITDB_DATABASE: shop
+    volumes:
+      - mongo-data:/data/db
+      - mongo-init:/docker-entrypoint-initdb.d:ro
+    depends_on:
+      seed-assets:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 2s
+      timeout: 5s
+      retries: 40
+
+  app:
+    image: ghcr.io/anmisttt/ddia-practice:ch3-p7
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      MONGO_DB: shop
+    depends_on:
+      mongo:
+        condition: service_healthy
+    working_dir: /lab
     volumes:
       - ./:/lab
+    command: ["tail", "-f", "/dev/null"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import pymongo"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mongo-data:
+  mongo-init:

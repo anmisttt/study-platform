@@ -11,11 +11,32 @@ configured="$(sed -nE 's/.*tag = "(ch[0-9]+-p[0-9]+)".*/\1/p' \
   practice-setups/docker-bake.hcl | sort -u)"
 directories="$(find practice-setups/tasks -mindepth 1 -maxdepth 1 -type d \
   -exec basename {} \; | sort -u)"
+index_mismatches="$(
+  for chapter_file in backend/src/data/*_chapter.json; do
+    jq -r --arg file "$chapter_file" '
+      .number as $chapter
+      | .practice
+      | to_entries[]
+      | .key as $practice_index
+      | (if $chapter == 3 then $practice_index + 1 else $practice_index end) as $expected_suffix
+      | (.value | tostring | scan("ghcr\\.io/anmisttt/ddia-practice:ch[0-9]+-p[0-9]+")) as $tag
+      | ($tag | capture("ddia-practice:ch(?<chapter>[0-9]+)-p(?<practice>[0-9]+)")) as $ref
+      | select(($ref.chapter | tonumber) != $chapter or ($ref.practice | tonumber) != $expected_suffix)
+      | "\($file): practice \($practice_index + 1) references \($tag); expected ch\($chapter)-p\($expected_suffix)"
+    ' "$chapter_file"
+  done | sort -u
+)"
 
 if [[ "$refs" != "$configured" || "$refs" != "$directories" ]]; then
   echo "practice image tags are out of sync" >&2
   diff -u <(printf '%s\n' "$refs") <(printf '%s\n' "$configured") >&2 || true
   diff -u <(printf '%s\n' "$refs") <(printf '%s\n' "$directories") >&2 || true
+  exit 1
+fi
+
+if [[ -n "$index_mismatches" ]]; then
+  echo "practice image tags do not match their configured numbering convention" >&2
+  printf '%s\n' "$index_mismatches" >&2
   exit 1
 fi
 
