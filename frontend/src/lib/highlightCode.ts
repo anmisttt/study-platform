@@ -1,13 +1,17 @@
 import hljs from "highlight.js/lib/core";
 import bash from "highlight.js/lib/languages/bash";
+import javascript from "highlight.js/lib/languages/javascript";
 import json from "highlight.js/lib/languages/json";
 import python from "highlight.js/lib/languages/python";
 import sql from "highlight.js/lib/languages/sql";
+import typescript from "highlight.js/lib/languages/typescript";
 
 hljs.registerLanguage("sql", sql);
 hljs.registerLanguage("python", python);
 hljs.registerLanguage("bash", bash);
 hljs.registerLanguage("json", json);
+hljs.registerLanguage("javascript", javascript);
+hljs.registerLanguage("typescript", typescript);
 
 const LANGUAGE_ALIASES: Record<string, string> = {
   sh: "bash",
@@ -18,6 +22,15 @@ const LANGUAGE_ALIASES: Record<string, string> = {
   postgres: "sql",
   postgresql: "sql",
   plpgsql: "sql",
+  js: "javascript",
+  jsx: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  node: "javascript",
+  ts: "typescript",
+  tsx: "typescript",
+  mts: "typescript",
+  cts: "typescript",
 };
 
 function escapeHtml(text: string): string {

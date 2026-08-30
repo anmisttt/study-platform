@@ -10,11 +10,14 @@ function formatQuestion(item: PromptItem): string {
 }
 
 export function userPromptForItem(answer: string, item: PromptItem): string {
-  return `
-  {
-    "question": "${formatQuestion(item)}",
-    "user_answer": "${answer}",
-    "correct_answer": "${item.answer}",
-  }
-  `;
+  return JSON.stringify(
+    {
+      item_type: "task" in item ? "practice" : "theory",
+      question: formatQuestion(item),
+      user_answer: answer,
+      reference_answer_example: item.answer,
+    },
+    null,
+    2,
+  );
 }

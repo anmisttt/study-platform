@@ -75,6 +75,20 @@ describe("FormattedText", () => {
     expect(code?.textContent).toBe("SELECT 1;");
   });
 
+  it("syntax-highlights TypeScript fenced code, including ts aliases", () => {
+    render(
+      <FormattedText
+        text={["```ts", "const n: number = 1;", "```"].join("\n")}
+      />,
+    );
+
+    const code = document.querySelector(".formatted-text__code code");
+    expect(code).toHaveClass("hljs");
+    expect(code).toHaveClass("language-typescript");
+    expect(code?.querySelector(".hljs-keyword")).toBeTruthy();
+    expect(code?.textContent).toBe("const n: number = 1;");
+  });
+
   it("escapes unlabeled fenced code without token spans", () => {
     render(
       <FormattedText text={["```", "SELECT <id>", "```"].join("\n")} />,
