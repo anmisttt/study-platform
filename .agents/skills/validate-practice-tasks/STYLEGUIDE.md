@@ -3,15 +3,19 @@
 Canonical format for every `practice[]` item in `backend/src/data/*_chapter.json`.
 Fields: `task` (short title), `question` (student-facing brief), `answer` (perfect reference).
 
-## 1. Practical and reproducible
+## 1. Purpose-led title and reproducible task
 
+- `task` must begin with a concrete technology label in square brackets and explain the main learning purpose in plain, learner-oriented language. When several technologies are used, list them inside the brackets separated by a comma and one space, for example `[Kafka, PostgreSQL]`; do not join them with `+`, `/`, or `vs`. Prefer a concise outcome such as `[RDFLib, SPARQL] Learn how to work with triple stores.`
+- Do not use the title as a compressed implementation instruction or data-model description, such as `Query package dependencies as subject-predicate-object triples.` Put those mechanics in the numbered tasks instead.
+- Keep the title free of Markdown emphasis, task numbering, and setup details beyond the required leading `[Technology]` label.
 - The item is a hands-on exercise a student can run locally, not a free-form essay.
 - Steps are concrete and reproducible from `task` + `question` alone (filenames, commands, expected signals).
 - A careful student should not need unspoken tools, ports, env vars, or side knowledge.
 
 ## 2. Fenced code blocks
 
-- Every code or shell snippet in `question` and `answer` must be wrapped in triple-backtick fences (```).
+- Every allowed code or shell snippet in `question` and `answer` must be wrapped in triple-backtick fences (```).
+- In `question`, code fences may contain operational lab commands or task-relevant starter code. Starter code must remain incomplete and must not contain completed solution logic or fragments copied from the reference answer.
 - Do not leave multi-line code as indented plain text outside fences.
 - Put a language tag on the opening fence when the block is one of the supported highlight languages. The UI highlights from the fence tag only (no content auto-detect); unlabeled or unknown tags render as plain escaped text.
 - Supported highlight languages (and aliases):
@@ -26,6 +30,7 @@ Fields: `task` (short title), `question` (student-facing brief), `answer` (perfe
 - Student work items in `question` must be numbered: `1.`, `2.`, `3.`, …
 - Prefer a short lead-in such as `Tasks:` then the numbered list.
 - Do not use only bullets or unnumbered paragraphs for the required work.
+- Do not organize work as `Part A`, `Part B`, lettered sections, or prose references to those labels. Convert each required part into the numbered task list and refer back to it as `Task 1`, `Task 2`, and so on.
 
 ## 4. No markdown decoration outside code fences
 
@@ -40,30 +45,27 @@ Fields: `task` (short title), `question` (student-facing brief), `answer` (perfe
 - Do not ship only a diff, a fragment, or “add these lines” patches unless the question explicitly asks for a patch format.
 - Keep any short write-up as plain prose (no `#` headings); put all code in fences.
 
-## 6. Initial setup with feature comments
+## 6. Separate starter code from task instructions
 
-- `question` must include an initial setup (files and/or commands) the student can save and run.
-- Setup must be runnable as given: after following prerequisites and saving/running the setup literally, it should execute without invented fixes (syntax-complete, stated entrypoint/commands work, and any intentional bug is a deliberate runtime/logic demo — not a broken paste).
-- Put **inline hints at the exact sites** the student must change — short comments on the stub, empty body, or buggy line (e.g. `# implement quorum read`, `# TODO: elect leader then CAS put`). Do not rely only on the numbered task list to say *where* to edit.
-- Prefer stubs or clear markers over a fully solved setup. A stub may `raise NotImplementedError` (or equivalent) so the file still parses; any “run the setup / reproduce the bug” step must either use already-working demo code or come *after* the implement step that completes it.
-- Filename(s) for the setup should be stated explicitly when the student creates files.
+- `question` may include task-relevant starter code, incomplete function bodies, and short edit-site markers such as `-- implement: ...` or `# TODO: ...`. These markers are encouraged when they make the intended edit location obvious.
+- Keep markers terse: identify the feature or location only. Do not put detailed requirements, algorithms, acceptance criteria, expected outputs, or step-by-step implementation guidance inside code comments.
+- Put the full requirements after the relevant code block in the numbered `Tasks:` list. The numbered tasks are the single source of truth; do not duplicate or split their instructions between code comments and prose.
+- Starter code must not contain completed solution logic, near-complete pseudocode, or fragments copied or adapted from the reference answer.
+- Non-task infrastructure code, including schema creation and seed inserts that the student is not meant to implement, belongs in container initialization rather than the student-facing scaffold.
+- Allowed prose details include artifact and object names, required columns or interfaces, constraints, required operations or algorithms, filenames, behavioral requirements, and expected outcomes.
+- Keep the brief reproducible by stating exact artifacts, commands, constraints, and success signals in the numbered tasks without revealing the solution.
 
-Example pattern (hints live in the setup, details stay in numbered tasks):
+Allowed pattern:
 
-```
-class LeaderlessStore:
-    def quorum_read(self, idxs: List[int]) -> int:
-        # implement quorum read (max of replica values at idxs)
-        raise NotImplementedError
-
-def reproduce_bug():
-    ...
+```sql
+-- implement: lookup-table schema
+-- TODO: migrate raw job postings into normalized tables
 ```
 
 Tasks:
 
-1. Implement `quorum_read` as described in the setup comment; run `reproduce_bug` and confirm the nonlinearizable schedule.
-2. …
+1. Create `ch2_companies`, `ch2_cities`, and `ch2_job_categories`, each with an `id` and unique `name`.
+2. Create `ch2_job_postings` with foreign keys, then migrate `ch2_job_postings_raw` using distinct lookup inserts and a join-based migration. Use the renamed company values produced in Task 1.
 
 ## 7. Prerequisites and install guidance
 
@@ -96,7 +98,9 @@ Tasks that need databases, brokers, or pip-heavy tooling should use a published 
 - Prerequisites line: `Prerequisites: Docker Engine 24+ (or Docker Desktop).`
 - Put **one** fenced `bash` block with: `docker run` (start lab or `init`), scaffold copy (`docker run --rm -v "$PWD:/out" IMAGE init`), connect/exec step, and **teardown** (`docker rm -f …` or `docker compose down -v`).
 - Image reference: `ghcr.io/anmisttt/ddia-practice:ch<N>-p<I>` (matches question id `practice-<I>` in chapter `<N>`).
-- Bulk seed data lives in the image; keep **DDL and stub comments inline** in `question` so the grading tutor still sees schema and edit sites. Do not paste large `INSERT` dumps in the brief when the image is pre-seeded.
+- Bulk seed data and schema that are not student work live in the image and are provisioned during container initialization.
+- The image's `init` command supplies starter files. The brief may also show the task-relevant starter scaffold when useful, including terse `-- implement:` or `TODO` markers, but it must keep detailed instructions in the numbered tasks after the code block.
+- When schema or data changes are student work, the starter SQL may mark the edit sites without implementing them. Describe the required objects, constraints, operations, and results in the numbered tasks.
 - Multi-service labs: `init` copies `docker-compose.yml`; student runs `docker compose up -d` on the host.
 - Every docker brief must include an explicit teardown command so solvers leave no orphaned containers.
 - **Never** tell students to run DB/client CLIs on the host (`psql`, `clickhouse-client`, `mysql`, `mongosh`, `etcdctl`, …) when the lab runs in Docker. Always prefix with the container entrypoint:
@@ -141,15 +145,25 @@ docker compose down -v
 
 Stdlib-only Python tasks (no broker/DB) stay on native Python prerequisites and do **not** need a lab image.
 
+## 9. Real-world tools and workflow
+
+- Before writing the task or its setup, understand how practitioners perform the work in a real system. Verify the current product, native CLI/API, configuration and data formats, normal command sequence, and expected signals using official documentation or another primary source.
+- Use those real-world tools in the task, starter scaffold, reference answer, and container setup. All four must describe and exercise the same instrument and workflow.
+- Prefer native interfaces and artifacts: for example, the product's actual client, migration/config files, schemas, and operational commands—not a custom script that imitates the product's behavior.
+- A laptop lab may reduce scale, replicas, partitions, data volume, or runtime, but it must preserve the essential practitioner workflow and the concept being taught.
+- Do not substitute a mock, toy database, in-memory reimplementation, or hand-written simulator when the authentic tool can run safely in Docker. If the authentic workflow cannot be made runnable, choose a different practical exercise rather than silently teaching an imitation.
+- Verify version-specific commands and APIs against the tool version pinned by the setup, then smoke-test the documented workflow before considering the item complete.
+
 ## Quick checklist
 
 | # | Rule | Where |
 | --- | --- | --- |
-| 1 | Hands-on, reproducible from brief alone | `question` |
-| 2 | All multi-line code in ``` fences; tag with a supported language when applicable | `question`, `answer` |
-| 3 | Numbered steps `1.` `2.` … | `question` |
+| 1 | Title begins with `[Technology]` (or comma-separated `[Technology, Technology]`) and states the learning goal; exercise is hands-on and reproducible from the brief | `task`, `question` |
+| 2 | Operational commands and task-relevant starter code use tagged fences; starter code contains no completed solution | `question`, `answer` |
+| 3 | Required work uses numbered tasks `1.`, `2.`, …; no `Part A` / `Part B` or lettered sections | `question` |
 | 4 | No `#` headings / decorative markdown outside fences | `task`, `question`, `answer` |
 | 5 | Full setup+changes in reference, not a fragment | `answer` |
-| 6 | Setup present, runnable as given, with inline implement-here comments at edit sites | `question` |
+| 6 | Starter code may use terse implement/TODO markers; detailed instructions appear only in numbered tasks after the code block | `question` |
 | 7 | Prerequisites listed; non-trivial installs in one commented fenced block | `question` |
-| 8 | Docker tasks: GHCR image, init/scaffold/teardown in one bash block; client CLIs via `docker exec` / `docker compose exec` only; no bulk INSERT in brief | `question` |
+| 8 | Docker tasks: GHCR image supplies non-task setup; task scaffolds may have terse markers, with details in numbered tasks | `question` |
+| 9 | Task and setup use a verified real-world tool, native workflow, and matching versioned commands; scale reduction does not replace the tool with a toy | `question`, `answer`, setup assets |

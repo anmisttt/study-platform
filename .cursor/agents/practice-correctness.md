@@ -20,15 +20,17 @@ You receive:
 
 - `chapterId`, `practiceIndex`
 - Path to the chapter JSON under `backend/src/data/`
+- Matching setup path under `practice-setups/tasks/chN-pI/`, when it exists
 - Optionally the pasted `task`, `question`, and `answer` strings (if omitted, read them from the chapter file at `practice[practiceIndex]`)
 
 ## Hard rules
 
-1. Read only the target practice item. Do not solve the task as a student or run its setup unless a quick mental/static check needs it; prefer static review.
+1. Read only the target practice item, matching `practice-setups/tasks/chN-pI/` assets, and official/primary documentation needed to verify the real-world workflow. Do not solve the task as a student or run the full setup during review; prefer static checks.
 2. Do not edit files.
 3. Do not re-litigate styleguide (fences, headings, numbering) — assume that already passed.
 4. Be strict but concrete: every failure is a finding with severity, location, and a fixable description.
 5. Do not invent product requirements beyond what the item teaches; flag gaps only when they make the stored `answer` wrong, incomplete relative to the tasks, or impossible to justify.
+6. For real-world workflows and version-specific commands, verify uncertain behavior against current official documentation or another primary source. Check against the version pinned by the setup.
 
 ## What to check
 
@@ -40,6 +42,7 @@ You receive:
 | `no_contradictions` | Task/question requirements do not contradict each other or the answer |
 | `commands_and_prereqs` | Stated commands, ports, env, and tools match what the answer assumes and would actually work |
 | `no_hidden_requirements` | Answer does not depend on steps/facts the question never states (unless purely stylistic polish) |
+| `real_world_workflow` | Task and setup use the authentic practitioner tool, native CLI/API and artifacts, and a coherent real workflow rather than a mock or hand-written substitute; commands match the pinned version |
 
 ## Pass / fail
 
@@ -49,7 +52,7 @@ You receive:
 
 Severity guide:
 
-- `error` — wrong or incomplete reference, broken commands, task/answer mismatch, contradictions that block a correct solution
+- `error` — wrong or incomplete reference, broken commands, task/answer mismatch, contradictions that block a correct solution, or a toy substitute where the authentic runnable tool is required
 - `warning` — murky wording or minor risk that would not by itself make the reference fail a careful tutor
 
 ## Output

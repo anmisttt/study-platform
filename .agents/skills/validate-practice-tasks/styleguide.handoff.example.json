@@ -4,8 +4,9 @@
   "practiceIndex": 0,
   "handOff": "practice-editor",
   "checks": [
+    { "id": "purpose_led_title", "pass": false, "detail": "Title describes the implementation action instead of the learning purpose" },
     { "id": "reproducible", "pass": true, "detail": "Hands-on Python exercise with clear run steps" },
-    { "id": "fenced_code", "pass": true, "detail": "Setup and answer code are fenced" },
+    { "id": "fenced_code", "pass": true, "detail": "Operational commands, starter code, and answer code are fenced" },
     { "id": "numbered_steps", "pass": true, "detail": "Tasks 1–5 numbered" },
     {
       "id": "no_md_decoration",
@@ -14,17 +15,32 @@
     },
     { "id": "full_answer", "pass": true, "detail": "Answer is full script from setup plus changes" },
     {
-      "id": "setup_with_comments",
-      "pass": false,
-      "detail": "Setup has no comments marking features the tasks require"
+      "id": "no_solution_leakage",
+      "pass": true,
+      "detail": "LeaderlessStore scaffold is incomplete and contains no reference-answer logic"
     },
+    {
+      "id": "instruction_separation",
+      "pass": false,
+      "detail": "Long implementation requirements are embedded in scaffold comments and repeated in the task list"
+    },
+    { "id": "scaffold_access", "pass": true, "detail": "Question names leaderless_store.py and includes its task-relevant scaffold" },
     {
       "id": "prereqs_install",
       "pass": false,
       "detail": "No Prerequisites section; Python assumed silently"
-    }
+    },
+    { "id": "docker_backed", "pass": true, "detail": "Not a Docker-backed task" },
+    { "id": "real_world_tools", "pass": true, "detail": "Uses Python's real execution model and standard-library concurrency primitives rather than a custom runtime mock" }
   ],
   "violations": [
+    {
+      "rule": 1,
+      "id": "purpose_led_title",
+      "where": "task",
+      "snippet": "Simulate quorum reads with three replica arrays",
+      "fix": "Rewrite with a technology label and learning purpose, such as '[Python] Learn how leaderless quorum reads work.'"
+    },
     {
       "rule": 4,
       "id": "no_md_decoration",
@@ -34,10 +50,10 @@
     },
     {
       "rule": 6,
-      "id": "setup_with_comments",
+      "id": "instruction_separation",
       "where": "question",
-      "snippet": "class LeaderlessStore:",
-      "fix": "Add comments in the setup that mark LeaderStore / linearizable_read as the required features"
+      "snippet": "# implement quorum read by taking the max replica value and rejecting stale epochs",
+      "fix": "Shorten the comment to '# TODO: implement quorum_read' and keep the algorithm, constraints, and expected behavior only in the numbered tasks after the code block"
     },
     {
       "rule": 7,
@@ -47,5 +63,5 @@
       "fix": "Add Prerequisites: Python 3.10+ (stdlib only); no extra packages"
     }
   ],
-  "feedbackForEditor": "1) Strip '# Solution' / '## Write-up' from answer; use plain prose. 2) Comment the setup where LeaderStore and linearizable_read belong. 3) Add an explicit Prerequisites line with install/runtime guidance."
+  "feedbackForEditor": "1) Rewrite the title with a leading [Technology] label and the main learning purpose. 2) Strip '# Solution' / '## Write-up' from answer; use plain prose. 3) Keep the starter scaffold, but reduce its comments to terse TODO markers and move all detailed requirements to the numbered tasks after the code block. 4) Add an explicit Prerequisites line with install/runtime guidance."
 }

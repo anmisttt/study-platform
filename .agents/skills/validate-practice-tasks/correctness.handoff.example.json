@@ -21,6 +21,11 @@
       "id": "no_hidden_requirements",
       "pass": false,
       "detail": "Answer uses an epoch fence never mentioned in the question"
+    },
+    {
+      "id": "real_world_workflow",
+      "pass": true,
+      "detail": "Task and answer use the stated Python runtime and its native interfaces consistently"
     }
   ],
   "findings": [

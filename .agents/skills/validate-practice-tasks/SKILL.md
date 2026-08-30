@@ -50,6 +50,7 @@ Delegate to **practice-styleguide** with:
 
 - `chapterId`, `practiceIndex`
 - Path to the chapter JSON under `backend/src/data/`
+- Matching setup path under `practice-setups/tasks/chN-pI/` when it exists
 
 If `status` is `fail` (`handOff`: `practice-editor`):
 
@@ -65,6 +66,7 @@ Delegate to **practice-correctness** with:
 
 - `chapterId`, `practiceIndex`
 - Path to the chapter JSON under `backend/src/data/`
+- Matching setup path under `practice-setups/tasks/chN-pI/` when it exists
 
 Launch exactly one `practice-correctness` subagent per round after a styleguide pass (`run_in_background: false` unless the user asks otherwise). Use this prompt shape:
 
@@ -72,6 +74,7 @@ Launch exactly one `practice-correctness` subagent per round after a styleguide 
 chapterId: <id>
 practiceIndex: <n>
 chapterFile: <absolute path to backend/src/data/..._chapter.json>
+setupPath: <absolute path to practice-setups/tasks/chN-pI, or "none">
 ```
 
 If `status` is `fail` (`handOff`: `practice-editor`):
@@ -155,7 +158,7 @@ After 5 failed rounds, stop and report remaining issues for human review. Do not
 
 - Never let practice-solver read `backend/src/data/*.json` or answer text.
 - Never put tutor comments or reference answers into the solver prompt.
-- practice-styleguide and practice-correctness may read the target practice item (including `answer`) and the styleguide; they must not edit.
+- practice-styleguide and practice-correctness may read the target practice item (including `answer`), the styleguide, the matching `practice-setups/tasks/chN-pI/` assets, and official/primary documentation needed to verify the real-world workflow; they must not edit.
 - practice-editor may read/write only the target practice item.
 - After each solver turn, run the artifact check (step 2b). Repo-root leftovers like `etcd-data/` must be deleted before the next round or final report.
 
@@ -166,4 +169,5 @@ After 5 failed rounds, stop and report remaining issues for human review. Do not
 3. Blind agent answer: majority of `--trials` ratings ≥ 5.
 4. Stored reference `answer`: majority of `--trials` ratings ≥ 5.
 5. Solver did not need steps absent from the question.
-6. No leftover runtime artifacts outside the workdir (e.g. no `etcd-data/` at repo root, no leftover `etcd-dev` container).
+6. Task, brief, starter scaffold, reference answer, and container setup use the same verified real-world tool, native workflow, and versioned interfaces rather than a toy substitute.
+7. No leftover runtime artifacts outside the workdir (e.g. no `etcd-data/` at repo root, no leftover `etcd-dev` container).
