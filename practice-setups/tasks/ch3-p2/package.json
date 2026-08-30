@@ -1,5 +1,5 @@
 {
-  "name": "ddia-ch3-p1-graphql-multi-store",
+  "name": "ddia-ch3-p2-graphql-multi-store",
   "version": "1.0.0",
   "private": true,
   "description": "GraphQL.js lab backed by PostgreSQL, MongoDB, and Neo4j",

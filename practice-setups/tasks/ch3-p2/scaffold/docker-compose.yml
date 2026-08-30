@@ -1,74 +1,34 @@
-name: ch3-event-sourcing
+name: ch3-graphql-multi-store
 
 services:
-  kafka:
-    image: apache/kafka:4.2.0
-    hostname: kafka
-    environment:
-      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_LOG_DIRS: /var/lib/kafka/data
+  seed-assets:
+    image: ghcr.io/anmisttt/ddia-practice:ch3-p2
     volumes:
-      - kafka-data:/var/lib/kafka/data
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
-      interval: 3s
-      timeout: 5s
-      retries: 40
-
-  kafka-init:
-    image: apache/kafka:4.2.0
-    depends_on:
-      kafka:
-        condition: service_healthy
-    volumes:
-      - ./initial_order_events.txt:/lab/initial_order_events.txt:ro
-    entrypoint: ["/bin/bash", "-c"]
+      - postgres-init:/seed/postgres
+      - mongo-init:/seed/mongo
+      - neo4j-init:/seed/neo4j
     command:
+      - bash
+      - -c
       - |
-        /opt/kafka/bin/kafka-topics.sh \
-          --bootstrap-server kafka:9092 \
-          --create --if-not-exists \
-          --topic order-events \
-          --partitions 1 \
-          --replication-factor 1 \
-          --config retention.ms=-1
-        /opt/kafka/bin/kafka-console-producer.sh \
-          --bootstrap-server kafka:9092 \
-          --topic order-events \
-          --reader-property parse.key=true \
-          --reader-property key.separator='|' \
-          < /lab/initial_order_events.txt
-        touch /tmp/kafka-seeded
-        exec tail -f /dev/null
-    healthcheck:
-      test: ["CMD", "test", "-f", "/tmp/kafka-seeded"]
-      interval: 2s
-      timeout: 2s
-      retries: 30
+        cp /lab/image/postgres_seed.sql /seed/postgres/10-dashboard.sql
+        cp /lab/image/mongo_seed.js /seed/mongo/10-dashboard.js
+        cp /lab/image/neo4j_seed.cypher /seed/neo4j/10-dashboard.cypher
 
   postgres:
     image: postgres:16.15-bookworm
     environment:
-      POSTGRES_DB: order_views
+      POSTGRES_DB: dashboard
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./postgres_views.sql:/docker-entrypoint-initdb.d/10-views.sql:ro
+      - postgres-init:/docker-entrypoint-initdb.d:ro
+    depends_on:
+      seed-assets:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d order_views"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dashboard"]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -76,42 +36,74 @@ services:
   mongo:
     image: mongo:8.0.29-noble
     environment:
-      MONGO_INITDB_DATABASE: order_views
+      MONGO_INITDB_DATABASE: dashboard
     volumes:
       - mongo-data:/data/db
-      - ./mongo_views.js:/docker-entrypoint-initdb.d/10-views.js:ro
+      - mongo-init:/docker-entrypoint-initdb.d:ro
+    depends_on:
+      seed-assets:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 2s
       timeout: 5s
       retries: 40
 
+  neo4j:
+    image: neo4j:5.26.30-community
+    environment:
+      NEO4J_AUTH: neo4j/graphpass
+    volumes:
+      - neo4j-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p graphpass 'RETURN 1' >/dev/null 2>&1"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  neo4j-seed:
+    image: neo4j:5.26.30-community
+    depends_on:
+      seed-assets:
+        condition: service_completed_successfully
+      neo4j:
+        condition: service_healthy
+    volumes:
+      - neo4j-init:/seed:ro
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - cypher-shell -a neo4j://neo4j:7687 -u neo4j -p graphpass -f /seed/10-dashboard.cypher
+
   app:
     image: ghcr.io/anmisttt/ddia-practice:ch3-p2
     environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      KAFKA_TOPIC: order-events
-      POSTGRES_DSN: postgresql://postgres:postgres@postgres:5432/order_views
+      POSTGRES_URL: postgresql://postgres:postgres@postgres:5432/dashboard
       MONGO_URL: mongodb://mongo:27017
-      MONGO_DB: order_views
+      MONGO_DB: dashboard
+      NEO4J_URI: neo4j://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: graphpass
     depends_on:
-      kafka-init:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       mongo:
         condition: service_healthy
+      neo4j-seed:
+        condition: service_completed_successfully
     working_dir: /lab
     volumes:
       - ./:/lab
     command: ["tail", "-f", "/dev/null"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import confluent_kafka, psycopg, pymongo"]
+      test: ["CMD", "node", "-e", "require('graphql'); require('pg'); require('mongodb'); require('neo4j-driver')"]
       interval: 2s
       timeout: 3s
       retries: 10
 
 volumes:
-  kafka-data:
   postgres-data:
+  postgres-init:
   mongo-data:
+  mongo-init:
+  neo4j-data:
+  neo4j-init:

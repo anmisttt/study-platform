@@ -32,7 +32,7 @@ variable "POSTGRES_TASKS" {
 
 variable "DELIVERY_TASKS" {
   default = [
-    { tag = "ch3-p2", apt = "" },
+    { tag = "ch3-p1", apt = "" },
     { tag = "ch3-p3", apt = "" },
     { tag = "ch3-p6", apt = "" },
     { tag = "ch3-p7", apt = "" },
@@ -57,7 +57,7 @@ variable "DELIVERY_TASKS" {
 
 variable "NODE_DELIVERY_TASKS" {
   default = [
-    { tag = "ch3-p1" },
+    { tag = "ch3-p2" },
   ]
 }
 
