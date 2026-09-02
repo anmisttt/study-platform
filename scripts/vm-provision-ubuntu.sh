@@ -9,6 +9,7 @@ fi
 echo "==> Installing OS packages"
 sudo apt update
 sudo apt install -y cron curl git nginx
+sudo systemctl enable cron nginx
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "==> Installing native deps for SQLite (better-sqlite3)"

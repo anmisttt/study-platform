@@ -274,6 +274,17 @@ if pm2 describe "${BACKEND_PROCESS_NAME}" >/dev/null 2>&1; then
 fi
 
 pm2 start dist/server.js --name "${BACKEND_PROCESS_NAME}" --cwd "${BACKEND_DIR}"
+
+# systemd unit so `pm2 save` dump is resurrected after reboot (idempotent).
+echo "==> Enabling PM2 restart on reboot"
+PM2_BIN="$(command -v pm2)"
+NODE_DIR="$(dirname "$(command -v node)")"
+PM2_USER="$(id -un)"
+if [[ "$(id -u)" -eq 0 ]]; then
+  env "PATH=${NODE_DIR}:${PATH}" "${PM2_BIN}" startup systemd -u "${PM2_USER}" --hp "${HOME}"
+else
+  sudo env "PATH=${NODE_DIR}:${PATH}" "${PM2_BIN}" startup systemd -u "${PM2_USER}" --hp "${HOME}"
+fi
 pm2 save
 
 echo "==> Installing daily stale-room cleanup cron"
@@ -314,6 +325,8 @@ fi
 echo "==> Deployment complete"
 echo "Backend health: curl http://127.0.0.1:${API_PORT}/health"
 echo "Stale-room cleanup: daily 04:00 (crontab; logs ${CLEANUP_LOGS})"
+echo "On reboot: nginx, cron, and PM2 (${BACKEND_PROCESS_NAME}) start automatically."
+echo "Verify after reboot: systemctl is-active cron nginx && pm2 list && curl -sf http://127.0.0.1:${API_PORT}/health"
 if ssl_certificate_available; then
   echo "Public app: https://${PRIMARY_DOMAIN}"
 elif [[ -n "${PRIMARY_DOMAIN}" ]]; then
