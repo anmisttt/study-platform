@@ -2,10 +2,41 @@ import { useEffect, useState, type ReactNode } from "react";
 import { highlightCode } from "../lib/highlightCode";
 
 type ParagraphBlock = { kind: "paragraph"; text: string };
-type CodeBlock = { kind: "code"; text: string; language?: string };
-type ContentBlock = ParagraphBlock | CodeBlock;
+type CodeBlock = {
+  kind: "code";
+  text: string;
+  language?: string;
+  alignWithNumberedBody?: boolean;
+};
+type CutBlock = {
+  kind: "cut";
+  title: string;
+  text: string;
+  alignWithNumberedBody?: boolean;
+};
+type ContentBlock = ParagraphBlock | CodeBlock | CutBlock;
 
 const NUMBERED_LINE_PATTERN = /^(\d+)\.\s+(.*)$/;
+const NUMBERED_BODY_INDENT_PATTERN = /^(?: {3,}|\t)/;
+const FENCED_BLOCK_PATTERN =
+  /```([\w-]*)?\n?([\s\S]*?)```|^([ \t]*):::cut[ \t]+([^\r\n]+?)[ \t]*\r?\n([\s\S]*?)^\3:::[ \t]*(?:\r?\n|$)/gm;
+
+function trimBlankLines(text: string): string {
+  return text.replace(/^(?:[ \t]*\n)+/, "").replace(/\s+$/, "");
+}
+
+function getNumberedBodyIndent(text: string): string | undefined {
+  const indent = /^[ \t]+/.exec(text)?.[0];
+  return indent && NUMBERED_BODY_INDENT_PATTERN.test(indent) ? indent : undefined;
+}
+
+function removeIndent(text: string, indent: string): string {
+  return text
+    .split("\n")
+    .map((line) => (line.startsWith(indent) ? line.slice(indent.length) : line))
+    .join("\n");
+}
+
 function renderInlineText(text: string): ReactNode {
   const nodes: ReactNode[] = [];
   const inlineCodePattern = /`([^`]+)`/g;
@@ -36,30 +67,44 @@ function renderInlineText(text: string): ReactNode {
 
 function parseFormattedText(text: string): ContentBlock[] {
   const blocks: ContentBlock[] = [];
-  const fencePattern = /```([\w-]*)?\n?([\s\S]*?)```/g;
   let lastIndex = 0;
-  let match: RegExpExecArray | null = fencePattern.exec(text);
+  let match: RegExpExecArray | null = FENCED_BLOCK_PATTERN.exec(text);
 
   while (match) {
     if (match.index > lastIndex) {
-      const paragraph = text.slice(lastIndex, match.index).trim();
+      const paragraph = trimBlankLines(text.slice(lastIndex, match.index));
       if (paragraph) {
         blocks.push({ kind: "paragraph", text: paragraph });
       }
     }
 
-    const language = match[1]?.trim().toLowerCase() || undefined;
-    blocks.push({
-      kind: "code",
-      text: match[2].replace(/\n$/, ""),
-      ...(language ? { language } : {}),
-    });
+    if (match[4] !== undefined) {
+      const indent = getNumberedBodyIndent(match[3] ?? "");
+      const content = match[5].replace(/\n[ \t]*$/, "");
+      blocks.push({
+        kind: "cut",
+        title: match[4].trim(),
+        text: indent ? removeIndent(content, indent) : content,
+        ...(indent ? { alignWithNumberedBody: true } : {}),
+      });
+    } else {
+      const language = match[1]?.trim().toLowerCase() || undefined;
+      const lineStart = text.lastIndexOf("\n", match.index - 1) + 1;
+      const indent = getNumberedBodyIndent(text.slice(lineStart, match.index));
+      const code = match[2].replace(/\n[ \t]*$/, "");
+      blocks.push({
+        kind: "code",
+        text: indent ? removeIndent(code, indent) : code,
+        ...(language ? { language } : {}),
+        ...(indent ? { alignWithNumberedBody: true } : {}),
+      });
+    }
     lastIndex = match.index + match[0].length;
-    match = fencePattern.exec(text);
+    match = FENCED_BLOCK_PATTERN.exec(text);
   }
 
   if (lastIndex < text.length) {
-    const paragraph = text.slice(lastIndex).trim();
+    const paragraph = trimBlankLines(text.slice(lastIndex));
     if (paragraph) {
       blocks.push({ kind: "paragraph", text: paragraph });
     }
@@ -128,12 +173,20 @@ function renderParagraphContent(
     const paragraphText = paragraphLines.join("\n");
     if (paragraphText.trim()) {
       const emphasisClass = takeEmphasisClass();
+      const indent = getNumberedBodyIndent(paragraphText);
+      const displayText = indent ? removeIndent(paragraphText, indent) : paragraphText;
       elements.push(
         <p
           key={`${blockKey}-paragraph-${part}`}
-          className={["formatted-text__paragraph", emphasisClass].filter(Boolean).join(" ")}
+          className={[
+            "formatted-text__paragraph",
+            indent ? "formatted-text__paragraph--numbered-body" : "",
+            emphasisClass,
+          ]
+            .filter(Boolean)
+            .join(" ")}
         >
-          {renderInlineText(paragraphText)}
+          {renderInlineText(displayText)}
         </p>,
       );
       part += 1;
@@ -200,10 +253,55 @@ function FormattedText({ text, className, emphasizeFirstParagraph = false }: For
   return (
     <div className={["formatted-text", className].filter(Boolean).join(" ")}>
       {blocks.map((block, index) => {
+        if (block.kind === "cut") {
+          return (
+            <details
+              key={index}
+              className={[
+                "formatted-text__cut",
+                block.alignWithNumberedBody ? "formatted-text__cut--numbered-body" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              <summary className="formatted-text__cut-title">
+                <svg
+                  className="formatted-text__cut-chevron"
+                  viewBox="0 0 20 20"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M7 5L12 10L7 15"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span>{renderInlineText(block.title)}</span>
+              </summary>
+              <div className="formatted-text__cut-body">
+                <FormattedText text={block.text} />
+              </div>
+            </details>
+          );
+        }
+
         if (block.kind === "code") {
           const highlighted = highlightCode(block.text, block.language);
           return (
-            <div key={index} className="formatted-text__code-block">
+            <div
+              key={index}
+              className={[
+                "formatted-text__code-block",
+                block.alignWithNumberedBody
+                  ? "formatted-text__code-block--numbered-body"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
               <button
                 type="button"
                 className={[

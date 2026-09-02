@@ -603,6 +603,7 @@
 }
 
 .formatted-text {
+  --formatted-text-numbered-body-offset: 32px;
   max-width: 100%;
   min-width: 0;
 }
@@ -618,6 +619,55 @@
 .formatted-text__code-block {
   position: relative;
   margin: 4px 0 12px;
+}
+
+.formatted-text__code-block--numbered-body,
+.formatted-text__cut--numbered-body,
+.formatted-text__paragraph--numbered-body {
+  width: calc(100% - var(--formatted-text-numbered-body-offset));
+  margin-left: var(--formatted-text-numbered-body-offset);
+}
+
+.formatted-text__cut {
+  margin: 4px 0 12px;
+}
+
+.formatted-text__cut-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.formatted-text__cut-title::-webkit-details-marker {
+  display: none;
+}
+
+.formatted-text__cut-title:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.formatted-text__cut-chevron {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--muted-foreground);
+  transition: transform 0.15s ease;
+}
+
+.formatted-text__cut[open] > .formatted-text__cut-title .formatted-text__cut-chevron {
+  transform: rotate(90deg);
+}
+
+.formatted-text__cut-body {
+  min-width: 0;
 }
 
 .formatted-text__code {
