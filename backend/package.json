@@ -10,7 +10,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "grade-practice": "tsx src/scripts/gradePractice.ts"
+    "grade-practice": "tsx src/scripts/gradePractice.ts",
+    "cleanup-stale-rooms": "tsx src/scripts/cleanupStaleRooms.ts"
   },
   "dependencies": {
     "@study-platform/shared": "file:../shared",

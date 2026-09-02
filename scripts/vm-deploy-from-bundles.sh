@@ -45,7 +45,7 @@ if [[ -n "${PRIMARY_DOMAIN}" ]]; then
   SSL_CERT_DIR="/etc/letsencrypt/live/${PRIMARY_DOMAIN}"
 fi
 
-for required_cmd in tar node npm pm2 nginx; do
+for required_cmd in tar node npm pm2 nginx crontab; do
   if ! command -v "${required_cmd}" >/dev/null 2>&1; then
     echo "Missing required command: ${required_cmd}"
     echo "Run: bash vm-provision-ubuntu.sh"
@@ -276,6 +276,16 @@ fi
 pm2 start dist/server.js --name "${BACKEND_PROCESS_NAME}" --cwd "${BACKEND_DIR}"
 pm2 save
 
+echo "==> Installing daily stale-room cleanup cron"
+mkdir -p "${APP_DIR}/logs"
+NODE_BIN="$(command -v node)"
+CRON_MARKER="study-platform-cleanup-stale-rooms"
+CLEANUP_LOGS="${APP_DIR}/logs/cleanup-stale-rooms.log"
+CRON_LINE="0 4 * * * cd ${BACKEND_DIR} && ${NODE_BIN} dist/scripts/cleanupStaleRooms.js >> \"${CLEANUP_LOGS}\" 2>&1 # ${CRON_MARKER}"
+current_cron="$(crontab -l 2>/dev/null || true)"
+filtered_cron="$(printf '%s\n' "${current_cron}" | grep -v "${CRON_MARKER}" || true)"
+printf '%s\n%s\n' "${filtered_cron}" "${CRON_LINE}" | crontab -
+
 echo "==> Verifying backend is listening on port ${API_PORT}"
 for _ in 1 2 3 4 5; do
   if curl -sf "http://127.0.0.1:${API_PORT}/health" >/dev/null; then
@@ -303,6 +313,7 @@ fi
 
 echo "==> Deployment complete"
 echo "Backend health: curl http://127.0.0.1:${API_PORT}/health"
+echo "Stale-room cleanup: daily 04:00 (crontab; logs ${CLEANUP_LOGS})"
 if ssl_certificate_available; then
   echo "Public app: https://${PRIMARY_DOMAIN}"
 elif [[ -n "${PRIMARY_DOMAIN}" ]]; then

@@ -14,11 +14,6 @@ const ANSWER_COLUMNS: Record<QuestionType, "theory_answers" | "practice_answers"
 };
 
 export class RoomsDb extends Db {
-  constructor(dbPath?: string) {
-    super(dbPath);
-    this.createRoomsTable();
-  }
-
   generateRoomId(): string {
     return Array.from({ length: ROOM_ID_LENGTH }, () =>
       ROOM_ID_CHARS[crypto.randomInt(ROOM_ID_CHARS.length)],
@@ -87,6 +82,28 @@ export class RoomsDb extends Db {
     return nextRevision;
   }
 
+  deleteStaleRooms(): { deleted: number; ids: string[] } {
+    const emptyRoom = `json_array_length(theory_answers) = 0 AND json_array_length(practice_answers) = 0`;
+    const rows = this.all<{ id: string }>(
+      `DELETE FROM rooms
+       WHERE (
+         (${emptyRoom})
+         AND updated_at < datetime('now', '-1 day')
+       ) OR (
+         NOT (${emptyRoom})
+         AND updated_at < datetime('now', '-1 month')
+       )
+       RETURNING id`,
+    );
+    return { deleted: rows.length, ids: rows.map((row) => row.id) };
+  }
+
+  hasRoomsTable(): boolean {
+    return (
+      this.get("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'rooms'") !== undefined
+    );
+  }
+
   private getItemRevision(item: AnswerFieldsJson | undefined): number {
     return item?.revision ?? 0;
   }
@@ -97,7 +114,7 @@ export class RoomsDb extends Db {
     }
   }
 
-  private createRoomsTable(): void {
+  createRoomsTable(): void {
     this.run(ROOMS_TABLE_SCHEMA);
   }
 

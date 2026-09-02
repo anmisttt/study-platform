@@ -33,6 +33,7 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 const HOST = process.env.HOST ?? "127.0.0.1";
 const roomsDb = new RoomsDb();
+roomsDb.createRoomsTable();
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5173",
