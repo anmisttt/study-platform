@@ -49,9 +49,11 @@ function expectPromptForItem(
   const prompt = userPromptForItem(userAnswer, resolved!.item);
   if ("task" in expected) {
     expect(prompt).toContain(expected.task);
+    expect(prompt).not.toContain(expected.answer);
+  } else {
+    expect(prompt).toContain(expected.answer);
   }
   expect(prompt).toContain(expected.question);
-  expect(prompt).toContain(expected.answer);
   expect(prompt).toContain(userAnswer);
 }
 

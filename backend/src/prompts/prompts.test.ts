@@ -1,24 +1,32 @@
 import type { PracticeItem, TheoryItem } from "@study-platform/shared";
 import { describe, expect, it } from "vitest";
-import { systemPrompt } from "./system-prompt";
+import { practiceSystemPrompt, theorySystemPrompt } from "./system-prompt";
 import { userPromptForItem } from "./user-prompt";
 
 describe("tutor prompts", () => {
-  it("makes correctness—not reference-answer similarity—the grading criterion", () => {
-    expect(systemPrompt).toContain("reference answer is only one example");
-    expect(systemPrompt).toContain(
+  it("grades practice from the question without a reference answer", () => {
+    expect(practiceSystemPrompt).toContain(
+      "Treat the question as the only source of grading requirements",
+    );
+    expect(practiceSystemPrompt).not.toContain("reference");
+  });
+
+  it("keeps reference-answer similarity out of theory grading criteria", () => {
+    expect(theorySystemPrompt).toContain("reference answer");
+    expect(theorySystemPrompt).toContain("only one example");
+    expect(theorySystemPrompt).toContain(
       "It is not the grading rubric or a canonical answer",
     );
-    expect(systemPrompt).toContain(
+    expect(theorySystemPrompt).toContain(
       "Do not reward or penalize wording, structure, verbosity, style, or similarity to the reference answer",
     );
-    expect(systemPrompt).toContain("Accept any valid alternative approach");
-    expect(systemPrompt).toContain(
+    expect(theorySystemPrompt).toContain("Accept any valid alternative approach");
+    expect(theorySystemPrompt).toContain(
       "The difference itself is never evidence of an error",
     );
   });
 
-  it("labels a stored practice answer as an example and emits valid JSON", () => {
+  it("omits the stored answer from a practice payload", () => {
     const item: PracticeItem = {
       task: "Implement the task",
       question: "Use the value \"quoted\" and explain why.",
@@ -31,8 +39,8 @@ describe("tutor prompts", () => {
       item_type: "practice",
       question: 'Implement the task\n\nUse the value "quoted" and explain why.',
       user_answer: "A different valid solution",
-      reference_answer_example: "One example\nwith multiple lines",
     });
+    expect(payload).not.toHaveProperty("reference_answer_example");
     expect(payload).not.toHaveProperty("correct_answer");
   });
 

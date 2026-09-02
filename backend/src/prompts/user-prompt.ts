@@ -1,6 +1,6 @@
 import type { PracticeItem, TheoryItem } from "@study-platform/shared";
 
-type PromptItem = TheoryItem | PracticeItem;
+type PromptItem = TheoryItem | Pick<PracticeItem, "task" | "question">;
 
 function formatQuestion(item: PromptItem): string {
   if ("task" in item) {
@@ -10,9 +10,21 @@ function formatQuestion(item: PromptItem): string {
 }
 
 export function userPromptForItem(answer: string, item: PromptItem): string {
+  if ("task" in item) {
+    return JSON.stringify(
+      {
+        item_type: "practice",
+        question: formatQuestion(item),
+        user_answer: answer,
+      },
+      null,
+      2,
+    );
+  }
+
   return JSON.stringify(
     {
-      item_type: "task" in item ? "practice" : "theory",
+      item_type: "theory",
       question: formatQuestion(item),
       user_answer: answer,
       reference_answer_example: item.answer,

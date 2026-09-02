@@ -7,12 +7,7 @@
     "pass": false,
     "aggregate": { "mean": 4.0, "min": 4, "majorityGte5": false }
   },
-  "reference": {
-    "trials": [{ "rating": 5, "comment": "..." }],
-    "pass": true,
-    "aggregate": { "mean": 5.0, "min": 5, "majorityGte5": true }
-  },
   "hypothesis": "ambiguous_task",
-  "evidence": ["blind answer missed leadership epoch checks that description never required"],
-  "feedbackForEditor": "State in tasks that linearizable_read must reject non-leader callers; keep perfect solution aligned."
+  "evidence": ["blind answer missed leadership epoch checks that the question never required"],
+  "feedbackForEditor": "State in the numbered tasks whether linearizable_read must reject non-leader callers."
 }

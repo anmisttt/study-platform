@@ -14,7 +14,7 @@ import { resolveChapterQuestion } from "./http/resolveChapterQuestion";
 import { respondWithError } from "./http/respondWithError";
 import { ensureAnswer, ensureBaseRevision } from "./http/validation";
 import { Tutor } from "./services/tutor";
-import { systemPrompt } from "./prompts/system-prompt";
+import { practiceSystemPrompt, theorySystemPrompt } from "./prompts/system-prompt";
 import { userPromptForItem } from "./prompts/user-prompt";
 import { Transcriber } from "./services/transcriber";
 
@@ -25,8 +25,6 @@ if (!process.env.OPENAI_API_KEY) {
 }
 
 const openaiApiKey = process.env.OPENAI_API_KEY;
-
-const tutor = new Tutor({ systemPrompt, model: "gpt-5.5", apiKey: openaiApiKey, temperature: 1});
 const transcriber = new Transcriber({ apiKey: openaiApiKey });
 
 const app = express();
@@ -109,6 +107,12 @@ app.post("/rooms/:roomId/questions/:questionId/check", async (req: Request, res:
       throw new NotFoundError("Question not found.");
     }
 
+    const tutor = new Tutor({
+      systemPrompt: resolved.type === "practice" ? practiceSystemPrompt : theorySystemPrompt,
+      model: "gpt-5.5",
+      apiKey: openaiApiKey,
+      temperature: 1,
+    });
     const result = await tutor.evaluateAnswer(userPromptForItem(answer, resolved.item));
 
     const revision = roomsDb.updateAnswer({

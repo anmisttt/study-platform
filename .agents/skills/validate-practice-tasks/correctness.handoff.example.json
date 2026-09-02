@@ -4,47 +4,59 @@
   "practiceIndex": 0,
   "handOff": "practice-editor",
   "checks": [
-    { "id": "answer_covers_tasks", "pass": true, "detail": "Answer implements tasks 1–4" },
     {
-      "id": "answer_correct",
+      "id": "requirements_correct",
       "pass": false,
-      "detail": "linearizable_read returns local replica value without leadership check"
+      "detail": "Task 3 asks a follower-only read to guarantee linearizability without a leader or quorum check"
     },
-    { "id": "setup_answer_consistent", "pass": true, "detail": "Same LeaderlessStore module and entrypoint" },
-    { "id": "no_contradictions", "pass": true, "detail": "Tasks agree with each other" },
+    {
+      "id": "setup_question_consistent",
+      "pass": true,
+      "detail": "The brief and scaffold use the same LeaderlessStore module and entrypoint"
+    },
+    {
+      "id": "no_contradictions",
+      "pass": false,
+      "detail": "The requested follower-only read contradicts the stated linearizability guarantee"
+    },
     {
       "id": "commands_and_prereqs",
       "pass": true,
-      "detail": "Python 3.10+ stdlib matches answer"
+      "detail": "Python 3.10+ stdlib matches the supplied scaffold"
     },
     {
       "id": "no_hidden_requirements",
       "pass": false,
-      "detail": "Answer uses an epoch fence never mentioned in the question"
+      "detail": "A correct solution needs leader identity or a quorum rule that the brief does not provide"
+    },
+    {
+      "id": "test_contract",
+      "pass": true,
+      "detail": "The supplied assertions use the documented Python runtime, check observable quorum-read outcomes, and need no explanatory comments"
     },
     {
       "id": "real_world_workflow",
       "pass": true,
-      "detail": "Task and answer use the stated Python runtime and its native interfaces consistently"
+      "detail": "The task and setup use the stated Python runtime and native interfaces consistently"
     }
   ],
   "findings": [
     {
       "severity": "error",
-      "id": "answer_correct",
-      "where": "answer",
-      "location": "LeaderStore.linearizable_read",
-      "finding": "Read path never verifies the caller is the current leader",
-      "fix": "Reject or redirect non-leader reads; only the leader may serve linearizable_read"
+      "id": "requirements_correct",
+      "where": "question",
+      "location": "Task 3",
+      "finding": "A local follower read cannot provide the requested linearizability guarantee as written",
+      "fix": "Require a current-leader check or a quorum read and state the needed metadata in the brief"
     },
     {
       "severity": "error",
       "id": "no_hidden_requirements",
-      "where": "question+answer",
-      "location": "task 3 / answer epoch fence",
-      "finding": "Reference relies on an epoch fence the brief never requires",
-      "fix": "Either state the epoch-fence requirement in a numbered task or remove it from the answer"
+      "where": "question+setup",
+      "location": "Task 3 / LeaderlessStore scaffold",
+      "finding": "The brief supplies no leader identity or quorum rule needed to implement a correct read",
+      "fix": "Add the missing state and requirement to the scaffold and numbered task"
     }
   ],
-  "feedbackForEditor": "1) Make linearizable_read leadership-aware in the answer. 2) Either document the epoch fence in the numbered tasks or drop it from the reference so question and answer match."
+  "feedbackForEditor": "Make Task 3 technically achievable by specifying either a current-leader check or a quorum-read rule and supplying the required state in the scaffold."
 }

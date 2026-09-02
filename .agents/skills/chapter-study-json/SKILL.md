@@ -12,10 +12,10 @@ Create study material JSON for one book chapter. Follow these instructions exact
 1. Identify the book file and target chapter (e.g. `do the same for chapter 2`).
 2. Read **only** the requested chapter from the book. If page extraction looks malformed, re-check page order before writing output; external official documentation for real-world tool/workflow verification is still required by step 3.
 3. Before drafting each practice item, establish how practitioners perform that work in real systems. Use current official documentation or another primary source to identify the actual product, native CLI/API, configuration and data artifacts, command sequence, and observable results.
-4. Draft ~10–15 theory items and 1–5 practice items (unless the user asks otherwise), using the verified real-world tools and workflow.
+4. Draft ~10–15 theory items and 1–5 practice briefs (unless the user asks otherwise), using the verified real-world tools and workflow. Do not draft solutions for practice items.
 5. For every Docker-backed practice item, ensure the matching assets under `practice-setups/tasks/chN-pI/` package those same tools and artifacts. Follow [the setup maintainer workflow](../../../practice-setups/README.md); do not modify unrelated task setups.
 6. Save as `<chapter_name>.json` or the filename the user requested (repo convention: `first_chapter.json`, `ninth_chapter.json`, …).
-7. Validate: JSON parses; `quality` is only `bad` | `good` | `perfect`; run lints/diagnostics on the file when available.
+7. Validate that the JSON parses and run lints/diagnostics on the file when available.
 
 ## Output structure
 
@@ -33,16 +33,15 @@ Valid JSON with chapter `number`, exact chapter title in `name`, plus `theory` a
   ],
   "practice": [{
     "task": "[PostgreSQL] Learn how to work with a concrete database concept.",
-    "description": "Requirements, task-relevant starter code, and expected results without completed solution logic.",
-    "solutions": [
-      {
-        "quality": "bad|good|perfect",
-        "solution": "Solution and why it has this quality."
-      }
-    ]
+    "question": "Requirements, task-relevant starter code, and expected results without completed solution logic.",
+    "answer": ""
   }]
 }
 ```
+
+Leave each new practice `answer` empty. The practice-validation workflow fills it
+with the most recently tutor-accepted blind solution; chapter creation must not
+invent a separate reference solution.
 
 ## Theory questions
 
@@ -73,12 +72,12 @@ Valid JSON with chapter `number`, exact chapter title in `name`, plus `theory` a
 - Prefer original scenarios unless the user asks to stay close to the book.
 - Choose the database or tool from the verified real-world workflow; GUI convenience is secondary. When it does not distort the workflow, prefer tools accessible through common clients such as DBeaver.
 - Use the tool and workflow practitioners actually use for the learning goal: the real database, broker, migration utility, query client, configuration format, and operational sequence. Do not replace an available Docker-runnable tool with a custom simulator, mock, or hand-written approximation.
-- Keep labs laptop-friendly by reducing data volume, service count, and runtime—not by changing the essential tool or workflow. Task commands, starter files, reference answers, and container assets must all use the same verified instrument.
+- Keep labs laptop-friendly by reducing data volume, service count, and runtime—not by changing the essential tool or workflow. Task commands, starter files, and container assets must all use the same verified instrument.
 - Start every `task` with a concrete technology label in square brackets, then state the main purpose concisely in learner-oriented language. When several technologies are used, list them inside the brackets separated by a comma and one space, for example `[Kafka, PostgreSQL]`; do not join them with `+`, `/`, or `vs`. Prefer `[RDFLib, SPARQL] Learn how to work with triple stores.` over an implementation-focused title such as `[RDFLib, SPARQL] Query package dependencies as subject-predicate-object triples.` Do not use Markdown emphasis, numbering, or setup details in the title.
-- Task-relevant starter code is allowed in the student-facing description. Keep it incomplete and use short edit-site markers such as `-- implement: ...` or `# TODO: ...`; never include completed solution logic, near-complete pseudocode, or reference-answer fragments.
+- Task-relevant starter code is allowed in the student-facing description. Keep it incomplete and use short edit-site markers such as `-- implement: ...` or `# TODO: ...`; never include completed solution logic, near-complete pseudocode, or solver-solution fragments.
 - Express every required work item as a numbered task (`1.`, `2.`, `3.`, …). Never use `Part A`, `Part B`, lettered sections, or references to them; use `Task 1`, `Task 2`, and so on.
 - Keep code comments terse: they identify edit locations or features only. Put detailed requirements, algorithms, constraints, expected results, and verification instructions after the relevant code block in the numbered task list; do not duplicate or split those instructions between comments and prose.
-- Code fences in a practice description may contain operational lab commands or task-relevant starter code. Put complete implementation code only in the reference solution.
+- Code fences in a practice description may contain operational lab commands or task-relevant starter code. Do not create complete implementation code while authoring the item; the accepted blind solution is stored later by practice validation.
 - Aim for ~1–5 practice items unless asked otherwise.
 - Follow [styleguide](../validate-practice-tasks/STYLEGUIDE.md)
 - For Docker-backed labs, provision non-task schema and seed data during container initialization. If schema or data changes are part of the exercise, starter SQL may contain terse edit markers; the numbered tasks specify the required objects, constraints, operations, and result.
@@ -86,6 +85,30 @@ Valid JSON with chapter `number`, exact chapter title in `name`, plus `theory` a
   - Compose: `docker compose exec -T <service> clickhouse-client --multiquery < setup.sql` (not `clickhouse-client --multiquery < setup.sql`).
   - Single container: `docker exec -i lab-chN-pI psql … < setup.sql`.
   - Interactive sessions use `docker compose exec <service> …` or `docker exec -it …` without implying the binary is on the host PATH.
+
+## Practice verification tests
+
+- When the implementation has concrete observable behavior, provide a compact test that checks the practice requirements. Plain language-native assertions are enough; do not add a test framework, service, abstraction layer, or dependency unless the task already needs it.
+- For Docker-backed practices, deliver the test with the matching setup image/scaffold and run it through the task's container in a numbered step. For practices without a Docker setup, include the compact test or assertion snippet directly in `question` with the command that runs it.
+- Test outcomes rather than exact implementation shape. Cover only the essential learning goal and a small number of useful failure cases; keep setup and runtime complexity flat.
+- Keep the student-facing verification instruction short, normally `Run the tests:` followed by the command. Do not repeat the assertions or expected results in prose when the supplied test already checks them; keep only requirements the learner needs in order to implement the task.
+- Add comments inside tests only when the purpose or timing of a check is not clear from its name and assertion. Do not narrate obvious test mechanics or restate assertions as comments.
+- Skip an automated test when the task is purely explanatory, observational, or design-oriented and no meaningful behavior can be asserted.
+
+## Docker-backed practice layout
+
+Apply all of these conventions to Docker-backed practice questions:
+
+1. Start with prerequisites and a short description of the lab.
+2. Write `Setup:` as plain text, followed by one `bash` block containing only initialization and startup commands.
+3. Put optional inspection and reference material in a collapsed cut using `:::cut <title>` and `:::`. Use a descriptive title such as `Observe the current state`.
+4. When the scaffold creates files, run `ls -l` inside the observation block and list the expected filenames as prose after that block.
+5. Keep detailed schemas, seed data, starter code, and current-state explanations inside the cut.
+6. Close the cut before `Tasks:` so the numbered work remains visible outside it.
+7. Express every required action as a numbered task.
+8. Put operational Docker commands beside the numbered task that uses them, not in the initial setup block.
+9. Indent fenced blocks and continuation text inside a numbered task by three spaces so the UI renders them at `.formatted-text__numbered-body` width.
+10. Make teardown the final numbered task. Keep a short teardown command inline, for example: ``5. Tear down the Docker stack with `docker compose down -v`.``
 
 ## General rules
 
@@ -110,9 +133,11 @@ Valid JSON with chapter `number`, exact chapter title in `name`, plus `theory` a
 - [ ] No book-structure / figure references
 - [ ] Every practice title begins with a concrete `[Technology]` label; multiple technologies use `[Technology, Technology]`; the remainder states the main learning purpose rather than implementation mechanics
 - [ ] Real-world workflow and tool choice were verified against current official or primary documentation before drafting
-- [ ] Task, starter scaffold, reference answer, and container setup use the same authentic tool, native interface, and artifacts
+- [ ] Task, starter scaffold, and container setup use the same authentic tool, native interface, and artifacts
+- [ ] Every new practice `answer` is empty pending an accepted blind solution from practice validation
 - [ ] Docker-backed briefs keep infrastructure-only schema creation and seed inserts in container initialization
 - [ ] Starter code contains only incomplete scaffolding and terse implement/TODO markers, never solution fragments
 - [ ] Detailed instructions appear in numbered tasks after code blocks and are not duplicated inside comments
 - [ ] Practice work is organized as numbered tasks with no `Part A` / `Part B` labels
+- [ ] When behavior is testable, a compact outcome-focused test is delivered by the Docker scaffold or included directly in the non-Docker brief, with a short run instruction that does not repeat its assertions; test comments exist only for non-obvious intent or timing
 - [ ] Lints/diagnostics clean when available

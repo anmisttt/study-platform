@@ -6,18 +6,14 @@
   "checks": [
     { "id": "purpose_led_title", "pass": false, "detail": "Title describes the implementation action instead of the learning purpose" },
     { "id": "reproducible", "pass": true, "detail": "Hands-on Python exercise with clear run steps" },
-    { "id": "fenced_code", "pass": true, "detail": "Operational commands, starter code, and answer code are fenced" },
+    { "id": "fenced_code", "pass": true, "detail": "Operational commands and starter code are fenced" },
+    { "id": "current_state_cut", "pass": true, "detail": "The item has no large current-state inspection sections requiring a cut" },
     { "id": "numbered_steps", "pass": true, "detail": "Tasks 1–5 numbered" },
-    {
-      "id": "no_md_decoration",
-      "pass": false,
-      "detail": "answer opens with markdown heading '# Solution'"
-    },
-    { "id": "full_answer", "pass": true, "detail": "Answer is full script from setup plus changes" },
+    { "id": "no_md_decoration", "pass": true, "detail": "Task and question contain no decorative markdown outside fences" },
     {
       "id": "no_solution_leakage",
       "pass": true,
-      "detail": "LeaderlessStore scaffold is incomplete and contains no reference-answer logic"
+      "detail": "LeaderlessStore scaffold is incomplete and contains no solution logic"
     },
     {
       "id": "instruction_separation",
@@ -31,6 +27,7 @@
       "detail": "No Prerequisites section; Python assumed silently"
     },
     { "id": "docker_backed", "pass": true, "detail": "Not a Docker-backed task" },
+    { "id": "compact_tests", "pass": true, "detail": "The non-Docker brief includes compact assertions and only a short Python run instruction; the checks are obvious without comments" },
     { "id": "real_world_tools", "pass": true, "detail": "Uses Python's real execution model and standard-library concurrency primitives rather than a custom runtime mock" }
   ],
   "violations": [
@@ -42,26 +39,19 @@
       "fix": "Rewrite with a technology label and learning purpose, such as '[Python] Learn how leaderless quorum reads work.'"
     },
     {
-      "rule": 4,
-      "id": "no_md_decoration",
-      "where": "answer",
-      "snippet": "# Solution",
-      "fix": "Replace headings with plain prose labels; keep code in fences only"
-    },
-    {
-      "rule": 6,
+      "rule": 7,
       "id": "instruction_separation",
       "where": "question",
       "snippet": "# implement quorum read by taking the max replica value and rejecting stale epochs",
       "fix": "Shorten the comment to '# TODO: implement quorum_read' and keep the algorithm, constraints, and expected behavior only in the numbered tasks after the code block"
     },
     {
-      "rule": 7,
+      "rule": 8,
       "id": "prereqs_install",
       "where": "question",
       "snippet": "Build a tiny 3-replica register",
       "fix": "Add Prerequisites: Python 3.10+ (stdlib only); no extra packages"
     }
   ],
-  "feedbackForEditor": "1) Rewrite the title with a leading [Technology] label and the main learning purpose. 2) Strip '# Solution' / '## Write-up' from answer; use plain prose. 3) Keep the starter scaffold, but reduce its comments to terse TODO markers and move all detailed requirements to the numbered tasks after the code block. 4) Add an explicit Prerequisites line with install/runtime guidance."
+  "feedbackForEditor": "1) Rewrite the title with a leading [Technology] label and the main learning purpose. 2) Keep the starter scaffold, but reduce its comments to terse TODO markers and move all detailed requirements to the numbered tasks after the code block. 3) Add an explicit Prerequisites line with install/runtime guidance."
 }

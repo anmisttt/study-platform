@@ -2,7 +2,7 @@
 
 Live site: [https://study-platform.me](https://study-platform.me)
 
-It’s a learning platform with theory questions, practical tasks, and an AI tutor that compares your answers with a reference solution, then gives feedback and a score.
+It’s a learning platform with theory questions, practical tasks, and an AI tutor that checks answers against each question’s requirements, then gives feedback and a score.
 
 I built it because I want AI to help deepen understanding, not just solve problems for you.
 

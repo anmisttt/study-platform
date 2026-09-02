@@ -3,7 +3,7 @@ import path from "path";
 import dotenv from "dotenv";
 import type { PracticeItem } from "@study-platform/shared";
 import { chapters, getChapterById } from "../chapters";
-import { systemPrompt } from "../prompts/system-prompt";
+import { practiceSystemPrompt } from "../prompts/system-prompt";
 import { userPromptForItem } from "../prompts/user-prompt";
 import { Tutor } from "../services/tutor";
 
@@ -11,6 +11,7 @@ dotenv.config({ path: path.join(__dirname, "../../.env") });
 dotenv.config();
 
 type Trial = { rating: number; comment: string };
+type PracticeBrief = Pick<PracticeItem, "task" | "question">;
 
 type Aggregate = {
   mean: number;
@@ -25,8 +26,6 @@ function usage(): never {
   npm run grade-practice -- --list
   npm run grade-practice -- --chapter <id> --index <n> --dump-brief
   npm run grade-practice -- --chapter <id> --index <n> --answer-file <path> [--trials N]
-  npm run grade-practice -- --chapter <id> --index <n> --reference [--trials N]
-  npm run grade-practice -- --chapter <id> --index <n> --answer-file <path> --reference [--trials N]
 
 Options:
   --trials N     Tutor evaluations to run (default: 3). Pass = majority of trials >= 5.
@@ -41,7 +40,6 @@ function parseArgs(argv: string[]) {
     chapter?: string;
     index?: number;
     answerFile?: string;
-    reference?: boolean;
     dumpBrief?: boolean;
     trials: number;
     json?: boolean;
@@ -69,9 +67,6 @@ function parseArgs(argv: string[]) {
         out.answerFile = next;
         i++;
         break;
-      case "--reference":
-        out.reference = true;
-        break;
       case "--dump-brief":
         out.dumpBrief = true;
         break;
@@ -95,14 +90,6 @@ function parseArgs(argv: string[]) {
   return out;
 }
 
-function clonePracticeItem(item: PracticeItem): PracticeItem {
-  return {
-    task: item.task,
-    question: item.question,
-    answer: item.answer,
-  };
-}
-
 function aggregateTrials(trials: Trial[]): Aggregate {
   const ratings = trials.map((t) => t.rating);
   const mean = ratings.reduce((a, b) => a + b, 0) / ratings.length;
@@ -113,10 +100,10 @@ function aggregateTrials(trials: Trial[]): Aggregate {
   return { mean, min, max, majorityGte5, pass: majorityGte5 };
 }
 
-async function runTrials(tutor: Tutor, item: PracticeItem, answer: string, trials: number): Promise<Trial[]> {
+async function runTrials(tutor: Tutor, item: PracticeBrief, answer: string, trials: number): Promise<Trial[]> {
   const results: Trial[] = [];
   for (let i = 0; i < trials; i++) {
-    const prompt = userPromptForItem(answer, clonePracticeItem(item));
+    const prompt = userPromptForItem(answer, item);
     const result = await tutor.evaluateAnswer(prompt);
     results.push({ rating: result.rating, comment: result.comment });
   }
@@ -175,7 +162,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (!args.answerFile && !args.reference) usage();
+  if (!args.answerFile) usage();
 
   if (!process.env.OPENAI_API_KEY) {
     console.error("OPENAI_API_KEY is required to grade practice answers.");
@@ -183,7 +170,7 @@ async function main(): Promise<void> {
   }
 
   const tutor = new Tutor({
-    systemPrompt,
+    systemPrompt: practiceSystemPrompt,
     model: process.env.OPENAI_GRADE_MODEL ?? "gpt-5.5",
     apiKey: process.env.OPENAI_API_KEY,
     temperature: 1,
@@ -195,7 +182,6 @@ async function main(): Promise<void> {
     task: string;
     trials: number;
     blind: { answerSource: string; trials: Trial[]; aggregate: Aggregate } | null;
-    reference: { trials: Trial[]; aggregate: Aggregate } | null;
     pass: boolean;
   } = {
     chapterId: chapter.id,
@@ -203,7 +189,6 @@ async function main(): Promise<void> {
     task: item.task,
     trials: args.trials,
     blind: null,
-    reference: null,
     pass: true,
   };
 
@@ -213,13 +198,6 @@ async function main(): Promise<void> {
     const trials = await runTrials(tutor, item, answer, args.trials);
     const agg = aggregateTrials(trials);
     report.blind = { answerSource: answerPath, trials, aggregate: agg };
-    report.pass = report.pass && agg.pass;
-  }
-
-  if (args.reference) {
-    const trials = await runTrials(tutor, item, item.answer, args.trials);
-    const agg = aggregateTrials(trials);
-    report.reference = { trials, aggregate: agg };
     report.pass = report.pass && agg.pass;
   }
 
