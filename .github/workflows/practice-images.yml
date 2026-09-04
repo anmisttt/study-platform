@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - "practice-setups/**"
+      - "backend/src/data/*.json"
       - ".github/workflows/practice-images.yml"
   pull_request:
     paths:
       - "practice-setups/**"
+      - "backend/src/data/*.json"
       - ".github/workflows/practice-images.yml"
   workflow_dispatch:
     inputs:
@@ -17,7 +19,7 @@ on:
         required: false
         type: string
       task:
-        description: "Zero-based practice index; blank builds all tasks in the chapter"
+        description: "One-based practice number; blank builds all tasks in the chapter"
         required: false
         type: string
 
@@ -29,8 +31,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: anmisttt
-  BASE_PKG: ddia-practice-base
-  TASK_PKG: ddia-practice
+  TASK_PKG: lab
 
 jobs:
   changes:
@@ -38,7 +39,6 @@ jobs:
     outputs:
       tags: ${{ steps.select.outputs.tags }}
       targets: ${{ steps.select.outputs.targets }}
-      build_base: ${{ steps.select.outputs.build_base }}
       run_drift: ${{ steps.select.outputs.run_drift }}
     steps:
       - uses: actions/checkout@v4
@@ -56,12 +56,13 @@ jobs:
               - 'practice-setups/tasks/ch*-p*/**'
             shared:
               - 'practice-setups/images/**'
-              - 'practice-setups/bases/**'
+              - 'practice-setups/common/**'
               - 'practice-setups/docker-bake.hcl'
               - 'practice-setups/.dockerignore'
               - '.github/workflows/practice-images.yml'
             drift:
               - 'practice-setups/check-tag-drift.sh'
+              - 'backend/src/data/*.json'
 
       - name: Select affected practice images
         id: select
@@ -70,12 +71,12 @@ jobs:
           DISPATCH_CHAPTER: ${{ inputs.chapter }}
           DISPATCH_TASK: ${{ inputs.task }}
           TASK_FILES: ${{ steps.filter.outputs.tasks_files }}
+          TASKS_CHANGED: ${{ steps.filter.outputs.tasks }}
           SHARED_CHANGED: ${{ steps.filter.outputs.shared }}
           DRIFT_CHANGED: ${{ steps.filter.outputs.drift }}
         run: |
           set -euo pipefail
           tags=""
-          build_base=false
           run_drift=false
 
           add_tag() {
@@ -108,8 +109,8 @@ jobs:
             if [[ -n "$DISPATCH_CHAPTER" && ! "$DISPATCH_CHAPTER" =~ ^[1-9][0-9]*$ ]]; then
               echo "chapter must be a positive integer" >&2
               exit 1
-            elif [[ -n "$DISPATCH_TASK" && ! "$DISPATCH_TASK" =~ ^[0-9]+$ ]]; then
-              echo "task must be a non-negative integer" >&2
+            elif [[ -n "$DISPATCH_TASK" && ! "$DISPATCH_TASK" =~ ^[1-9][0-9]*$ ]]; then
+              echo "task must be a positive one-based integer" >&2
               exit 1
             elif [[ -n "$DISPATCH_TASK" && -z "$DISPATCH_CHAPTER" ]]; then
               echo "task requires chapter" >&2
@@ -123,9 +124,12 @@ jobs:
               add_tag "$tag"
             elif [[ -n "$DISPATCH_CHAPTER" ]]; then
               add_chapter "$DISPATCH_CHAPTER"
+              if [[ -z "$tags" ]]; then
+                echo "no Docker images are configured for chapter $DISPATCH_CHAPTER" >&2
+                exit 1
+              fi
             else
               add_all
-              build_base=true
             fi
           else
             while IFS= read -r file; do
@@ -133,9 +137,11 @@ jobs:
               add_tag "${tag%%/*}"
             done < <(jq -r '.[]' <<< "${TASK_FILES:-[]}")
 
+            if [[ "$TASKS_CHANGED" == "true" ]]; then
+              run_drift=true
+            fi
             if [[ "$SHARED_CHANGED" == "true" ]]; then
               add_all
-              build_base=true
               run_drift=true
             fi
             if [[ "$DRIFT_CHANGED" == "true" ]]; then
@@ -146,20 +152,16 @@ jobs:
           tags_json="$(printf '%s' "$tags" | sed '/^$/d' | sort -Vu \
             | jq -Rsc 'split("\n") | map(select(length > 0))')"
           targets="$(jq -r '[.[] | "task-" + .] | join(",")' <<< "$tags_json")"
-          if [[ "$build_base" == "true" ]]; then
-            targets="base-pg16${targets:+,$targets}"
-          fi
           if [[ "$tags_json" != "[]" ]]; then
             run_drift=true
           fi
 
           echo "tags=$tags_json" >> "$GITHUB_OUTPUT"
           echo "targets=$targets" >> "$GITHUB_OUTPUT"
-          echo "build_base=$build_base" >> "$GITHUB_OUTPUT"
           echo "run_drift=$run_drift" >> "$GITHUB_OUTPUT"
           jq -n --argjson tags "$tags_json" --arg targets "$targets" \
-            --arg buildBase "$build_base" --arg runDrift "$run_drift" \
-            '{tags: $tags, targets: $targets, buildBase: $buildBase, runDrift: $runDrift}'
+            --arg runDrift "$run_drift" \
+            '{tags: $tags, targets: $targets, runDrift: $runDrift}'
 
   drift-check:
     needs: changes
@@ -232,18 +234,15 @@ jobs:
         env:
           SHA: ${{ github.sha }}
           TAGS: ${{ needs.changes.outputs.tags }}
-          BUILD_BASE: ${{ needs.changes.outputs.build_base }}
+          SOURCE_URL: https://github.com/${{ github.repository }}
         run: |
           set -euo pipefail
           cd practice-setups
+          source_ann="index:org.opencontainers.image.source=${SOURCE_URL}"
           jq -r '.[]' <<< "$TAGS" | while IFS= read -r tag; do
-            docker buildx imagetools create -t "${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${tag}" \
+            docker buildx imagetools create --annotation "$source_ann" \
+              -t "${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${tag}" \
               -t "${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${tag}-${SHA:0:7}" \
               "${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${tag}-amd64-${SHA}" \
               "${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${tag}-arm64-${SHA}"
           done
-          if [[ "$BUILD_BASE" == "true" ]]; then
-            docker buildx imagetools create -t "${REGISTRY}/${IMAGE_OWNER}/${BASE_PKG}:pg16" \
-              "${REGISTRY}/${IMAGE_OWNER}/${BASE_PKG}:pg16-amd64-${SHA}" \
-              "${REGISTRY}/${IMAGE_OWNER}/${BASE_PKG}:pg16-arm64-${SHA}"
-          fi

@@ -1,56 +1,33 @@
-DROP TABLE IF EXISTS tasks CASCADE;
-DROP TABLE IF EXISTS projects CASCADE;
-DROP TABLE IF EXISTS tenants CASCADE;
-DROP TABLE IF EXISTS plans CASCADE;
+DROP SCHEMA IF EXISTS acme CASCADE;
+DROP SCHEMA IF EXISTS globex CASCADE;
 
-CREATE TABLE plans (
-  plan_code text PRIMARY KEY
-);
-CREATE TABLE tenants (
-  tenant_id uuid NOT NULL,
-  name text NOT NULL,
-  plan_code text NOT NULL
-);
-CREATE TABLE projects (
-  tenant_id uuid NOT NULL,
-  project_id uuid NOT NULL,
-  name text NOT NULL
-);
-CREATE TABLE tasks (
-  tenant_id uuid NOT NULL,
-  task_id uuid NOT NULL,
-  project_id uuid NOT NULL,
+CREATE SCHEMA acme;
+CREATE SCHEMA globex;
+
+CREATE TABLE acme.tickets (
+  ticket_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   title text NOT NULL
 );
+CREATE TABLE acme.comments (
+  comment_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  ticket_id bigint NOT NULL REFERENCES acme.tickets(ticket_id),
+  body text NOT NULL
+);
 
--- TODO: replace this block with reference-table and distribution calls.
-DO $$ BEGIN RAISE NOTICE 'distribution not implemented'; END $$;
+CREATE TABLE globex.tickets (
+  ticket_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  title text NOT NULL
+);
+CREATE TABLE globex.comments (
+  comment_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  ticket_id bigint NOT NULL REFERENCES globex.tickets(ticket_id),
+  body text NOT NULL
+);
 
--- TODO: replace this block with tenant-aware keys and foreign keys.
-DO $$ BEGIN RAISE NOTICE 'constraints not implemented'; END $$;
+-- TODO: distribute both tenant schemas after their tables exist.
 
-INSERT INTO plans VALUES ('starter');
-INSERT INTO tenants VALUES
-  ('00000000-0000-0000-0000-000000000001', 'Acme', 'starter');
-INSERT INTO projects VALUES
-  ('00000000-0000-0000-0000-000000000001',
-   '10000000-0000-0000-0000-000000000001', 'Launch');
-INSERT INTO tasks VALUES
-  ('00000000-0000-0000-0000-000000000001',
-   '11000000-0000-0000-0000-000000000001',
-   '10000000-0000-0000-0000-000000000001', 'Prepare rollout');
-
-SELECT table_name, citus_table_type, distribution_column,
-       colocation_id, shard_count
-FROM citus_tables
-WHERE table_name IN ('plans'::regclass, 'tenants'::regclass,
-                     'projects'::regclass, 'tasks'::regclass)
+SELECT table_name, citus_table_type, colocation_id, nodename
+FROM citus_shards
+WHERE table_name::text LIKE 'acme.%'
+   OR table_name::text LIKE 'globex.%'
 ORDER BY table_name::text;
-
-EXPLAIN (COSTS OFF)
-SELECT p.name, count(t.task_id)
-FROM projects p
-LEFT JOIN tasks t
-  ON (t.tenant_id, t.project_id) = (p.tenant_id, p.project_id)
-WHERE p.tenant_id = '00000000-0000-0000-0000-000000000001'
-GROUP BY p.tenant_id, p.project_id, p.name;

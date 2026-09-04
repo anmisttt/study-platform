@@ -1,45 +1,49 @@
--- setup.sql — messages table with seed data; indexes are stubs (implement at comment sites)
-DROP TABLE IF EXISTS messages CASCADE;
+-- setup.sql — PostgreSQL operational schema (stubs)
+DROP TABLE IF EXISTS order_items CASCADE;
+DROP TABLE IF EXISTS orders CASCADE;
+DROP TABLE IF EXISTS products CASCADE;
 
-CREATE TABLE messages (
-  id          BIGSERIAL    PRIMARY KEY,
-  channel_id  BIGINT       NOT NULL,
-  author_id   BIGINT       NOT NULL,
-  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-  body        TEXT         NOT NULL,
-  edited_at   TIMESTAMPTZ,
-  deleted_at  TIMESTAMPTZ
+CREATE TABLE products (
+  id       BIGINT PRIMARY KEY,
+  name     TEXT NOT NULL,
+  category TEXT NOT NULL
 );
 
--- Seed enough rows for EXPLAIN to prefer indexes: 3 channels, mixed authors, some soft-deletes.
--- One rare phrase (~0.1% of rows) keeps Q3 selective so the planner can use the GIN index.
-INSERT INTO messages (channel_id, author_id, created_at, body, deleted_at)
-SELECT
-  1 + (g % 3),
-  100 + (g % 10),
-  TIMESTAMPTZ '2024-01-01' + ((g % 5000) || ' minutes')::interval,
-  CASE
-    WHEN g % 1000 = 0 THEN 'xenon quarantine protocol ticket ' || g
-    WHEN g % 5 = 1 THEN 'please reset my password soon'
-    WHEN g % 5 = 2 THEN 'meeting notes and follow-ups'
-    WHEN g % 5 = 3 THEN 'deploy rolled back after timeout'
-    WHEN g % 5 = 4 THEN 'hello from channel chat ' || g
-    ELSE 'shipping delay for order ' || g
-  END,
-  CASE WHEN g % 17 = 0 THEN TIMESTAMPTZ '2024-06-01' ELSE NULL END
-FROM generate_series(1, 100000) AS g;
+CREATE TABLE orders (
+  id            BIGINT PRIMARY KEY,
+  customer_id   BIGINT        NOT NULL,
+  status        TEXT          NOT NULL,
+  total_amount  NUMERIC(10,2) NOT NULL,
+  created_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
 
-ANALYZE messages;
+-- choose indexes for:
+--   WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 20
+-- optional: partial index for open statuses (pending/processing)
+-- (PRIMARY KEY on id already covers WHERE id = $1)
 
--- Index section: leave empty until Tasks step 2.
--- implement Q1 covering/partial index
---   CREATE INDEX ... ON messages (channel_id, created_at DESC)
---   INCLUDE (id, author_id, body) WHERE deleted_at IS NULL;
+CREATE TABLE order_items (
+  order_id    BIGINT  NOT NULL REFERENCES orders(id),
+  product_id  BIGINT  NOT NULL REFERENCES products(id),
+  quantity    INT     NOT NULL,
+  unit_price  NUMERIC(10,2) NOT NULL
+  -- choose PRIMARY KEY (order_id, product_id)
+);
 
--- implement Q2 composite
---   CREATE INDEX ... ON messages (channel_id, author_id, created_at DESC)
---   WHERE deleted_at IS NULL;
+INSERT INTO products (id, name, category) VALUES
+  (1, 'Keyboard', 'Electronics'),
+  (2, 'Hoodie', 'Clothing');
+INSERT INTO orders (id, customer_id, status, total_amount, created_at) VALUES
+  (1001, 42, 'pending', 79.98, now() - interval '2 days'),
+  (1002, 42, 'shipped', 49.99, now() - interval '1 day'),
+  (1003, 7,  'pending', 29.99, now());
+INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES
+  (1001, 1, 1, 49.99),
+  (1001, 2, 1, 29.99),
+  (1002, 2, 1, 49.99),
+  (1003, 1, 1, 29.99);
 
--- implement Q3 GIN tsvector
---   CREATE INDEX ... ON messages USING GIN (to_tsvector('english', body))
---   WHERE deleted_at IS NULL;
+-- Demo workload A (uncomment after apply)
+-- SELECT id, customer_id, status, total_amount, created_at FROM orders WHERE id = 1001;
+-- SELECT id, status, total_amount, created_at FROM orders WHERE customer_id = 42 ORDER BY created_at DESC LIMIT 20;

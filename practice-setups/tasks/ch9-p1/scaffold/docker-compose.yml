@@ -1,8 +1,8 @@
 services:
   netlab:
-    image: ghcr.io/anmisttt/ddia-practice:ch9-p1
+    image: ghcr.io/anmisttt/lab:ch9-p1
     container_name: lab-ch9-p1
-    # tc/netem and tcpdump need these two capabilities
+    # tc/netem and iptables need these two capabilities
     cap_add:
       - NET_ADMIN
       - NET_RAW

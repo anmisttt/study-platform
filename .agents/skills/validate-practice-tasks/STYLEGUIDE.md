@@ -120,7 +120,7 @@ Tasks that need databases, brokers, or pip-heavy tooling should use a published 
 - Prerequisites line: `Prerequisites: Docker Engine 24+ (or Docker Desktop).`
 - Start with prerequisites and a short description of the lab.
 - Write `Setup:` as plain text, followed by one fenced `bash` block containing only initialization and startup commands, such as the scaffold copy plus `docker compose up`.
-- Image reference: `ghcr.io/anmisttt/ddia-practice:ch<N>-p<I>` (matches question id `practice-<I>` in chapter `<N>`).
+- Image reference: `ghcr.io/anmisttt/lab:ch<N>-p<I>`, where `I` is the one-based practice ordinal (the corresponding question id is `practice-<I - 1>`).
 - Bulk seed data and schema that are not student work live in the image and are provisioned during container initialization.
 - The image's `init` command supplies starter files. The brief may also show the task-relevant starter scaffold when useful, including terse `-- implement:` or `TODO` markers, but it must keep detailed instructions in the numbered tasks after the code block.
 - When schema or data changes are student work, the starter SQL may mark the edit sites without implementing them. Describe the required objects, constraints, operations, and results in the numbered tasks.
@@ -149,8 +149,8 @@ Prerequisites: Docker Engine 24+ (or Docker Desktop).
 Setup:
 
 ```bash
-docker run -d --name lab-ch1-p0 -p 5432:5432 ghcr.io/anmisttt/ddia-practice:ch1-p0
-docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/ddia-practice:ch1-p0 init
+docker run -d --name lab-ch1-p1 -p 5432:5432 ghcr.io/anmisttt/lab:ch1-p1
+docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/lab:ch1-p1 init
 ```
 
 :::cut Observe the current state
@@ -166,10 +166,10 @@ Tasks:
 1. Complete `setup.sql`, then apply it inside the container:
 
    ```bash
-   docker exec -i lab-ch1-p0 psql -v ON_ERROR_STOP=1 -U postgres -d retail_lab < setup.sql
+   docker exec -i lab-ch1-p1 psql -v ON_ERROR_STOP=1 -U postgres -d retail_lab < setup.sql
    ```
 
-2. Tear down the Docker lab with `docker rm -f lab-ch1-p0`.
+2. Tear down the Docker lab with `docker rm -f lab-ch1-p1`.
 ````
 
 Example (compose / ClickHouse):
@@ -180,7 +180,7 @@ Prerequisites: Docker Engine 24+ (or Docker Desktop).
 Setup:
 
 ```bash
-docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/ddia-practice:ch4-p4 init
+docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/lab:ch4-p5 init
 docker compose up -d
 ```
 

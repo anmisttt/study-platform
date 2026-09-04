@@ -1,23 +1,23 @@
--- PREPARE TRANSACTION needs a non-zero slot count; applied at image build time
--- and picked up when the container starts Postgres.
-ALTER SYSTEM SET max_prepared_transactions = 10;
+-- setup: budget_write_skew.sql — run once before the tasks
+DROP TABLE IF EXISTS expense_approvals;
 
-DROP TABLE IF EXISTS passenger_charges;
+DROP TABLE IF EXISTS project_budgets;
 
-DROP TABLE IF EXISTS driver_earnings;
-
--- Node A: earnings
-CREATE TABLE driver_earnings (
-  driver_id    INT     PRIMARY KEY,
-  total_earned NUMERIC NOT NULL DEFAULT 0
+CREATE TABLE project_budgets (
+  project_id   INT     PRIMARY KEY,
+  total_budget NUMERIC NOT NULL
 );
 
-INSERT INTO driver_earnings VALUES (7, 0);
-
--- Node B: billing
-CREATE TABLE passenger_charges (
-  id           SERIAL  PRIMARY KEY,
-  trip_id      INT     NOT NULL,
-  passenger_id INT     NOT NULL,
-  amount       NUMERIC NOT NULL CHECK (amount > 0)
+CREATE TABLE expense_approvals (
+  id          SERIAL  PRIMARY KEY,
+  project_id  INT     NOT NULL REFERENCES project_budgets(project_id),
+  description TEXT    NOT NULL,
+  amount      NUMERIC NOT NULL CHECK (amount > 0),
+  approved    BOOLEAN NOT NULL DEFAULT false
 );
+
+INSERT INTO project_budgets VALUES (1, 10000);
+
+INSERT INTO expense_approvals (project_id, description, amount) VALUES
+  (1, 'Server hardware', 6000),   -- becomes id = 1
+  (1, 'Software licenses', 5000);

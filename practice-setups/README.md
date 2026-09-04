@@ -1,28 +1,28 @@
 # Practice task Docker setups
 
-Pre-seeded lab environments for hands-on practice tasks, published to **GHCR** as `ghcr.io/anmisttt/ddia-practice:<tag>` (one tag per practice item, e.g. `ch1-p0`).
+Pre-seeded lab environments for hands-on practice tasks, published to **GHCR** as `ghcr.io/anmisttt/lab:<tag>` (one tag per practice item, e.g. `ch1-p1`).
 
 ## Quick start (student)
 
 ```bash
 # Start pre-seeded Postgres lab
-docker run -d --name lab-ch1-p0 -p 5432:5432 ghcr.io/anmisttt/ddia-practice:ch1-p0
+docker run -d --name lab-ch1-p1 -p 5432:5432 ghcr.io/anmisttt/lab:ch1-p1
 
 # Copy stub files into your working directory
-docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/ddia-practice:ch1-p0 init
+docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/lab:ch1-p1 init
 
 # Connect / apply SQL inside the container (never bare host psql)
-docker exec -i lab-ch1-p0 psql -v ON_ERROR_STOP=1 -U postgres -d retail_lab < setup.sql
-docker exec -it lab-ch1-p0 psql -U postgres -d retail_lab
+docker exec -i lab-ch1-p1 psql -v ON_ERROR_STOP=1 -U postgres -d retail_lab < setup.sql
+docker exec -it lab-ch1-p1 psql -U postgres -d retail_lab
 
 # Teardown
-docker rm -f lab-ch1-p0
+docker rm -f lab-ch1-p1
 ```
 
 Multi-service tasks (Kafka, RabbitMQ, Citus, ClickHouse, etc.) use `docker compose`. Client CLIs always go through `docker compose exec` — never a bare host `psql` / `clickhouse-client` / `mysql`:
 
 ```bash
-docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/ddia-practice:ch4-p4 init
+docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/lab:ch4-p5 init
 docker compose up -d
 docker compose exec -T clickhouse clickhouse-client --multiquery < setup.sql
 docker compose exec clickhouse clickhouse-client
@@ -36,11 +36,11 @@ Only exercises that need a containerized service or packaged dependencies appear
 ```bash
 cd practice-setups
 
-# Build one Docker-backed task (a required shared base is automatic)
-./build.sh ch1-p0
+# Build one Docker-backed task
+./build.sh ch1-p1
 
 # Smoke-test a postgres task
-./build.sh verify ch1-p0
+./build.sh verify ch1-p1
 
 # Build all configured practice images
 ./build.sh all
@@ -52,7 +52,7 @@ Task assets are the source of truth. There is no generated manifest or per-task 
 
 | Path | Purpose |
 |------|---------|
-| `bases/pg16/` | Shared PostgreSQL 16 base with `init` entrypoint |
+| `common/` | Shared `init` entrypoint for all lab images |
 | `images/` | Shared PostgreSQL, Python-delivery, and Node-delivery Dockerfiles |
 | `tasks/chN-pI/` | Per-task seed, requirements, and student scaffold |
 | `docker-bake.hcl` | Task inventory plus local/CI build configuration |
@@ -78,10 +78,8 @@ Fifteen stdlib-only Python tasks have no image (unchanged briefs).
 
 ## CI
 
-`.github/workflows/practice-images.yml` builds and pushes to GHCR only when image inputs under `practice-setups/` change. A task-directory change builds that task, while shared image changes rebuild all images. Chapter JSON changes do not trigger image builds. Manual dispatch accepts an optional chapter number and zero-based practice index: blank chapter builds everything; chapter alone builds every image in it; chapter plus task builds only `chN-pI`.
-
-**One-time setup:** set the `ddia-practice` package visibility to **public** in GitHub → Packages so students can pull without login.
+`.github/workflows/practice-images.yml` builds and pushes to GHCR only when image inputs under `practice-setups/` change. A task-directory change builds that task, while shared image changes rebuild all images. Chapter JSON changes run the drift check without rebuilding images. Manual dispatch accepts an optional chapter number and one-based practice number: blank chapter builds everything; chapter alone builds every image in it; chapter plus task builds only `chN-pI`.
 
 ## Tag convention
 
-`ch<N>-p<I>` matches frontend question ids `practice-<I>` in chapter `<N>` (e.g. `first_chapter` → chapter 1 → `ch1-p0`).
+`ch<N>-p<I>` uses a one-based practice ordinal. It maps to `practice[I - 1]` in chapter `<N>` and frontend question id `practice-<I - 1>` (for example, `first_chapter` practice 1 uses `ch1-p1` and question id `practice-0`).

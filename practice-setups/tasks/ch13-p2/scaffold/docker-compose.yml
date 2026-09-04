@@ -1,4 +1,14 @@
 services:
+  postgres:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: ch13_idem_lab
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./seed.sql:/docker-entrypoint-initdb.d/01-seed.sql:ro
   kafka:
     image: apache/kafka:3.9.1
     ports:

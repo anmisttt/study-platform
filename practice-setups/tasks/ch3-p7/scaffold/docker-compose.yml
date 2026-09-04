@@ -2,7 +2,7 @@ name: ch3-document-lookup
 
 services:
   seed-assets:
-    image: ghcr.io/anmisttt/ddia-practice:ch3-p7
+    image: ghcr.io/anmisttt/lab:ch3-p7
     volumes:
       - mongo-init:/seed-out
     command:
@@ -27,7 +27,7 @@ services:
       retries: 40
 
   app:
-    image: ghcr.io/anmisttt/ddia-practice:ch3-p7
+    image: ghcr.io/anmisttt/lab:ch3-p7
     environment:
       MONGO_URL: mongodb://mongo:27017
       MONGO_DB: shop

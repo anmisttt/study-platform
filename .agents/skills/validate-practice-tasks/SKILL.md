@@ -31,6 +31,8 @@ Canonical rules live in [STYLEGUIDE.md](STYLEGUIDE.md). Every round starts with 
 
 Require all of these conventions when validating or repairing Docker-backed practice questions:
 
+Lab tags and setup directories use one-based practice ordinals: chapter array index `n` and CLI `--index n` map to `chN-p(n+1)`.
+
 1. Start with prerequisites and a short description of the lab.
 2. Write `Setup:` as plain text, followed by one `bash` block containing only initialization and startup commands.
 3. Put optional inspection and reference material in a collapsed cut using `:::cut <title>` and `:::`. Use a descriptive title such as `Observe the current state`.
@@ -117,10 +119,10 @@ npm run grade-practice -- --chapter <id> --index <n> --dump-brief
 
 Create workdir from `workdirHint` (under `.practice-validation/`, gitignored). Write `brief.json` there with **only** `task` and `question`.
 
-If the brief references `ghcr.io/anmisttt/ddia-practice:`, build the tag locally first so the solver can run the brief verbatim (Docker prefers the local image when present):
+If the brief references `ghcr.io/anmisttt/lab:`, build the tag locally first so the solver can run the brief verbatim (Docker prefers the local image when present):
 
 ```bash
-cd practice-setups && ./build.sh <tag>   # e.g. ch1-p0
+cd practice-setups && ./build.sh <tag>   # e.g. ch1-p1
 ```
 
 For compose-stack tasks, run `init` and `docker compose up -d` in the workdir after the solver copies scaffold files.

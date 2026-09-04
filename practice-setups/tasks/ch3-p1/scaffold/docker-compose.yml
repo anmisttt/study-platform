@@ -87,7 +87,7 @@ services:
       retries: 40
 
   app:
-    image: ghcr.io/anmisttt/ddia-practice:ch3-p1
+    image: ghcr.io/anmisttt/lab:ch3-p1
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_TOPIC: order-events

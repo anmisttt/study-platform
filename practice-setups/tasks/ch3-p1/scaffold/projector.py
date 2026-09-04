@@ -22,7 +22,7 @@ def read_events() -> list[dict]:
 
 
 def rebuild_views(events: list[dict]) -> None:
-    # TODO: rebuild PostgreSQL and MongoDB projections
+    # TODO: rebuild application projections and refresh the revenue materialized view
     raise NotImplementedError
 
 
@@ -37,11 +37,20 @@ def snapshot() -> dict:
                 """
             )
         )
-        revenue = list(
+        table_revenue = list(
             postgres.execute(
                 """
                 SELECT day::text AS day, net_revenue
                 FROM daily_revenue_view
+                ORDER BY day
+                """
+            )
+        )
+        materialized_revenue = list(
+            postgres.execute(
+                """
+                SELECT day::text AS day, net_revenue
+                FROM daily_revenue_materialized
                 ORDER BY day
                 """
             )
@@ -54,7 +63,12 @@ def snapshot() -> dict:
         ).sort("customer_id", 1)
     )
     mongo.close()
-    return {"orders": orders, "daily_revenue": revenue, "customer_spend": customers}
+    return {
+        "orders": orders,
+        "table_revenue": table_revenue,
+        "materialized_revenue": materialized_revenue,
+        "customer_spend": customers,
+    }
 
 
 def main() -> None:

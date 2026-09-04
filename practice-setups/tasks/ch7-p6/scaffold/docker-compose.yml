@@ -1,0 +1,18 @@
+x-citus: &citus
+  image: citusdata/citus:13.2.0
+  environment:
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: citus
+    POSTGRES_HOST_AUTH_METHOD: trust
+
+services:
+  coordinator:
+    <<: *citus
+    container_name: ch7-row-coordinator
+    ports: ["5434:5432"]
+  worker1:
+    <<: *citus
+    container_name: ch7-row-worker1
+  worker2:
+    <<: *citus
+    container_name: ch7-row-worker2

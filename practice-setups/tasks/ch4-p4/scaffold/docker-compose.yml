@@ -1,6 +1,16 @@
 services:
-  clickhouse:
-    image: clickhouse/clickhouse-server:24.8
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: lab
+      MYSQL_DATABASE: ch4_lab
     ports:
-      - "8123:8123"
-      - "9000:9000"
+      - "3306:3306"
+    volumes:
+      - ./seed.sql:/docker-entrypoint-initdb.d/01-seed.sql:ro
+  lab:
+    image: ghcr.io/anmisttt/lab:ch4-p4
+    entrypoint: ["sleep", "infinity"]
+    working_dir: /work
+    volumes:
+      - .:/work

@@ -2,7 +2,7 @@ name: ch3-n-plus-one
 
 services:
   seed-assets:
-    image: ghcr.io/anmisttt/ddia-practice:ch3-p6
+    image: ghcr.io/anmisttt/lab:ch3-p6
     volumes:
       - postgres-init:/seed-out
     command:
@@ -29,7 +29,7 @@ services:
       retries: 30
 
   app:
-    image: ghcr.io/anmisttt/ddia-practice:ch3-p6
+    image: ghcr.io/anmisttt/lab:ch3-p6
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/n1_lab
     depends_on:

@@ -1,13 +1,17 @@
 # syntax=docker/dockerfile:1
 
-ARG BASE_IMAGE=ghcr.io/anmisttt/ddia-practice-base:pg16
-FROM ${BASE_IMAGE}
+FROM postgres:16-bookworm
+
+LABEL org.opencontainers.image.source="https://github.com/anmisttt/study-platform"
 
 ARG POSTGRES_DB=lab
 ENV PGDATA=/lab/pgdata \
     POSTGRES_DB=${POSTGRES_DB} \
     POSTGRES_PASSWORD=lab \
     POSTGRES_USER=postgres
+
+COPY common/lab-init-entrypoint.sh /usr/local/bin/lab-entrypoint.sh
+RUN chmod +x /usr/local/bin/lab-entrypoint.sh
 
 COPY --from=task seed.sql /lab/seed.sql
 COPY --from=task scaffold/ /lab/scaffold/
@@ -23,3 +27,5 @@ RUN initdb -D "$PGDATA" \
  && pg_ctl -D "$PGDATA" -m fast -w stop
 
 USER root
+ENTRYPOINT ["lab-entrypoint.sh"]
+CMD ["postgres"]

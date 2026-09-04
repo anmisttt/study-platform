@@ -8,11 +8,11 @@ x-citus: &citus
 services:
   coordinator:
     <<: *citus
-    container_name: ch7-row-coordinator
-    ports: ["5434:5432"]
+    container_name: ch7-schema-coordinator
+    ports: ["5433:5432"]
   worker1:
     <<: *citus
-    container_name: ch7-row-worker1
+    container_name: ch7-schema-worker1
   worker2:
     <<: *citus
-    container_name: ch7-row-worker2
+    container_name: ch7-schema-worker2

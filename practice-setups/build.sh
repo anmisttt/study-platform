@@ -7,15 +7,14 @@ cd "$ROOT"
 
 REGISTRY="${REGISTRY:-ghcr.io}"
 IMAGE_OWNER="${IMAGE_OWNER:-anmisttt}"
-BASE_PKG="${BASE_PKG:-ddia-practice-base}"
-TASK_PKG="${TASK_PKG:-ddia-practice}"
+TASK_PKG="${TASK_PKG:-lab}"
 PLATFORM="${PLATFORM:-linux/$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')}"
-export REGISTRY IMAGE_OWNER BASE_PKG TASK_PKG
+export REGISTRY IMAGE_OWNER TASK_PKG
 
 usage() {
   cat <<EOF
 Usage:
-  ./build.sh <tag>           Build one Docker-backed task, e.g. ch1-p0
+  ./build.sh <tag>           Build one Docker-backed task, e.g. ch1-p1
   ./build.sh all             Build all configured practice images
   ./build.sh verify <tag>    Smoke-test a PostgreSQL task image
 

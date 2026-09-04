@@ -2,7 +2,7 @@ name: ch3-graphql-multi-store
 
 services:
   seed-assets:
-    image: ghcr.io/anmisttt/ddia-practice:ch3-p2
+    image: ghcr.io/anmisttt/lab:ch3-p2
     volumes:
       - postgres-init:/seed/postgres
       - mongo-init:/seed/mongo
@@ -75,7 +75,7 @@ services:
       - cypher-shell -a neo4j://neo4j:7687 -u neo4j -p graphpass -f /seed/10-dashboard.cypher
 
   app:
-    image: ghcr.io/anmisttt/ddia-practice:ch3-p2
+    image: ghcr.io/anmisttt/lab:ch3-p2
     environment:
       POSTGRES_URL: postgresql://postgres:postgres@postgres:5432/dashboard
       MONGO_URL: mongodb://mongo:27017

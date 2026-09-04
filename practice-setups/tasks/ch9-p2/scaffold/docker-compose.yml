@@ -1,0 +1,12 @@
+services:
+  netlab:
+    image: ghcr.io/anmisttt/lab:ch9-p2
+    container_name: lab-ch9-p2
+    # tc/netem and tcpdump need these two capabilities
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    working_dir: /work
+    volumes:
+      - ./:/work
+    command: ["sleep", "infinity"]

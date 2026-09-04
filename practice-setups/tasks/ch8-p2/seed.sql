@@ -1,19 +1,10 @@
--- setup.sql — flight seat booking (DDIA ch8)
-DROP TABLE IF EXISTS seat_reservations;
+-- Pre-seeded state: one counter row at zero.
+DROP TABLE IF EXISTS page_views;
 
-DROP TABLE IF EXISTS flights;
-
-CREATE TABLE flights (
-  id    SERIAL PRIMARY KEY,
-  route TEXT   NOT NULL
+CREATE TABLE page_views (
+  page_id    TEXT   PRIMARY KEY,
+  view_count BIGINT NOT NULL DEFAULT 0,
+  version    BIGINT NOT NULL DEFAULT 0
 );
 
-CREATE TABLE seat_reservations (
-  id        SERIAL PRIMARY KEY,
-  flight_id INT  NOT NULL REFERENCES flights(id),
-  seat_no   TEXT NOT NULL,
-  user_id   INT  NOT NULL
-  -- add UNIQUE (flight_id, seat_no) to prevent double-booking
-);
-
-INSERT INTO flights VALUES (1, 'NYC-LON');
+INSERT INTO page_views VALUES ('home', 0, 0);
