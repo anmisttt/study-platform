@@ -48,7 +48,7 @@ INSERT INTO oltp.orders (customer_id, created_at) VALUES
   (3, '2024-05-18 18:00:00+00');
 
 INSERT INTO oltp.order_items (order_id, product_id, quantity, price) VALUES
-  (1, 1, 2, 12.00),
+  (1, 1, 2, 10.00),
   (1, 3, 1, 5.50),
   (2, 2, 1, 80.00),
   (3, 1, 1, 12.00),

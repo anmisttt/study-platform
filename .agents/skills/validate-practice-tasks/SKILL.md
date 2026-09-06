@@ -122,7 +122,7 @@ Create workdir from `workdirHint` (under `.practice-validation/`, gitignored). W
 If the brief references `ghcr.io/anmisttt/lab:`, build the tag locally first so the solver can run the brief verbatim (Docker prefers the local image when present):
 
 ```bash
-cd practice-setups && ./build.sh <tag>   # e.g. ch1-p1
+cd practice-setups && ./build.sh <tag>   # e.g. ch3-p9
 ```
 
 For compose-stack tasks, run `init` and `docker compose up -d` in the workdir after the solver copies scaffold files.
@@ -192,7 +192,7 @@ After 5 failed rounds, stop and report remaining issues for human review. Do not
 - Never let practice-solver read `backend/src/data/*.json` or answer text.
 - Never put tutor comments or the stored `answer` into the solver prompt.
 - practice-styleguide and practice-correctness may read only the target `task` and `question`, the styleguide, the matching `practice-setups/tasks/chN-pI/` assets, and official/primary documentation needed to verify the real-world workflow; they must not read or evaluate `answer`, and they must not edit.
-- practice-editor may read the target practice item's `task` and `question` plus matching setup assets needed to understand the test contract. It may write only `task`, `question`, and compact verification-test assets; it must not read or edit `answer` or modify unrelated scaffold files.
+- practice-editor may read the target practice item's `task` and `question` plus matching setup assets needed to understand the test contract. It may write `task`, `question`, compact verification-test assets, and the matching setup's `seed.sql` only when structured review feedback shows the current fixture cannot distinguish required behavior from an incorrect implementation. Seed edits must be minimal fixture-value or fixture-row changes needed to expose that behavior, with corresponding expected-value updates in the compact test. It must not read or edit `answer`, change setup architecture, or modify unrelated scaffold files.
 - After each solver turn, run the artifact check (step 2b). Repo-root leftovers like `etcd-data/` must be deleted before the next round or final report.
 
 ## Success criteria

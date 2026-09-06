@@ -6,9 +6,9 @@ variable "TAG_SUFFIX" { default = "" }
 # These two lists are the complete image inventory.
 variable "POSTGRES_TASKS" {
   default = [
-    { tag = "ch1-p1", db = "retail_lab" },
     { tag = "ch3-p4", db = "lab" },
     { tag = "ch3-p5", db = "lab" },
+    { tag = "ch3-p9", db = "retail_lab" },
     { tag = "ch4-p2", db = "messages_index_lab" },
     { tag = "ch4-p3", db = "index_shape_lab" },
     { tag = "ch5-p2", db = "lab" },

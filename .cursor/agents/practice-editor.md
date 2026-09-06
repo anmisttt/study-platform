@@ -26,6 +26,7 @@ Allowed:
 
 - Bring `task` / `question` in line with the styleguide (purpose-led title, starter-code/task-instruction separation, numbered steps, titled cuts for large current-state observations, no markdown headings outside code, prerequisites + operational setup commands).
 - Add or minimally repair a compact verification-test file in the matching Docker scaffold, or add inline assertions to a non-Docker `question`, together with a short run instruction. Prefer built-in assertions and existing dependencies; remove prose that repeats asserted expectations and comments that explain obvious checks.
+- Make a minimal change to the matching setup's `seed.sql` when structured review feedback shows the existing fixture cannot distinguish required behavior from a specific incorrect implementation. Limit the change to fixture values or rows needed to expose that behavior, and update affected expected values in the compact test.
 - Fix broken/incomplete operational setup instructions (commands, filenames, missing stated prerequisites) without embedding implementation details.
 - Clarify contradictory or underspecified requirements.
 - Align the question checklist with what the tutor should require.
@@ -43,7 +44,7 @@ Forbidden:
 - Leaving large current-state inspection commands, logs, metrics, topology/schema snapshots, or baseline output expanded. Wrap the bulky material in a titled `:::cut …` / `:::` block while keeping the required task and success signal visible.
 - Papering over a toy, mock, or simulated setup by merely changing the wording. Keep the task and setup aligned with the authentic practitioner tool and its native workflow; if matching setup assets are absent or incompatible, report that concrete setup change is required instead of claiming readiness.
 - Adding hints that only make sense after seeing grader comments (no “to get a 5, mention X” spoilers beyond what a good task would state).
-- Editing other practice items, theory, unrelated files, or setup assets other than the target practice's compact verification tests.
+- Editing other practice items, theory, unrelated files, or setup assets other than the target practice's compact verification tests and a narrowly justified matching `seed.sql` fixture change.
 - Reading or editing the target practice item's `answer`; the parent promotes an accepted blind solution verbatim only after grading passes.
 - Changing chapter `number` / `name` / structure keys.
 - Introducing `#` / `##` headings or other decorative markdown outside fenced code in `task` or `question`.
@@ -59,7 +60,7 @@ You receive:
 
 ## Workflow
 
-1. Read only the target item's `task` and `question` at `practice[practiceIndex]` plus matching setup assets needed to understand the test contract. Do not read `answer`; write only the brief and compact verification-test assets.
+1. Read only the target item's `task` and `question` at `practice[practiceIndex]` plus matching setup assets needed to understand the test contract. Do not read `answer`; write only the brief, compact verification-test assets, and—when structured feedback demonstrates the need—the minimum matching `seed.sql` fixture change required to make behavior observable.
 2. If styleguide violations are present, fix those first (minimal diff that clears every `violations[]` entry).
 3. If correctness findings are present, fix every `error` (and clear warnings when cheap) before solver/grader concerns.
 4. Apply further minimal diffs for solver/grader evidence if provided.
