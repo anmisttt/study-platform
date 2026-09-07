@@ -28,6 +28,23 @@ if [ "${1:-}" = "init" ]; then
       chown -h "$owner" "$out/$relative"
     done < <(find /lab/scaffold -mindepth 1 -print0)
   fi
+
+  while IFS= read -r -d '' source; do
+    relative="${source#/lab/scaffold/}"
+    chmod +x "$out/$relative"
+  done < <(find /lab/scaffold -type f -name '*.sh' -print0)
+
+  if [ -d /lab/image ] && [ -n "$(find /lab/image -mindepth 1 -print -quit)" ]; then
+    mkdir -p "$out/preloaded_data"
+    cp -R /lab/image/. "$out/preloaded_data"/
+    if [ -n "$owner" ]; then
+      chown -h "$owner" "$out/preloaded_data"
+      while IFS= read -r -d '' source; do
+        relative="${source#/lab/image/}"
+        chown -h "$owner" "$out/preloaded_data/$relative"
+      done < <(find /lab/image -mindepth 1 -print0)
+    fi
+  fi
   exit 0
 fi
 
