@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { highlightCode } from "../lib/highlightCode";
 
 type ParagraphBlock = { kind: "paragraph"; text: string };
@@ -18,6 +18,7 @@ type ContentBlock = ParagraphBlock | CodeBlock | CutBlock;
 
 const NUMBERED_LINE_PATTERN = /^(\d+)\.\s+(.*)$/;
 const NUMBERED_BODY_INDENT_PATTERN = /^(?: {3,}|\t)/;
+const CODE_LINE_GUTTER_MIN_LINES = 4;
 const FENCED_BLOCK_PATTERN =
   /```([\w-]*)?\n?([\s\S]*?)```|^([ \t]*):::cut[ \t]+([^\r\n]+?)[ \t]*\r?\n([\s\S]*?)^\3:::[ \t]*(?:\r?\n|$)/gm;
 
@@ -290,6 +291,8 @@ function FormattedText({ text, className, emphasizeFirstParagraph = false }: For
 
         if (block.kind === "code") {
           const highlighted = highlightCode(block.text, block.language);
+          const lineCount = block.text.split("\n").length;
+          const showLineGutter = lineCount >= CODE_LINE_GUTTER_MIN_LINES;
           return (
             <div
               key={index}
@@ -357,15 +360,41 @@ function FormattedText({ text, className, emphasizeFirstParagraph = false }: For
                   </svg>
                 )}
               </button>
-              <pre className="formatted-text__code">
-                <code
-                  className={
-                    highlighted.language
-                      ? `language-${highlighted.language} hljs`
-                      : "hljs"
-                  }
-                  dangerouslySetInnerHTML={{ __html: highlighted.html }}
-                />
+              <pre
+                className={[
+                  "formatted-text__code",
+                  showLineGutter ? "formatted-text__code--numbered" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                style={
+                  showLineGutter
+                    ? ({
+                        "--formatted-text-code-line-digits": String(String(lineCount).length),
+                      } as CSSProperties)
+                    : undefined
+                }
+              >
+                {[
+                  ...(showLineGutter
+                    ? [
+                        <span key="gutter" className="formatted-text__code-gutter" aria-hidden="true">
+                          {Array.from({ length: lineCount }, (_, lineIndex) => (
+                            <span key={lineIndex} />
+                          ))}
+                        </span>,
+                      ]
+                    : []),
+                  <code
+                    key="source"
+                    className={
+                      highlighted.language
+                        ? `language-${highlighted.language} hljs`
+                        : "hljs"
+                    }
+                    dangerouslySetInnerHTML={{ __html: highlighted.html }}
+                  />,
+                ]}
               </pre>
             </div>
           );

@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import FormattedText from "./formattedText";
 
 describe("FormattedText", () => {
@@ -99,6 +99,59 @@ describe("FormattedText", () => {
     expect(code).not.toHaveClass("language-sql");
     expect(code?.querySelector(".hljs-keyword")).toBeNull();
     expect(code?.innerHTML).toBe("SELECT &lt;id&gt;");
+  });
+
+  it("omits the line-number gutter for code with three lines or fewer", () => {
+    render(
+      <FormattedText
+        text={["```sql", "SELECT 1;", "SELECT 2;", "SELECT 3;", "```"].join("\n")}
+      />,
+    );
+
+    expect(document.querySelector(".formatted-text__code-gutter")).toBeNull();
+    expect(document.querySelector(".formatted-text__code")).not.toHaveClass(
+      "formatted-text__code--numbered",
+    );
+  });
+
+  it("renders a non-copyable line-number gutter for code with more than three lines", () => {
+    render(
+      <FormattedText
+        text={["```sql", "SELECT 1;", "SELECT 2;", "SELECT 3;", "SELECT 4;", "```"].join("\n")}
+      />,
+    );
+
+    const gutter = document.querySelector(".formatted-text__code-gutter");
+    expect(gutter).toHaveAttribute("aria-hidden", "true");
+    expect(gutter?.children).toHaveLength(4);
+    expect(gutter?.textContent).toBe("");
+    expect(document.querySelector(".formatted-text__code")).toHaveClass(
+      "formatted-text__code--numbered",
+    );
+
+    const code = document.querySelector(".formatted-text__code code");
+    expect(code?.textContent).toBe("SELECT 1;\nSELECT 2;\nSELECT 3;\nSELECT 4;");
+  });
+
+  it("copies the original source without line numbers", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    render(
+      <FormattedText
+        text={["```sql", "SELECT 1;", "SELECT 2;", "SELECT 3;", "SELECT 4;", "```"].join("\n")}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy code block" }));
+    });
+
+    expect(writeText).toHaveBeenCalledWith("SELECT 1;\nSELECT 2;\nSELECT 3;\nSELECT 4;");
+    expect(screen.getByRole("button", { name: "Code copied" })).toBeTruthy();
   });
 
   it("aligns indented task blocks with the numbered body", () => {
