@@ -6,8 +6,8 @@ variable "TAG_SUFFIX" { default = "" }
 # These two lists are the complete image inventory.
 variable "POSTGRES_TASKS" {
   default = [
-    { tag = "ch3-p4", db = "lab" },
     { tag = "ch3-p5", db = "lab" },
+    { tag = "ch3-p6", db = "lab" },
     { tag = "ch3-p9", db = "retail_lab" },
     { tag = "ch4-p2", db = "messages_index_lab" },
     { tag = "ch4-p3", db = "index_shape_lab" },
@@ -33,7 +33,7 @@ variable "PYTHON_DELIVERY_TASKS" {
   default = [
     { tag = "ch3-p1", apt = "" },
     { tag = "ch3-p3", apt = "" },
-    { tag = "ch3-p6", apt = "" },
+    { tag = "ch3-p4", apt = "" },
     { tag = "ch3-p7", apt = "" },
     { tag = "ch4-p1", apt = "" },
     { tag = "ch4-p4", apt = "" },

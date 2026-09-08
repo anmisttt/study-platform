@@ -19,8 +19,18 @@ def joined_orders(db) -> list[dict]:
 def main() -> None:
     with MongoClient(MONGO_URL) as client:
         client.admin.command("ping")
-        rows = joined_orders(client[MONGO_DB])
+        db = client[MONGO_DB]
+        probe_id = 1099
+        db.orders.insert_one(
+            {"_id": probe_id, "customer_id": 2, "status": "paid", "total": 49}
+        )
+        try:
+            rows = joined_orders(db)
+        finally:
+            db.orders.delete_one({"_id": probe_id})
 
+    expected_keys = {"order_id", "total", "customer_name", "tier"}
+    assert all(set(row) == expected_keys for row in rows)
     shape = [
         (row["order_id"], row["total"], row.get("customer_name"), row.get("tier"))
         for row in rows

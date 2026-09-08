@@ -48,23 +48,28 @@ def count_selects(conn, cursor, statement, parameters, context, executemany):
         select_count += 1
 
 
-def serialize(authors: list[Author]) -> list[tuple[str, list[str]]]:
-    return [(author.name, [book.title for book in author.books]) for author in authors]
-
-
 def load_lazy() -> tuple[int, list[tuple[str, list[str]]]]:
-    # TODO: lazy relationship loading
-    raise NotImplementedError
+    global select_count
+    select_count = 0
+    with Session(engine) as session:
+        # TODO: lazy relationship loading
+        raise NotImplementedError
 
 
 def load_joined() -> tuple[int, list[tuple[str, list[str]]]]:
-    # TODO: joined eager loading
-    raise NotImplementedError
+    global select_count
+    select_count = 0
+    with Session(engine) as session:
+        # TODO: joined eager loading
+        raise NotImplementedError
 
 
 def load_selectin() -> tuple[int, list[tuple[str, list[str]]]]:
-    # TODO: select-in eager loading
-    raise NotImplementedError
+    global select_count
+    select_count = 0
+    with Session(engine) as session:
+        # TODO: select-in eager loading
+        raise NotImplementedError
 
 
 def main() -> None:
