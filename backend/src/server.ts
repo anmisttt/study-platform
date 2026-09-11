@@ -14,7 +14,7 @@ import { resolveChapterQuestion } from "./http/resolveChapterQuestion";
 import { respondWithError } from "./http/respondWithError";
 import { ensureAnswer, ensureBaseRevision } from "./http/validation";
 import { Tutor } from "./services/tutor";
-import { practiceSystemPrompt, theorySystemPrompt } from "./prompts/system-prompt";
+import { loadSystemPrompt } from "./prompts/loadSystemPrompt";
 import { userPromptForItem } from "./prompts/user-prompt";
 import { Transcriber } from "./services/transcriber";
 
@@ -108,7 +108,7 @@ app.post("/rooms/:roomId/questions/:questionId/check", async (req: Request, res:
     }
 
     const tutor = new Tutor({
-      systemPrompt: resolved.type === "practice" ? practiceSystemPrompt : theorySystemPrompt,
+      systemPrompt: await loadSystemPrompt(resolved.type),
       model: "gpt-5.5",
       apiKey: openaiApiKey,
       temperature: 1,

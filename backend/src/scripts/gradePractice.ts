@@ -3,7 +3,7 @@ import path from "path";
 import dotenv from "dotenv";
 import type { PracticeItem } from "@study-platform/shared";
 import { chapters, getChapterById } from "../chapters";
-import { practiceSystemPrompt } from "../prompts/system-prompt";
+import { loadSystemPrompt } from "../prompts/loadSystemPrompt";
 import { userPromptForItem } from "../prompts/user-prompt";
 import { Tutor } from "../services/tutor";
 
@@ -170,7 +170,7 @@ async function main(): Promise<void> {
   }
 
   const tutor = new Tutor({
-    systemPrompt: practiceSystemPrompt,
+    systemPrompt: await loadSystemPrompt("practice"),
     model: process.env.OPENAI_GRADE_MODEL ?? "gpt-5.5",
     apiKey: process.env.OPENAI_API_KEY,
     temperature: 1,

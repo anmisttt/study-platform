@@ -1,4 +1,9 @@
-export const practiceSystemPrompt = `
+import { QuestionType } from "@study-platform/shared";
+
+const PRACTICE_SYSTEM_PROMPT_NAME = "practice-system-prompt";
+const THEORY_SYSTEM_PROMPT_NAME = "theory-system-prompt";
+
+const practiceSystemPrompt = `
 <role>
 You are a helpful assistant that helps students learn about system design.
 </role>
@@ -42,7 +47,7 @@ in the question.
 </output>
 `;
 
-export const theorySystemPrompt = `
+const theorySystemPrompt = `
 <role>
 You are a helpful assistant that helps students learn about system design.
 </role>
@@ -90,3 +95,14 @@ possible solution. It is not the grading rubric or a canonical answer.
   }
 </output>
 `;
+
+export const systemPromptByType: Record<QuestionType, Record<"defaultPrompt" | "langfusePrompt", string>> = {
+  practice: {
+    defaultPrompt: practiceSystemPrompt,
+    langfusePrompt: PRACTICE_SYSTEM_PROMPT_NAME,
+  },
+  theory: {
+    defaultPrompt: theorySystemPrompt,
+    langfusePrompt: THEORY_SYSTEM_PROMPT_NAME,
+  },
+};
