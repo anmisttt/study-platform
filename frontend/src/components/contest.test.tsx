@@ -394,6 +394,48 @@ describe("Contest", () => {
     expectResultField(/Your answer:/, "Peer practice answer");
   });
 
+  it("keeps a peer check pending until its result arrives", async () => {
+    draftApi.answerInput = "Peer draft";
+    draftApi.isAnswerChecking = true;
+    const view = renderContest({
+      roomId: "ABC123",
+      questionRef: "practice-0",
+      initialSession: sessionWithRoom(),
+    });
+
+    expect(screen.getByRole("status")).toHaveTextContent("Checking answer...");
+
+    draftApi.answerInput = "";
+    draftApi.isAnswerChecking = false;
+    view.rerender(
+      <ContestHarness
+        roomId="ABC123"
+        questionRef="practice-0"
+        initialSession={sessionWithRoom()}
+      />,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("Checking answer...");
+
+    act(() => {
+      draftApi.emitRoomSnapshot(
+        roomDetailsWithAnswer({
+          practiceAnswer: {
+            answer: "Peer draft",
+            rating: 4,
+            comment: "Peer result.",
+            revision: 1,
+          },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expectResultField(/Rating:/, "4/5");
+    });
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
   it("returns to the editor when Try again is clicked", async () => {
     const answered = sessionWithRoom(
       roomDetailsWithAnswer({
@@ -422,6 +464,49 @@ describe("Contest", () => {
     expect(screen.getByPlaceholderText("Type your answer in any language...")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Check" })).toBeTruthy();
     expect(voiceApi.stop).toHaveBeenCalled();
+  });
+
+  it("resets the local editor preference when switching questions", async () => {
+    const answered = sessionWithRoom(
+      roomDetailsWithAnswer({
+        theoryAnswer: {
+          answer: "Prior answer",
+          rating: 2,
+          comment: "Needs work.",
+          revision: 1,
+        },
+      }),
+    );
+    const view = renderContest({
+      roomId: "ABC123",
+      questionRef: "theory-0",
+      initialSession: answered,
+    });
+
+    await waitFor(() => {
+      expectResultField(/Rating:/, "2/5");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(screen.getByPlaceholderText("Type your answer in any language...")).toBeTruthy();
+
+    view.rerender(
+      <ContestHarness
+        roomId="ABC123"
+        questionRef="practice-0"
+        initialSession={answered}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Practice 1" })).toBeTruthy();
+
+    view.rerender(
+      <ContestHarness
+        roomId="ABC123"
+        questionRef="theory-0"
+        initialSession={answered}
+      />,
+    );
+    expectResultField(/Rating:/, "2/5");
+    expect(screen.queryByPlaceholderText("Type your answer in any language...")).toBeNull();
   });
 
   it("calls onResetProgress when Start again is clicked", () => {

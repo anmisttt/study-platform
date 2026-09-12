@@ -35,6 +35,24 @@ describe("useCollaborativeDraft", () => {
     noRoom.unmount();
   });
 
+  it("does not expose stale draft state after being disabled and re-enabled", async () => {
+    const harness = renderDraft();
+    await connectAndSnapshot(harness);
+
+    act(() => {
+      harness.api().onAnswerInputChange("stale draft");
+    });
+    expect(harness.api().answerInput).toBe("stale draft");
+
+    harness.rerender({ enabled: false });
+    expect(harness.api().answerInput).toBe("");
+    expect(harness.api().isDraftHydrated).toBe(false);
+
+    harness.rerender({ enabled: true });
+    expect(harness.api().answerInput).toBe("");
+    expect(harness.api().isDraftHydrated).toBe(false);
+  });
+
   it("connects to the room URL and watches the question once the socket opens", async () => {
     const harness = renderDraft();
     await connectAndSnapshot(harness);

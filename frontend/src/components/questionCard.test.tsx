@@ -117,4 +117,22 @@ describe("QuestionCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Hide reference answer" }));
     expect(screen.queryByText("Reference theory answer.")).toBeNull();
   });
+
+  it("hides an open reference answer when the question changes", () => {
+    const view = renderCard({ answerInput: "draft", answer: "Theory reference." });
+
+    fireEvent.click(screen.getByRole("button", { name: "Show reference answer" }));
+    expect(screen.getByText("Theory reference.")).toBeTruthy();
+
+    view.rerender(
+      <QuestionCard
+        {...view.props}
+        currentItem={practiceItem}
+        answer="Practice reference."
+      />,
+    );
+
+    expect(screen.queryByText("Practice reference.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Show reference answer" })).toBeTruthy();
+  });
 });

@@ -1,5 +1,5 @@
 import { MAX_ANSWER_LENGTH } from "@study-platform/shared";
-import { type KeyboardEvent, type RefObject, useEffect, useState } from "react";
+import { type KeyboardEvent, type RefObject, useState } from "react";
 import Answer from "./answer";
 import FormattedText from "./formattedText";
 import type { QuestionItem, ResponseEntry } from "./contest-types";
@@ -55,11 +55,22 @@ function QuestionCard({
   onCheck,
   onTryAgain,
 }: QuestionCardProps) {
-  const [isAnswerVisible, setIsAnswerVisible] = useState(false);
+  const [answerVisibility, setAnswerVisibility] = useState({
+    questionId: currentItem.id,
+    visible: false,
+  });
+  const isAnswerVisible =
+    answerVisibility.questionId === currentItem.id && answerVisibility.visible;
 
-  useEffect(() => {
-    setIsAnswerVisible(false);
-  }, [currentItem.id]);
+  function setIsAnswerVisible(visible: boolean | ((current: boolean) => boolean)): void {
+    setAnswerVisibility((current) => {
+      const currentVisible = current.questionId === currentItem.id && current.visible;
+      return {
+        questionId: currentItem.id,
+        visible: typeof visible === "function" ? visible(currentVisible) : visible,
+      };
+    });
+  }
 
   const isOverAnswerLimit = answerInput.length > MAX_ANSWER_LENGTH;
   const isCheckDisabled = isChecking || !answerInput.trim() || isOverAnswerLimit;

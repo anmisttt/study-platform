@@ -32,6 +32,79 @@ type CheckResponsePayload = CheckResult & {
   room?: RoomDetails;
 };
 
+type QuestionUiObservation = {
+  questionId: string | null;
+  isDraftHydrated: boolean;
+  isAnswerChecking: boolean;
+  answerHasText: boolean;
+  hasResult: boolean;
+  resultRevision: number;
+};
+
+type QuestionUiState = QuestionUiObservation & {
+  isEditingLocally: boolean;
+  isCheckPending: boolean;
+};
+
+function createQuestionUiState(observation: QuestionUiObservation): QuestionUiState {
+  return {
+    ...observation,
+    isEditingLocally: !(
+      observation.isDraftHydrated &&
+      observation.hasResult &&
+      !observation.answerHasText
+    ),
+    isCheckPending: observation.isAnswerChecking,
+  };
+}
+
+function reconcileQuestionUiState(
+  current: QuestionUiState,
+  observation: QuestionUiObservation,
+): QuestionUiState {
+  if (current.questionId !== observation.questionId) {
+    return createQuestionUiState(observation);
+  }
+
+  const observationChanged =
+    current.isDraftHydrated !== observation.isDraftHydrated ||
+    current.isAnswerChecking !== observation.isAnswerChecking ||
+    current.answerHasText !== observation.answerHasText ||
+    current.hasResult !== observation.hasResult ||
+    current.resultRevision !== observation.resultRevision;
+  if (!observationChanged) {
+    return current;
+  }
+
+  let isEditingLocally = current.isEditingLocally;
+  let isCheckPending = current.isCheckPending;
+
+  if (!current.isDraftHydrated && observation.isDraftHydrated) {
+    isEditingLocally = !(observation.hasResult && !observation.answerHasText);
+  }
+
+  if (observation.isAnswerChecking) {
+    isCheckPending = true;
+  } else if (observation.answerHasText) {
+    isCheckPending = false;
+  }
+
+  if (
+    current.resultRevision !== observation.resultRevision &&
+    observation.hasResult &&
+    isCheckPending
+  ) {
+    isCheckPending = false;
+    isEditingLocally = false;
+  }
+
+  return {
+    ...observation,
+    isEditingLocally,
+    isCheckPending,
+  };
+}
+
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
@@ -84,12 +157,14 @@ function Contest({
   onResetProgress,
 }: ContestProps) {
   const [isChecking, setIsChecking] = useState<boolean>(false);
-  const [roomInput, setRoomInput] = useState<string>(roomId ?? "");
+  const [roomInputState, setRoomInputState] = useState({
+    roomId,
+    value: roomId ?? "",
+  });
   const [isRoomActionPending, setIsRoomActionPending] = useState<boolean>(false);
   const [startError, setStartError] = useState<string>(initialError);
-  const [isEditingLocally, setIsEditingLocally] = useState<boolean>(true);
   const [timerEpoch, setTimerEpoch] = useState(0);
-  const [isCheckPending, setIsCheckPending] = useState(false);
+  const roomInput = roomInputState.roomId === roomId ? roomInputState.value : (roomId ?? "");
 
   const items = useMemo(
     () => (chapterSession.details ? flattenItems(chapterSession.details) : []),
@@ -140,6 +215,43 @@ function Contest({
     },
   });
   const answerInput = collaborativeDraft.answerInput;
+  const clearLocalAnswerChecking = collaborativeDraft.clearLocalAnswerChecking;
+  const questionId = currentItem?.id ?? null;
+  const questionUiObservation: QuestionUiObservation = {
+    questionId,
+    isDraftHydrated: collaborativeDraft.isDraftHydrated,
+    isAnswerChecking: collaborativeDraft.isAnswerChecking,
+    answerHasText: answerInput.trim().length > 0,
+    hasResult: Boolean(currentResponse?.result),
+    resultRevision: currentItem && currentResponse?.result
+      ? (chapterSession.revisions[currentItem.id] ?? 0)
+      : -1,
+  };
+  const [storedQuestionUi, setStoredQuestionUi] = useState(() =>
+    createQuestionUiState(questionUiObservation),
+  );
+  const questionUi = reconcileQuestionUiState(storedQuestionUi, questionUiObservation);
+  if (questionUi !== storedQuestionUi) {
+    setStoredQuestionUi(questionUi);
+  }
+  const { isEditingLocally, isCheckPending } = questionUi;
+
+  function updateQuestionUi(
+    update: (current: QuestionUiState) => QuestionUiState,
+  ): void {
+    setStoredQuestionUi((current) =>
+      update(reconcileQuestionUiState(current, questionUiObservation)),
+    );
+  }
+
+  function setIsEditingLocally(value: boolean): void {
+    updateQuestionUi((current) => ({ ...current, isEditingLocally: value }));
+  }
+
+  function setIsCheckPending(value: boolean): void {
+    updateQuestionUi((current) => ({ ...current, isCheckPending: value }));
+  }
+
   const allAnswered =
     items.length > 0 && items.every((item) => Boolean(chapterSession.responses[item.id]?.result));
 
@@ -157,52 +269,12 @@ function Contest({
   }, [items, chapterSession.responses]);
 
   useEffect(() => {
-    setRoomInput(roomId ?? "");
-  }, [roomId]);
-
-  useEffect(() => {
-    setIsEditingLocally(true);
-    setTimerEpoch(0);
-  }, [currentItem?.id]);
-
-  // Only decide result-vs-editor view when landing on a question (after draft
-  // hydrates). Do not re-run on answerInput — an empty draft after "Try again"
-  // must stay in edit mode.
-  useEffect(() => {
-    if (!collaborativeDraft.isDraftHydrated) {
-      return;
-    }
-
-    if (currentResponse?.result && collaborativeDraft.answerInput.trim().length === 0) {
-      setIsEditingLocally(false);
-    }
-  }, [currentItem?.id, collaborativeDraft.isDraftHydrated]);
-
-  // Keep peers on the checking screen after the draft is cleared until the room connection
-  // delivers the result (or the check fails and the draft comes back).
-  useEffect(() => {
-    if (collaborativeDraft.isAnswerChecking) {
-      setIsCheckPending(true);
-    } else if (collaborativeDraft.answerInput.trim().length > 0) {
-      setIsCheckPending(false);
-    }
-  }, [collaborativeDraft.isAnswerChecking, collaborativeDraft.answerInput]);
-
-  useEffect(() => {
     if (!currentResponse?.result) {
       return;
     }
 
-    collaborativeDraft.clearLocalAnswerChecking();
-    if (isCheckPending) {
-      setIsCheckPending(false);
-      setIsEditingLocally(false);
-    }
-  }, [currentResponse?.result, isCheckPending]);
-
-  useEffect(() => {
-    setIsCheckPending(false);
-  }, [currentItem?.id]);
+    clearLocalAnswerChecking();
+  }, [clearLocalAnswerChecking, currentResponse?.result]);
 
   const isCheckInProgress = isChecking || collaborativeDraft.isAnswerChecking || isCheckPending;
 
@@ -387,7 +459,9 @@ function Contest({
               type="text"
               className="room-id-input"
               value={roomInput}
-              onChange={(event) => setRoomInput(event.target.value)}
+              onChange={(event) => {
+                setRoomInputState({ roomId, value: event.target.value });
+              }}
               placeholder="Room ID..."
               maxLength={6}
               disabled={isRoomActionPending}
@@ -495,7 +569,7 @@ function Contest({
           </div>
           <div className="timer-top-right">
             <Timer
-              resetKey={`${currentItem.id}:${timerEpoch}`}
+              key={`${currentItem.id}:${timerEpoch}`}
               initialSeconds={currentItem.type === "theory" ? 3 * 60 : 10 * 60}
               paused={!isEditingLocally || isCheckInProgress}
             />

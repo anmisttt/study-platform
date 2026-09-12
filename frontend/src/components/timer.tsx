@@ -1,23 +1,14 @@
 import { useEffect, useState } from "react";
 
 type TimerProps = {
-  resetKey: string | number;
   initialSeconds: number;
   paused?: boolean;
 };
 
-function Timer({ resetKey, initialSeconds, paused = false }: TimerProps) {
+function Timer({ initialSeconds, paused = false }: TimerProps) {
   const [secondsLeft, setSecondsLeft] = useState(initialSeconds);
-  const [isPaused, setIsPaused] = useState(paused);
-
-  useEffect(() => {
-    setSecondsLeft(initialSeconds);
-    setIsPaused(false);
-  }, [initialSeconds, resetKey]);
-
-  useEffect(() => {
-    setIsPaused(paused);
-  }, [paused]);
+  const [isManuallyPaused, setIsManuallyPaused] = useState(false);
+  const isPaused = paused || isManuallyPaused;
 
   useEffect(() => {
     if (isPaused) {
@@ -47,7 +38,7 @@ function Timer({ resetKey, initialSeconds, paused = false }: TimerProps) {
         <button
           type="button"
           className="secondary-button timer-icon-button"
-          onClick={() => setIsPaused((prev) => !prev)}
+          onClick={() => setIsManuallyPaused((current) => !current)}
           disabled={paused}
           aria-label={isPaused ? "Continue timer" : "Pause timer"}
           title={isPaused ? "Continue timer" : "Pause timer"}
@@ -67,7 +58,7 @@ function Timer({ resetKey, initialSeconds, paused = false }: TimerProps) {
           className="secondary-button timer-icon-button"
           onClick={() => {
             setSecondsLeft(initialSeconds);
-            setIsPaused(paused);
+            setIsManuallyPaused(false);
           }}
           aria-label="Reset timer"
           title="Reset timer"

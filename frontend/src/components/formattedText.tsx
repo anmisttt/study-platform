@@ -117,10 +117,11 @@ function parseFormattedText(text: string): ContentBlock[] {
 function renderParagraphContent(
   text: string,
   blockKey: number,
-  takeEmphasisClass: () => string | undefined,
+  emphasizeFirstParagraph: boolean,
 ): ReactNode {
   const lines = text.split("\n");
   const elements: ReactNode[] = [];
+  let pendingFirstParagraphEmphasis = emphasizeFirstParagraph;
   let index = 0;
   let part = 0;
 
@@ -173,7 +174,10 @@ function renderParagraphContent(
 
     const paragraphText = paragraphLines.join("\n");
     if (paragraphText.trim()) {
-      const emphasisClass = takeEmphasisClass();
+      const emphasisClass = pendingFirstParagraphEmphasis
+        ? "formatted-text__paragraph--emphasis"
+        : undefined;
+      pendingFirstParagraphEmphasis = false;
       const indent = getNumberedBodyIndent(paragraphText);
       const displayText = indent ? removeIndent(paragraphText, indent) : paragraphText;
       elements.push(
@@ -197,6 +201,12 @@ function renderParagraphContent(
   return elements;
 }
 
+function containsRenderableParagraph(text: string): boolean {
+  return text
+    .split("\n")
+    .some((line) => line.trim().length > 0 && !NUMBERED_LINE_PATTERN.test(line));
+}
+
 type FormattedTextProps = {
   text: string;
   className?: string;
@@ -206,15 +216,11 @@ type FormattedTextProps = {
 function FormattedText({ text, className, emphasizeFirstParagraph = false }: FormattedTextProps) {
   const blocks = parseFormattedText(text);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  let pendingFirstParagraphEmphasis = emphasizeFirstParagraph;
-
-  function takeEmphasisClass(): string | undefined {
-    if (!pendingFirstParagraphEmphasis) {
-      return undefined;
-    }
-    pendingFirstParagraphEmphasis = false;
-    return "formatted-text__paragraph--emphasis";
-  }
+  const emphasizedBlockIndex = emphasizeFirstParagraph
+    ? blocks.findIndex(
+        (block) => block.kind === "paragraph" && containsRenderableParagraph(block.text),
+      )
+    : -1;
 
   useEffect(() => {
     if (copiedIndex === null) {
@@ -402,7 +408,7 @@ function FormattedText({ text, className, emphasizeFirstParagraph = false }: For
 
         return (
           <div key={index} className="formatted-text__section">
-            {renderParagraphContent(block.text, index, takeEmphasisClass)}
+            {renderParagraphContent(block.text, index, index === emphasizedBlockIndex)}
           </div>
         );
       })}

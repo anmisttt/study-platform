@@ -132,9 +132,19 @@ export function useCollaborativeDraft({
   onRoomSnapshot,
   onRoomError,
 }: UseCollaborativeDraftOptions): UseCollaborativeDraftResult {
+  const requestedDraftKey = enabled && roomId && questionId
+    ? `${roomId}\0${questionId}`
+    : null;
   const [answerInput, setAnswerInput] = useState("");
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
   const [isAnswerChecking, setIsAnswerChecking] = useState(false);
+  const [draftStateKey, setDraftStateKey] = useState(requestedDraftKey);
+  if (draftStateKey !== requestedDraftKey) {
+    setDraftStateKey(requestedDraftKey);
+    setAnswerInput("");
+    setIsDraftHydrated(false);
+    setIsAnswerChecking(false);
+  }
   const docRef = useRef<Y.Doc | null>(null);
   const ytextRef = useRef<Y.Text | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -156,13 +166,12 @@ export function useCollaborativeDraft({
   const onRoomSnapshotRef = useRef(onRoomSnapshot);
   const onRoomErrorRef = useRef(onRoomError);
 
-  roomIdRef.current = roomId;
-  questionIdRef.current = questionId;
-
   useEffect(() => {
+    roomIdRef.current = roomId;
+    questionIdRef.current = questionId;
     onRoomSnapshotRef.current = onRoomSnapshot;
     onRoomErrorRef.current = onRoomError;
-  }, [onRoomError, onRoomSnapshot]);
+  }, [onRoomError, onRoomSnapshot, questionId, roomId]);
 
   const clearDebounceTimer = useCallback(() => {
     if (debounceTimerRef.current !== null) {
@@ -491,9 +500,6 @@ export function useCollaborativeDraft({
       lastSentStateVectorRef.current = null;
       snapshotReceivedRef.current = false;
       snapshotGenerationRef.current += 1;
-      setAnswerInput("");
-      setIsDraftHydrated(false);
-      setIsAnswerChecking(false);
       return;
     }
 
@@ -716,10 +722,12 @@ export function useCollaborativeDraft({
     setIsAnswerChecking(false);
   }, []);
 
+  const hasActiveDraft = enabled && Boolean(roomId) && Boolean(questionId);
+
   return {
-    answerInput,
-    isDraftHydrated,
-    isAnswerChecking,
+    answerInput: hasActiveDraft ? answerInput : "",
+    isDraftHydrated: hasActiveDraft && isDraftHydrated,
+    isAnswerChecking: hasActiveDraft && isAnswerChecking,
     textareaRef,
     onAnswerInputChange,
     appendDraftText,
