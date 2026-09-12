@@ -115,15 +115,3 @@ export async function clearRoomDraftUpdates(roomId: string): Promise<void> {
     db.close();
   }
 }
-
-export function resolveAnswerInput(
-  _roomId: string | null,
-  questionId: string,
-  session: { drafts: Record<string, string>; responses: Record<string, { answer: string }> },
-): string {
-  if (questionId in session.drafts) {
-    return session.drafts[questionId];
-  }
-
-  return session.responses[questionId]?.answer ?? "";
-}

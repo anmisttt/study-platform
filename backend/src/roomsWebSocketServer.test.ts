@@ -1,27 +1,36 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as Y from "yjs";
+import type { RoomDetails } from "@study-platform/shared";
 import {
   buildInsertUpdate,
   decodeAnswerText,
-  startRelayServer,
+  startRoomsWebSocketServer,
   TestClient,
-} from "./testClient";
+} from "./wsHelpers/testClient";
 
 const ROOM = "room1";
 const Q = "practice-0";
+const roomDetails: RoomDetails = {
+  roomId: ROOM,
+  chapterId: "chapter-1",
+  number: 1,
+  name: "Chapter 1",
+  theory: [],
+  practice: [],
+};
 
-let server: Awaited<ReturnType<typeof startRelayServer>>;
+let server: Awaited<ReturnType<typeof startRoomsWebSocketServer>>;
 let clients: TestClient[] = [];
 
-async function connect(): Promise<TestClient> {
-  const client = new TestClient(server.port);
+async function connect(roomId = ROOM): Promise<TestClient> {
+  const client = new TestClient(server.port, roomId);
   await client.ready();
   clients.push(client);
   return client;
 }
 
 beforeEach(async () => {
-  server = await startRelayServer();
+  server = await startRoomsWebSocketServer();
   clients = [];
 });
 
@@ -33,25 +42,57 @@ afterEach(async () => {
   await server.close();
 });
 
-describe("DraftRelay", () => {
-  it("responds to subscribe with a snapshot then checking:false", async () => {
+describe("RoomsWebSocketServer", () => {
+  it("sends room state on connection and broadcasts later room changes to every question", async () => {
+    await server.close();
+    server = await startRoomsWebSocketServer((roomId) => ({ ...roomDetails, roomId }));
+
+    const a = await connect();
+    const b = await connect();
+    const otherRoom = await connect("room2");
+    a.watchQuestion(Q);
+    b.watchQuestion("practice-1");
+    otherRoom.watchQuestion(Q);
+
+    expect(await a.waitForType("room_snapshot")).toMatchObject({ room: roomDetails });
+    expect(await b.waitForType("room_snapshot")).toMatchObject({ room: roomDetails });
+    await otherRoom.waitForType("room_snapshot");
+
+    const updatedRoom = {
+      ...roomDetails,
+      practice: [{ task: "task", question: "question", answer: "answer", revision: 1 }],
+    };
+    server.webSocketServer.broadcastRoomSnapshot(updatedRoom);
+
+    expect(await a.waitForType("room_snapshot")).toMatchObject({ room: updatedRoom });
+    expect(await b.waitForType("room_snapshot")).toMatchObject({ room: updatedRoom });
+    await otherRoom.expectNoMessage((message) => message.type === "room_snapshot");
+  });
+
+  it("responds to a question watch with a snapshot then checking:false", async () => {
     const client = await connect();
-    client.subscribe(ROOM, Q);
+    client.watchQuestion(Q);
 
     const snapshot = await client.waitForType("snapshot");
-    expect(snapshot).toMatchObject({ type: "snapshot", roomId: ROOM, questionId: Q });
+    expect(snapshot).toMatchObject({ type: "snapshot", questionId: Q });
     expect(typeof snapshot.update).toBe("string");
+    expect(snapshot).not.toHaveProperty("roomId");
 
     const checking = await client.waitForType("checking");
     expect(checking).toMatchObject({ checking: false });
   });
 
-  it("returns an error when updating before subscribing", async () => {
-    const client = await connect();
-    client.sendUpdate(ROOM, Q, buildInsertUpdate("hello").update);
+  it("reports a room lookup failure during connection setup", async () => {
+    await server.close();
+    server = await startRoomsWebSocketServer(() => {
+      throw new Error("Room not found.");
+    });
 
-    const error = await client.waitForType("error");
-    expect(error.message).toMatch(/subscribe/i);
+    const client = await connect("missing");
+    expect(await client.waitForType("error")).toEqual({
+      type: "error",
+      message: "Room not found.",
+    });
   });
 
   it("returns an error for a binary frame", async () => {
@@ -73,56 +114,56 @@ describe("DraftRelay", () => {
   it("broadcasts an update to peers but does not echo it to the sender", async () => {
     const a = await connect();
     const b = await connect();
-    a.subscribe(ROOM, Q);
-    b.subscribe(ROOM, Q);
+    a.watchQuestion(Q);
+    b.watchQuestion(Q);
     await a.waitForType("snapshot");
     await b.waitForType("snapshot");
 
     const { update } = buildInsertUpdate("hello from A");
-    a.sendUpdate(ROOM, Q, update);
+    a.sendUpdate(Q, update);
 
     const received = await b.waitForType("update");
-    expect(received).toMatchObject({ roomId: ROOM, questionId: Q, update });
+    expect(received).toEqual({ type: "update", questionId: Q, update });
     await a.expectNoMessage((message) => message.type === "update");
   });
 
   it("does not deliver updates across different questions", async () => {
     const a = await connect();
     const b = await connect();
-    a.subscribe(ROOM, Q);
-    b.subscribe(ROOM, "practice-1");
+    a.watchQuestion(Q);
+    b.watchQuestion("practice-1");
     await a.waitForType("snapshot");
     await b.waitForType("snapshot");
 
-    a.sendUpdate(ROOM, Q, buildInsertUpdate("only for Q").update);
+    a.sendUpdate(Q, buildInsertUpdate("only for Q").update);
 
     await b.expectNoMessage((message) => message.type === "update");
   });
 
   it("does not deliver updates across different rooms", async () => {
     const a = await connect();
-    const b = await connect();
-    a.subscribe(ROOM, Q);
-    b.subscribe("room2", Q);
+    const b = await connect("room2");
+    a.watchQuestion(Q);
+    b.watchQuestion(Q);
     await a.waitForType("snapshot");
     await b.waitForType("snapshot");
 
-    a.sendUpdate(ROOM, Q, buildInsertUpdate("only for room1").update);
+    a.sendUpdate(Q, buildInsertUpdate("only for room1").update);
 
     await b.expectNoMessage((message) => message.type === "update");
   });
 
   it("gives a late joiner the current document state via snapshot", async () => {
     const a = await connect();
-    a.subscribe(ROOM, Q);
+    a.watchQuestion(Q);
     await a.waitForType("snapshot");
-    a.sendUpdate(ROOM, Q, buildInsertUpdate("persisted text").update);
+    a.sendUpdate(Q, buildInsertUpdate("persisted text").update);
 
-    // Allow the relay to apply the update before the late join.
+    // Allow the server to apply the update before the late join.
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     const b = await connect();
-    b.subscribe(ROOM, Q);
+    b.watchQuestion(Q);
     const snapshot = await b.waitForType("snapshot");
     expect(decodeAnswerText(snapshot.update as string)).toBe("persisted text");
   });
@@ -130,8 +171,8 @@ describe("DraftRelay", () => {
   it("converges concurrent updates from two clients", async () => {
     const a = await connect();
     const b = await connect();
-    a.subscribe(ROOM, Q);
-    b.subscribe(ROOM, Q);
+    a.watchQuestion(Q);
+    b.watchQuestion(Q);
     await a.waitForType("snapshot");
     await b.waitForType("snapshot");
 
@@ -140,8 +181,8 @@ describe("DraftRelay", () => {
     const docB = new Y.Doc();
     docB.getText("answer").insert(0, "BBB");
 
-    a.sendUpdate(ROOM, Q, Buffer.from(Y.encodeStateAsUpdate(docA)).toString("base64"));
-    b.sendUpdate(ROOM, Q, Buffer.from(Y.encodeStateAsUpdate(docB)).toString("base64"));
+    a.sendUpdate(Q, Buffer.from(Y.encodeStateAsUpdate(docA)).toString("base64"));
+    b.sendUpdate(Q, Buffer.from(Y.encodeStateAsUpdate(docB)).toString("base64"));
 
     const aReceived = await a.waitForType("update");
     const bReceived = await b.waitForType("update");
@@ -154,9 +195,9 @@ describe("DraftRelay", () => {
     expect(textA).toContain("AAA");
     expect(textA).toContain("BBB");
 
-    // The relay's own doc should match after a fresh subscribe snapshot.
+    // The server's own doc should match after a fresh question snapshot.
     const c = await connect();
-    c.subscribe(ROOM, Q);
+    c.watchQuestion(Q);
     const snapshot = await c.waitForType("snapshot");
     expect(decodeAnswerText(snapshot.update as string)).toBe(textA);
   });
@@ -164,12 +205,12 @@ describe("DraftRelay", () => {
   it("ignores an empty update (nothing is broadcast)", async () => {
     const a = await connect();
     const b = await connect();
-    a.subscribe(ROOM, Q);
-    b.subscribe(ROOM, Q);
+    a.watchQuestion(Q);
+    b.watchQuestion(Q);
     await a.waitForType("snapshot");
     await b.waitForType("snapshot");
 
-    a.sendUpdate(ROOM, Q, "");
+    a.sendUpdate(Q, "");
 
     await b.expectNoMessage((message) => message.type === "update");
   });
@@ -178,33 +219,33 @@ describe("DraftRelay", () => {
     it("broadcasts checking:true to peers and clears with checking:false", async () => {
       const a = await connect();
       const b = await connect();
-      a.subscribe(ROOM, Q);
-      b.subscribe(ROOM, Q);
+      a.watchQuestion(Q);
+      b.watchQuestion(Q);
       await a.waitForType("snapshot");
       await b.waitForType("snapshot");
       await a.waitForType("checking");
       await b.waitForType("checking");
 
-      a.sendChecking(ROOM, Q, true);
+      a.sendChecking(Q, true);
       const on = await b.waitForType("checking");
       expect(on).toMatchObject({ checking: true });
 
-      a.sendChecking(ROOM, Q, false);
+      a.sendChecking(Q, false);
       const off = await b.waitForType("checking");
       expect(off).toMatchObject({ checking: false });
     });
 
-    it("reports checking:true to a newly subscribing client", async () => {
+    it("reports checking:true to a newly watching client", async () => {
       const a = await connect();
-      a.subscribe(ROOM, Q);
+      a.watchQuestion(Q);
       await a.waitForType("snapshot");
       await a.waitForType("checking");
-      a.sendChecking(ROOM, Q, true);
+      a.sendChecking(Q, true);
 
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       const b = await connect();
-      b.subscribe(ROOM, Q);
+      b.watchQuestion(Q);
       await b.waitForType("snapshot");
       const checking = await b.waitForType("checking");
       expect(checking).toMatchObject({ checking: true });
@@ -215,64 +256,79 @@ describe("DraftRelay", () => {
     it("retains the document while at least one subscriber remains", async () => {
       const a = await connect();
       const b = await connect();
-      a.subscribe(ROOM, Q);
-      b.subscribe(ROOM, Q);
+      a.watchQuestion(Q);
+      b.watchQuestion(Q);
       await a.waitForType("snapshot");
       await b.waitForType("snapshot");
-      a.sendUpdate(ROOM, Q, buildInsertUpdate("shared text").update);
+      a.sendUpdate(Q, buildInsertUpdate("shared text").update);
       await b.waitForType("update");
 
       a.close();
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       const c = await connect();
-      c.subscribe(ROOM, Q);
+      c.watchQuestion(Q);
       const snapshot = await c.waitForType("snapshot");
       expect(decodeAnswerText(snapshot.update as string)).toBe("shared text");
     });
 
-    it("preserves the document when a lone client re-subscribes to the same question", async () => {
+    it("preserves the document when a lone client watches the same question again", async () => {
       const a = await connect();
-      a.subscribe(ROOM, Q);
+      a.watchQuestion(Q);
       await a.waitForType("snapshot");
-      a.sendUpdate(ROOM, Q, buildInsertUpdate("keep me").update);
+      a.sendUpdate(Q, buildInsertUpdate("keep me").update);
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      // Re-subscribing to the same question on the same socket must not wipe state.
-      a.subscribe(ROOM, Q);
+      // Watching the same question on the same socket must not wipe state.
+      a.watchQuestion(Q);
       const snapshot = await a.waitForType("snapshot");
       expect(decodeAnswerText(snapshot.update as string)).toBe("keep me");
     });
 
+    it("preserves inactive question drafts while the client remains in the room", async () => {
+      const client = await connect();
+      client.watchQuestion(Q);
+      await client.waitForType("snapshot");
+      client.sendUpdate(Q, buildInsertUpdate("keep across navigation").update);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      client.watchQuestion("practice-1");
+      await client.waitForType("snapshot");
+      client.watchQuestion(Q);
+
+      const snapshot = await client.waitForType("snapshot");
+      expect(decodeAnswerText(snapshot.update as string)).toBe("keep across navigation");
+    });
+
     it("discards the document once the last subscriber leaves", async () => {
       const a = await connect();
-      a.subscribe(ROOM, Q);
+      a.watchQuestion(Q);
       await a.waitForType("snapshot");
-      a.sendUpdate(ROOM, Q, buildInsertUpdate("ephemeral").update);
+      a.sendUpdate(Q, buildInsertUpdate("ephemeral").update);
       await new Promise((resolve) => setTimeout(resolve, 50));
       a.close();
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       const b = await connect();
-      b.subscribe(ROOM, Q);
+      b.watchQuestion(Q);
       const snapshot = await b.waitForType("snapshot");
       expect(decodeAnswerText(snapshot.update as string)).toBe("");
     });
   });
 
-  it("stops delivering updates for a question after re-subscribing to another", async () => {
+  it("stops delivering updates for a question after watching another", async () => {
     const a = await connect();
     const b = await connect();
-    a.subscribe(ROOM, Q);
-    b.subscribe(ROOM, Q);
+    a.watchQuestion(Q);
+    b.watchQuestion(Q);
     await a.waitForType("snapshot");
     await b.waitForType("snapshot");
 
     // B moves to another question.
-    b.subscribe(ROOM, "practice-9");
+    b.watchQuestion("practice-9");
     await b.waitForType("snapshot");
 
-    a.sendUpdate(ROOM, Q, buildInsertUpdate("after switch").update);
+    a.sendUpdate(Q, buildInsertUpdate("after switch").update);
     await b.expectNoMessage((message) => message.type === "update");
   });
 });

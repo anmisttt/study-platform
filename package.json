@@ -1,0 +1,8 @@
+{
+  "name": "study-platform",
+  "private": true,
+  "scripts": {
+    "lint": "npm run lint --prefix frontend && npm run lint --prefix shared && npm run lint --prefix backend",
+    "test": "npm test --prefix frontend && npm test --prefix backend"
+  }
+}

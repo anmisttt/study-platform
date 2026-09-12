@@ -4,17 +4,14 @@ import Timer from "./timer";
 import type { ChapterMeta, RoomDetails } from "@study-platform/shared";
 import {
   createRoomApiPath,
-  roomApiPath,
+  formatQuestionRef,
   roomQuestionCheckApiPath,
 } from "@study-platform/shared";
 import type { ChapterSession, CheckResult, QuestionItem, ResponseEntry } from "./contest-types";
 import { flattenItems } from "../utils/questions";
-import { resolveAnswerInput } from "../utils/draftStorage";
-import { mergeRoomDetailsIntoSession, roomDetailsToChapterSession } from "../utils/room";
+import { mergeRoomDetailsIntoSession } from "../utils/room";
 import { useCollaborativeDraft } from "../hooks/useCollaborativeDraft";
 import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
-
-const ROOM_POLL_INTERVAL_MS = 5000;
 
 type ContestProps = {
   chapterMeta: ChapterMeta | null;
@@ -29,14 +26,10 @@ type ContestProps = {
   onResetProgress: () => void;
 };
 
-type ConflictPayload = {
-  error?: string;
-  room?: RoomDetails;
-};
-
 type CheckResponsePayload = CheckResult & {
   revision?: number;
   error?: string;
+  room?: RoomDetails;
 };
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -93,7 +86,7 @@ function Contest({
   const [isChecking, setIsChecking] = useState<boolean>(false);
   const [roomInput, setRoomInput] = useState<string>(roomId ?? "");
   const [isRoomActionPending, setIsRoomActionPending] = useState<boolean>(false);
-  const [startError, setStartError] = useState<string>("");
+  const [startError, setStartError] = useState<string>(initialError);
   const [isEditingLocally, setIsEditingLocally] = useState<boolean>(true);
   const [timerEpoch, setTimerEpoch] = useState(0);
   const [isCheckPending, setIsCheckPending] = useState(false);
@@ -110,8 +103,20 @@ function Contest({
   const collaborativeDraft = useCollaborativeDraft({
     apiBase,
     roomId,
-    questionId: currentItem?.id ?? null,
+    questionId: questionRef ?? null,
     enabled: isPracticeMode && Boolean(roomId),
+    onRoomSnapshot: (room) => {
+      if (room.roomId !== roomId) {
+        return;
+      }
+      if (room.chapterId !== chapterMeta?.id) {
+        onRoomAccessError("Room is not for this chapter.");
+        return;
+      }
+
+      onSessionChange((session) => mergeRoomDetailsIntoSession(session, room));
+    },
+    onRoomError: onRoomAccessError,
   });
   const {
     isListening,
@@ -134,11 +139,7 @@ function Contest({
       window.alert(message);
     },
   });
-  const answerInput = roomId
-    ? collaborativeDraft.answerInput
-    : currentItem
-      ? resolveAnswerInput(roomId, currentItem.id, chapterSession)
-      : "";
+  const answerInput = collaborativeDraft.answerInput;
   const allAnswered =
     items.length > 0 && items.every((item) => Boolean(chapterSession.responses[item.id]?.result));
 
@@ -160,12 +161,6 @@ function Contest({
   }, [roomId]);
 
   useEffect(() => {
-    if (initialError) {
-      setStartError(initialError);
-    }
-  }, [initialError]);
-
-  useEffect(() => {
     setIsEditingLocally(true);
     setTimerEpoch(0);
   }, [currentItem?.id]);
@@ -183,7 +178,7 @@ function Contest({
     }
   }, [currentItem?.id, collaborativeDraft.isDraftHydrated]);
 
-  // Keep peers on the checking screen after the draft is cleared until room poll
+  // Keep peers on the checking screen after the draft is cleared until the room connection
   // delivers the result (or the check fails and the draft comes back).
   useEffect(() => {
     if (collaborativeDraft.isAnswerChecking) {
@@ -211,30 +206,6 @@ function Contest({
 
   const isCheckInProgress = isChecking || collaborativeDraft.isAnswerChecking || isCheckPending;
 
-  async function fetchRoom(activeRoomId: string): Promise<RoomDetails> {
-    if (!chapterMeta) {
-      throw new Error("Chapter is unavailable.");
-    }
-
-    const res = await fetch(
-      `${apiBase}${roomApiPath(activeRoomId)}?chapterId=${encodeURIComponent(chapterMeta.id)}`,
-    );
-    const payload = (await res.json()) as RoomDetails & { error?: string };
-    if (!res.ok) {
-      throw new Error(payload.error ?? "Failed to load room.");
-    }
-
-    return payload;
-  }
-
-  function applyConflictRoom(payload: ConflictPayload): void {
-    if (!roomId || !payload.room) {
-      return;
-    }
-
-    onSessionChange((session) => mergeRoomDetailsIntoSession(session, payload.room!));
-  }
-
   function openQuestion(index: number): void {
     if (items.length === 0 || !roomId) {
       return;
@@ -246,65 +217,24 @@ function Contest({
     }
   }
 
-  function handleAnswerInputChange(value: string): void {
-    if (!currentItem || !roomId) {
+  function beginPracticeWithRoom(activeRoomId: string): void {
+    if (!chapterMeta) {
       return;
     }
 
-    collaborativeDraft.onAnswerInputChange(value);
-  }
-
-  async function syncRoomDetails(activeRoomId: string, options?: { showLoading?: boolean }): Promise<RoomDetails | null> {
-    if (!chapterMeta) {
-      return null;
+    const firstQuestionRef =
+      chapterMeta.theoryCount > 0
+        ? formatQuestionRef("theory", 0)
+        : chapterMeta.practiceCount > 0
+          ? formatQuestionRef("practice", 0)
+          : null;
+    if (!firstQuestionRef) {
+      setStartError("This chapter has no questions.");
+      return;
     }
 
-    const showLoading = options?.showLoading ?? false;
-    if (showLoading) {
-      onSessionChange((session) => ({
-        ...session,
-        loading: true,
-        error: "",
-      }));
-    }
-
-    try {
-      const payload = await fetchRoom(activeRoomId);
-      onSessionChange((session) => ({
-        ...mergeRoomDetailsIntoSession(session, payload),
-        loading: false,
-        error: "",
-      }));
-      return payload;
-    } catch (error: unknown) {
-      const message = errorMessage(error, "Failed to load room.");
-      if (showLoading) {
-        onSessionChange((session) => ({
-          ...session,
-          loading: false,
-          error: message,
-        }));
-      }
-      return null;
-    }
-  }
-
-  async function beginPracticeWithRoom(activeRoomId: string): Promise<void> {
-    setIsRoomActionPending(true);
     setStartError("");
-    try {
-      const room = await fetchRoom(activeRoomId);
-      const firstItem = flattenItems(roomDetailsToChapterSession(room).details!)[0];
-      if (!firstItem) {
-        throw new Error("This room has no questions.");
-      }
-
-      onQuestionNavigate(firstItem.id, activeRoomId);
-    } catch (error: unknown) {
-      setStartError(errorMessage(error, "Failed to start practicing."));
-    } finally {
-      setIsRoomActionPending(false);
-    }
+    onQuestionNavigate(firstQuestionRef, activeRoomId);
   }
 
   async function generateNewRoom(): Promise<void> {
@@ -325,21 +255,22 @@ function Contest({
         throw new Error(payload.error ?? "Failed to create room.");
       }
 
-      await beginPracticeWithRoom(payload.roomId);
+      beginPracticeWithRoom(payload.roomId);
     } catch (error: unknown) {
       setStartError(errorMessage(error, "Failed to create room."));
+    } finally {
       setIsRoomActionPending(false);
     }
   }
 
-  async function joinExistingRoom(): Promise<void> {
+  function joinExistingRoom(): void {
     const trimmedRoomId = roomInput.trim();
     if (!trimmedRoomId) {
       setStartError("Enter a room ID to join.");
       return;
     }
 
-    await beginPracticeWithRoom(trimmedRoomId);
+    beginPracticeWithRoom(trimmedRoomId);
   }
 
   async function handleCheck(): Promise<void> {
@@ -361,9 +292,11 @@ function Contest({
         body: JSON.stringify({ answer: trimmedAnswer, baseRevision }),
       });
 
-      const payload = (await res.json()) as CheckResponsePayload & ConflictPayload;
+      const payload = (await res.json()) as CheckResponsePayload;
       if (res.status === 409) {
-        applyConflictRoom(payload);
+        if (payload.room) {
+          onSessionChange((session) => mergeRoomDetailsIntoSession(session, payload.room!));
+        }
         throw new Error(payload.error ?? "Question was updated by someone else.");
       }
       if (!res.ok) {
@@ -381,25 +314,20 @@ function Contest({
       };
 
       collaborativeDraft.clearCollaborativeDraft();
-      onSessionChange((session) => {
-        const nextDrafts = { ...session.drafts };
-        delete nextDrafts[currentItem.id];
-        return {
-          ...session,
-          responses: {
-            ...session.responses,
-            [currentItem.id]: {
-              answer: trimmedAnswer,
-              result: checkResult,
-            },
+      onSessionChange((session) => ({
+        ...session,
+        responses: {
+          ...session.responses,
+          [currentItem.id]: {
+            answer: trimmedAnswer,
+            result: checkResult,
           },
-          revisions: {
-            ...session.revisions,
-            [currentItem.id]: nextRevision,
-          },
-          drafts: nextDrafts,
-        };
-      });
+        },
+        revisions: {
+          ...session.revisions,
+          [currentItem.id]: nextRevision,
+        },
+      }));
       setIsEditingLocally(false);
       setIsCheckPending(false);
       collaborativeDraft.setAnswerChecking(false);
@@ -428,36 +356,6 @@ function Contest({
     onResetProgress();
   }
 
-  useEffect(() => {
-    if (!isPracticeMode || !roomId || !chapterMeta || chapterSession.details || chapterSession.loading) {
-      return;
-    }
-
-    void syncRoomDetails(roomId, { showLoading: true });
-  }, [isPracticeMode, roomId, chapterMeta, chapterSession.details, chapterSession.loading]);
-
-  useEffect(() => {
-    if (!isPracticeMode || !roomId || !chapterMeta || !chapterSession.details) {
-      return;
-    }
-
-    const intervalId = window.setInterval(() => {
-      void syncRoomDetails(roomId);
-    }, ROOM_POLL_INTERVAL_MS);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [isPracticeMode, roomId, chapterMeta, chapterSession.details]);
-
-  useEffect(() => {
-    if (!isPracticeMode || !roomId || chapterSession.loading || chapterSession.details || !chapterSession.error) {
-      return;
-    }
-
-    onRoomAccessError(chapterSession.error);
-  }, [isPracticeMode, roomId, chapterSession.loading, chapterSession.details, chapterSession.error, onRoomAccessError]);
-
   // Stop the realtime session when navigating between questions so a late
   // transcript cannot leak into a different question's draft.
   useEffect(() => {
@@ -469,25 +367,20 @@ function Contest({
   }
 
   if (!isPracticeMode) {
-    const isBusy = chapterSession.loading || isRoomActionPending;
-
     return (
       <div className="start-card">
         <h1>{chapterMeta.name}</h1>
         <p>
           {chapterMeta.theoryCount} theory items + {chapterMeta.practiceCount} practice tasks
         </p>
-        {chapterSession.loading && <p className="start-card-status">Loading room...</p>}
-        {(startError || chapterSession.error) && (
-          <p className="error-inline">{startError || chapterSession.error}</p>
-        )}
+        {startError && <p className="error-inline">{startError}</p>}
 
         <div className="start-card-room-panel">
           <form
             className="start-card-room-join-form"
             onSubmit={(event) => {
               event.preventDefault();
-              void joinExistingRoom();
+              joinExistingRoom();
             }}
           >
             <input
@@ -497,14 +390,14 @@ function Contest({
               onChange={(event) => setRoomInput(event.target.value)}
               placeholder="Room ID..."
               maxLength={6}
-              disabled={isBusy}
+              disabled={isRoomActionPending}
               spellCheck={false}
               autoComplete="off"
             />
             <button
               type="submit"
               className="primary-button start-card-button start-card-join"
-              disabled={isBusy}
+              disabled={isRoomActionPending}
             >
               Join room
             </button>
@@ -518,7 +411,7 @@ function Contest({
             onClick={() => {
               void generateNewRoom();
             }}
-            disabled={isBusy}
+            disabled={isRoomActionPending}
           >
             Generate new room
           </button>
@@ -527,12 +420,8 @@ function Contest({
     );
   }
 
-  if (chapterSession.loading || (!chapterSession.details && !chapterSession.error)) {
-    return <div className="screen-message">Loading room questions...</div>;
-  }
-
   if (!chapterSession.details) {
-    return null;
+    return <div className="screen-message">Loading room questions...</div>;
   }
 
   if (!currentItem) {
@@ -623,7 +512,7 @@ function Contest({
           isTranscribing={isTranscribing}
           answer={questionAnswer}
           answerTextareaRef={roomId ? collaborativeDraft.textareaRef : undefined}
-          onAnswerInputChange={handleAnswerInputChange}
+          onAnswerInputChange={collaborativeDraft.onAnswerInputChange}
           onVoiceInput={toggleVoiceRecording}
           onCheck={handleCheck}
           onTryAgain={handleTryAgain}

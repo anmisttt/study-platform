@@ -4,19 +4,20 @@ import {
   DRAFT_YTEXT_NAME,
   type DraftServerMessage,
   type DraftSnapshotMessage,
+  type RoomDetails,
 } from "@study-platform/shared";
 import {
   clearDraftUpdate,
   loadDraftUpdate,
   saveDraftUpdate,
 } from "../utils/draftStorage";
-import { draftWebSocketUrl } from "../utils/draftWebSocketUrl";
+import { roomsWebSocketUrl } from "../utils/roomsWebSocketUrl";
 import { updateYText } from "../utils/yTextBinding";
 
 const DRAFT_SEND_DEBOUNCE_MS = 1000;
 const WS_RECONNECT_DELAY_MS = 1000;
 
-function closeDraftWebSocket(ws: WebSocket): void {
+function closeRoomWebSocket(ws: WebSocket): void {
   ws.onmessage = null;
   ws.onerror = null;
   ws.onclose = null;
@@ -58,9 +59,25 @@ export function parseServerMessage(raw: string): DraftServerMessage | null {
     }
 
     const message = parsed as Record<string, unknown>;
+    if (message.type === "room_snapshot") {
+      const room = message.room;
+      if (
+        !room ||
+        typeof room !== "object" ||
+        Array.isArray(room) ||
+        typeof (room as Record<string, unknown>).roomId !== "string" ||
+        typeof (room as Record<string, unknown>).chapterId !== "string" ||
+        !Array.isArray((room as Record<string, unknown>).theory) ||
+        !Array.isArray((room as Record<string, unknown>).practice)
+      ) {
+        return null;
+      }
+
+      return message as DraftServerMessage;
+    }
+
     if (
       (message.type === "snapshot" || message.type === "update") &&
-      typeof message.roomId === "string" &&
       typeof message.questionId === "string" &&
       typeof message.update === "string"
     ) {
@@ -69,7 +86,6 @@ export function parseServerMessage(raw: string): DraftServerMessage | null {
 
     if (
       message.type === "checking" &&
-      typeof message.roomId === "string" &&
       typeof message.questionId === "string" &&
       typeof message.checking === "boolean"
     ) {
@@ -92,6 +108,8 @@ type UseCollaborativeDraftOptions = {
   roomId: string | null;
   questionId: string | null;
   enabled: boolean;
+  onRoomSnapshot?: (room: RoomDetails) => void;
+  onRoomError?: (message: string) => void;
 };
 
 type UseCollaborativeDraftResult = {
@@ -111,6 +129,8 @@ export function useCollaborativeDraft({
   roomId,
   questionId,
   enabled,
+  onRoomSnapshot,
+  onRoomError,
 }: UseCollaborativeDraftOptions): UseCollaborativeDraftResult {
   const [answerInput, setAnswerInput] = useState("");
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
@@ -133,9 +153,16 @@ export function useCollaborativeDraft({
   const snapshotGenerationRef = useRef(0);
   const roomIdRef = useRef(roomId);
   const questionIdRef = useRef(questionId);
+  const onRoomSnapshotRef = useRef(onRoomSnapshot);
+  const onRoomErrorRef = useRef(onRoomError);
 
   roomIdRef.current = roomId;
   questionIdRef.current = questionId;
+
+  useEffect(() => {
+    onRoomSnapshotRef.current = onRoomSnapshot;
+    onRoomErrorRef.current = onRoomError;
+  }, [onRoomError, onRoomSnapshot]);
 
   const clearDebounceTimer = useCallback(() => {
     if (debounceTimerRef.current !== null) {
@@ -195,7 +222,6 @@ export function useCollaborativeDraft({
     ws.send(
       JSON.stringify({
         type: "update",
-        roomId: activeRoomId,
         questionId: activeQuestionId,
         update: encodeUpdateBase64(update),
       }),
@@ -283,7 +309,7 @@ export function useCollaborativeDraft({
         return;
       }
 
-      if (message.roomId !== activeRoomId || message.questionId !== activeQuestionId) {
+      if (message.questionId !== activeQuestionId) {
         return;
       }
 
@@ -363,7 +389,7 @@ export function useCollaborativeDraft({
     [bindDocPersistence, clearDebounceTimer, detachDocPersistence, flushPendingUpdate, syncAnswerFromYText],
   );
 
-  const subscribeToQuestion = useCallback(
+  const watchQuestion = useCallback(
     (activeRoomId: string, activeQuestionId: string) => {
       if (activeQuestionRef.current !== activeQuestionId) {
         clearDebounceTimer();
@@ -395,8 +421,7 @@ export function useCollaborativeDraft({
       snapshotReceivedRef.current = false;
       ws.send(
         JSON.stringify({
-          type: "subscribe",
-          roomId: activeRoomId,
+          type: "watch_question",
           questionId: activeQuestionId,
         }),
       );
@@ -407,6 +432,19 @@ export function useCollaborativeDraft({
   const handleServerMessage = useCallback(
     (message: DraftServerMessage) => {
       const activeRoomId = roomIdRef.current;
+
+      if (message.type === "error") {
+        onRoomErrorRef.current?.(message.message);
+        return;
+      }
+
+      if (message.type === "room_snapshot") {
+        if (message.room.roomId === activeRoomId) {
+          onRoomSnapshotRef.current?.(message.room);
+        }
+        return;
+      }
+
       const activeQuestionId = activeQuestionRef.current;
       const doc = docRef.current;
       const ytext = ytextRef.current;
@@ -415,11 +453,7 @@ export function useCollaborativeDraft({
         return;
       }
 
-      if (message.type === "error") {
-        return;
-      }
-
-      if (message.roomId !== activeRoomId || message.questionId !== activeQuestionId) {
+      if (message.questionId !== activeQuestionId) {
         return;
       }
 
@@ -448,7 +482,7 @@ export function useCollaborativeDraft({
       clearDebounceTimer();
       detachDocPersistence();
       if (wsRef.current) {
-        closeDraftWebSocket(wsRef.current);
+        closeRoomWebSocket(wsRef.current);
         wsRef.current = null;
       }
       activeQuestionRef.current = null;
@@ -472,7 +506,7 @@ export function useCollaborativeDraft({
         return;
       }
 
-      const ws = new WebSocket(draftWebSocketUrl(apiBase));
+      const ws = new WebSocket(roomsWebSocketUrl(apiBase, roomId));
       activeWs = ws;
       wsRef.current = ws;
 
@@ -483,7 +517,7 @@ export function useCollaborativeDraft({
         }
 
         if (questionIdRef.current) {
-          subscribeToQuestion(roomId, questionIdRef.current);
+          watchQuestion(roomId, questionIdRef.current);
         }
       };
 
@@ -530,11 +564,12 @@ export function useCollaborativeDraft({
       clearDebounceTimer();
       flushPendingUpdate();
       if (activeWs) {
-        closeDraftWebSocket(activeWs);
+        closeRoomWebSocket(activeWs);
       }
       if (wsRef.current === activeWs) {
         wsRef.current = null;
       }
+      activeQuestionRef.current = null;
       snapshotReceivedRef.current = false;
     };
   }, [
@@ -545,7 +580,7 @@ export function useCollaborativeDraft({
     flushPendingUpdate,
     handleServerMessage,
     roomId,
-    subscribeToQuestion,
+    watchQuestion,
   ]);
 
   useEffect(() => {
@@ -553,8 +588,8 @@ export function useCollaborativeDraft({
       return;
     }
 
-    subscribeToQuestion(roomId, questionId);
-  }, [enabled, questionId, roomId, subscribeToQuestion]);
+    watchQuestion(roomId, questionId);
+  }, [enabled, questionId, roomId, watchQuestion]);
 
   // Restore the caret after a remote update re-renders the textarea. The
   // relative positions resolve to the correct absolute offsets even if the
@@ -671,7 +706,6 @@ export function useCollaborativeDraft({
     ws.send(
       JSON.stringify({
         type: "checking",
-        roomId: activeRoomId,
         questionId: activeQuestionId,
         checking,
       }),

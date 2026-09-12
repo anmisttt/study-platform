@@ -1,30 +1,33 @@
+import type { RoomDetails } from "./api";
+
 export const DRAFT_YTEXT_NAME = "answer";
 
-export type DraftSubscribeMessage = {
-  type: "subscribe";
-  roomId: string;
+export type QuestionWatchMessage = {
+  type: "watch_question";
   questionId: string;
 };
 
 export type DraftUpdateMessage = {
   type: "update";
-  roomId: string;
   questionId: string;
   update: string;
 };
 
 export type DraftSnapshotMessage = {
   type: "snapshot";
-  roomId: string;
   questionId: string;
   update: string;
 };
 
 export type DraftCheckingMessage = {
   type: "checking";
-  roomId: string;
   questionId: string;
   checking: boolean;
+};
+
+export type RoomSnapshotMessage = {
+  type: "room_snapshot";
+  room: RoomDetails;
 };
 
 export type DraftErrorMessage = {
@@ -32,9 +35,13 @@ export type DraftErrorMessage = {
   message: string;
 };
 
-export type DraftClientMessage = DraftSubscribeMessage | DraftUpdateMessage | DraftCheckingMessage;
+export type DraftClientMessage =
+  | QuestionWatchMessage
+  | DraftUpdateMessage
+  | DraftCheckingMessage;
 
 export type DraftServerMessage =
+  | RoomSnapshotMessage
   | DraftSnapshotMessage
   | DraftUpdateMessage
   | DraftCheckingMessage

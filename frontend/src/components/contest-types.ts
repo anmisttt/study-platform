@@ -29,20 +29,14 @@ export type ResponseEntry = {
 
 export type ChapterSession = {
   details: Chapter | null;
-  loading: boolean;
-  error: string;
   responses: Record<string, ResponseEntry>;
-  drafts: Record<string, string>;
   revisions: Record<string, number>;
 };
 
 export function createInitialChapterSession(): ChapterSession {
   return {
     details: null,
-    loading: false,
-    error: "",
     responses: {},
-    drafts: {},
     revisions: {},
   };
 }

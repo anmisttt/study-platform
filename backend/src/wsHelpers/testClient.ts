@@ -2,22 +2,27 @@ import { AddressInfo } from "node:net";
 import { createServer, type Server } from "node:http";
 import { WebSocket } from "ws";
 import * as Y from "yjs";
-import { DraftRelay } from "./draftRelay";
+import {
+  roomWebSocketPath,
+  roomsWebSocketBasePath,
+  type RoomDetails,
+} from "@study-platform/shared";
+import { RoomsWebSocketServer } from "../roomsWebSocketServer";
 import { encodeUpdateBase64 } from "./wireCodec";
-
-const DRAFTS_PATH = "/drafts/ws";
 
 export type ParsedMessage = Record<string, unknown>;
 
-export async function startRelayServer(): Promise<{
+export async function startRoomsWebSocketServer(
+  loadRoom?: (roomId: string) => RoomDetails,
+): Promise<{
   server: Server;
-  relay: DraftRelay;
+  webSocketServer: RoomsWebSocketServer;
   port: number;
   close: () => Promise<void>;
 }> {
-  const relay = new DraftRelay();
+  const webSocketServer = new RoomsWebSocketServer(loadRoom);
   const server = createServer();
-  relay.attach(server, DRAFTS_PATH);
+  webSocketServer.attach(server, roomsWebSocketBasePath());
 
   await new Promise<void>((resolve) => {
     server.listen(0, resolve);
@@ -27,7 +32,7 @@ export async function startRelayServer(): Promise<{
 
   return {
     server,
-    relay,
+    webSocketServer,
     port,
     close: () =>
       new Promise<void>((resolve, reject) => {
@@ -47,8 +52,8 @@ export class TestClient {
   private readonly consumed = new Set<number>();
   private readonly openPromise: Promise<void>;
 
-  constructor(port: number) {
-    this.ws = new WebSocket(`ws://localhost:${port}${DRAFTS_PATH}`);
+  constructor(port: number, roomId: string) {
+    this.ws = new WebSocket(`ws://localhost:${port}${roomWebSocketPath(roomId)}`);
     this.openPromise = new Promise<void>((resolve, reject) => {
       this.ws.on("open", resolve);
       this.ws.on("error", reject);
@@ -79,16 +84,16 @@ export class TestClient {
     this.ws.send(JSON.stringify(message));
   }
 
-  subscribe(roomId: string, questionId: string): void {
-    this.send({ type: "subscribe", roomId, questionId });
+  watchQuestion(questionId: string): void {
+    this.send({ type: "watch_question", questionId });
   }
 
-  sendUpdate(roomId: string, questionId: string, update: string): void {
-    this.send({ type: "update", roomId, questionId, update });
+  sendUpdate(questionId: string, update: string): void {
+    this.send({ type: "update", questionId, update });
   }
 
-  sendChecking(roomId: string, questionId: string, checking: boolean): void {
-    this.send({ type: "checking", roomId, questionId, checking });
+  sendChecking(questionId: string, checking: boolean): void {
+    this.send({ type: "checking", questionId, checking });
   }
 
   async waitFor(
@@ -135,7 +140,7 @@ export class TestClient {
 
   close(): void {
     this.ws.removeAllListeners();
-    this.ws.close();
+    this.ws.terminate();
   }
 }
 

@@ -1,7 +1,7 @@
-import { roomDraftsWebSocketPath } from "@study-platform/shared";
+import { roomWebSocketPath } from "@study-platform/shared";
 
-export function draftWebSocketUrl(apiBase: string): string {
-  const wsPath = roomDraftsWebSocketPath();
+export function roomsWebSocketUrl(apiBase: string, roomId: string): string {
+  const wsPath = roomWebSocketPath(roomId);
 
   if (apiBase.startsWith("http://") || apiBase.startsWith("https://")) {
     const url = new URL(apiBase);

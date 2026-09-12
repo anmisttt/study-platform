@@ -1,5 +1,6 @@
 import { act, render } from "@testing-library/react";
 import * as Y from "yjs";
+import type { RoomDetails } from "@study-platform/shared";
 import {
   useCollaborativeDraft,
 } from "../hooks/useCollaborativeDraft";
@@ -12,6 +13,8 @@ type HarnessProps = {
   roomId: string | null;
   questionId: string | null;
   enabled: boolean;
+  onRoomSnapshot?: (room: RoomDetails) => void;
+  onRoomError?: (message: string) => void;
 };
 
 export const API_BASE = "http://localhost/api";
@@ -127,9 +130,8 @@ export function renderDraft(initial: Partial<HarnessProps> = {}): Harness {
 /** Open the mock socket and deliver the initial snapshot for a question. */
 export async function connectAndSnapshot(
   harness: Harness,
-  options: { roomId?: string; questionId?: string; snapshot?: string } = {},
+  options: { questionId?: string; snapshot?: string } = {},
 ): Promise<void> {
-  const roomId = options.roomId ?? "room1";
   const questionId = options.questionId ?? "practice-0";
   const snapshot = options.snapshot ?? "";
 
@@ -140,7 +142,7 @@ export async function connectAndSnapshot(
 
   await act(async () => {
     harness.ws().simulateMessage(
-      JSON.stringify({ type: "snapshot", roomId, questionId, update: snapshot }),
+      JSON.stringify({ type: "snapshot", questionId, update: snapshot }),
     );
     await Promise.resolve();
   });
@@ -152,14 +154,13 @@ export async function connectAndSnapshot(
 /** Deliver a `snapshot` message without re-opening the socket. */
 export async function deliverSnapshot(
   harness: Harness,
-  options: { roomId?: string; questionId?: string; snapshot?: string } = {},
+  options: { questionId?: string; snapshot?: string } = {},
 ): Promise<void> {
-  const roomId = options.roomId ?? "room1";
   const questionId = options.questionId ?? "practice-0";
   const snapshot = options.snapshot ?? "";
   await act(async () => {
     harness.ws().simulateMessage(
-      JSON.stringify({ type: "snapshot", roomId, questionId, update: snapshot }),
+      JSON.stringify({ type: "snapshot", questionId, update: snapshot }),
     );
     await Promise.resolve();
   });
@@ -170,12 +171,11 @@ export async function deliverSnapshot(
 export async function deliverUpdate(
   harness: Harness,
   update: string,
-  options: { roomId?: string; questionId?: string } = {},
+  options: { questionId?: string } = {},
 ): Promise<void> {
-  const roomId = options.roomId ?? "room1";
   const questionId = options.questionId ?? "practice-0";
   await act(async () => {
-    harness.ws().simulateMessage(JSON.stringify({ type: "update", roomId, questionId, update }));
+    harness.ws().simulateMessage(JSON.stringify({ type: "update", questionId, update }));
     await Promise.resolve();
   });
 }

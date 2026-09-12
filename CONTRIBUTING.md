@@ -4,7 +4,7 @@
 
 - `shared` - TypeScript types and route helpers shared by frontend and backend (`@study-platform/shared`)
 - `frontend` - React UI with chapter list, practice flow, collaborative drafts, voice input, answer check, and score (see `frontend/README.md`)
-- `backend` - Express API: chapters, rooms, LLM answer grading, audio transcription, and a WebSocket draft relay
+- `backend` - Express API: chapters, rooms, LLM answer grading, audio transcription, and a room WebSocket server
 
 ## Run locally
 
@@ -71,11 +71,12 @@ Then open `http://localhost:5173`.
 - `GET /health`
 - `GET /chapters` - chapter list with theory/practice counts
 - `POST /rooms` with `{ "chapterId": "..." }` - create a room for a chapter, returns `{ roomId }`
-- `GET /rooms/:roomId?chapterId=...` - room details (chapter content + saved answers)
 - `POST /rooms/:roomId/questions/theory/:questionId/check` with `{ "answer": "...", "baseRevision": <n> }`
 - `POST /rooms/:roomId/questions/practice/:questionId/check` with `{ "answer": "...", "baseRevision": <n> }`
 - `POST /transcribe` - multipart form with an `audio` file, returns `{ text }`
-- `GET /drafts/ws` (WebSocket) - Yjs draft relay for collaborative answers
+- `WS /ws/rooms/:roomId` - room-scoped connection for room snapshots,
+  checked-answer updates, checking state, and question-scoped Yjs drafts. Send
+  `watch_question` whenever the active question changes.
 
 Check responses are produced by OpenAI grading and include `rating`, `comment`, and the saved `revision`.
 

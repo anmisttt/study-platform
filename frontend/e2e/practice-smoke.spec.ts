@@ -39,7 +39,7 @@ async function fulfillJson(route: Route, body: unknown, status = 200): Promise<v
 }
 
 async function mockBackend(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+  await page.addInitScript((room) => {
     class MockWebSocket {
       static CONNECTING = 0;
       static OPEN = 1;
@@ -50,27 +50,39 @@ async function mockBackend(page: Page): Promise<void> {
       onmessage: ((event: MessageEvent) => void) | null = null;
       onerror: ((event: Event) => void) | null = null;
       onclose: ((event: CloseEvent) => void) | null = null;
+      private roomId: string | null = null;
 
-      constructor(_url: string) {
+      constructor(url: string | URL) {
+        const roomSegment = new URL(String(url), window.location.href).pathname.split("/").pop();
+        this.roomId = roomSegment ? decodeURIComponent(roomSegment) : null;
         queueMicrotask(() => {
           this.readyState = MockWebSocket.OPEN;
           this.onopen?.(new Event("open"));
+
+          if (this.roomId) {
+            this.onmessage?.(
+              new MessageEvent("message", {
+                data: JSON.stringify({
+                  type: "room_snapshot",
+                  room: { ...room, roomId: this.roomId },
+                }),
+              }),
+            );
+          }
         });
       }
 
       send(data: string) {
         const message = JSON.parse(data) as {
           type?: string;
-          roomId?: string;
           questionId?: string;
         };
-        if (message.type === "subscribe" && message.roomId && message.questionId) {
+        if (message.type === "watch_question" && this.roomId && message.questionId) {
           queueMicrotask(() => {
             this.onmessage?.(
               new MessageEvent("message", {
                 data: JSON.stringify({
                   type: "snapshot",
-                  roomId: message.roomId,
                   questionId: message.questionId,
                   update: "",
                 }),
@@ -91,7 +103,7 @@ async function mockBackend(page: Page): Promise<void> {
       writable: true,
       value: MockWebSocket,
     });
-  });
+  }, roomDetails);
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -105,11 +117,6 @@ async function mockBackend(page: Page): Promise<void> {
 
     if (request.method() === "POST" && path === "/rooms") {
       await fulfillJson(route, { roomId: "ABC123" });
-      return;
-    }
-
-    if (request.method() === "GET" && path === "/rooms/ABC123") {
-      await fulfillJson(route, roomDetails);
       return;
     }
 

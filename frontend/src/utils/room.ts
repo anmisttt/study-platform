@@ -2,9 +2,10 @@ import type { Chapter, RoomDetails } from "@study-platform/shared";
 import { formatQuestionRef } from "@study-platform/shared";
 import type { ChapterSession, ResponseEntry } from "../components/contest-types";
 
-export function roomDetailsToChapterSession(
+export function mergeRoomDetailsIntoSession(
+  session: ChapterSession,
   data: RoomDetails,
-): Pick<ChapterSession, "details" | "responses" | "revisions"> {
+): ChapterSession {
   const details: Chapter = {
     id: data.chapterId,
     number: data.number,
@@ -48,19 +49,10 @@ export function roomDetailsToChapterSession(
     }
   });
 
-  return { details, responses, revisions };
-}
-
-export function mergeRoomDetailsIntoSession(
-  session: ChapterSession,
-  data: RoomDetails,
-): ChapterSession {
-  const mapped = roomDetailsToChapterSession(data);
-
   return {
     ...session,
-    details: mapped.details,
-    responses: mapped.responses,
-    revisions: mapped.revisions,
+    details,
+    responses,
+    revisions,
   };
 }

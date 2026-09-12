@@ -40,9 +40,3 @@ export function getRoomDetails(roomId: string | null, roomsDb: RoomsDb): RoomDet
     practice: mergePracticeWithAnswers(chapter.practice, practiceAnswers),
   };
 }
-
-export function assertRoomChapter(room: RoomDetails, chapterId: string | null): void {
-  if (chapterId && room.chapterId !== chapterId) {
-    throw new UserError("Room is not for this chapter.");
-  }
-}

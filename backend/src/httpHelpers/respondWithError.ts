@@ -30,7 +30,6 @@ export function respondWithError(
     return;
   }
 
-  // eslint-disable-next-line no-console
   console.error(error);
   res.status(500).json({ error: fallbackMessage });
 }

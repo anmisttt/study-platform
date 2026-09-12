@@ -2,17 +2,17 @@ import cors, { type CorsOptions } from "cors";
 import dotenv from "dotenv";
 import express, { Request, Response } from "express";
 import { createServer } from "node:http";
-import { realtimeTranscriptionTokenPath, roomDraftsWebSocketPath } from "@study-platform/shared";
+import { realtimeTranscriptionTokenPath, roomsWebSocketBasePath } from "@study-platform/shared";
 import { chapters, getChapterById } from "./chapters";
-import { DraftRelay } from "./drafts/draftRelay";
-import { assertRoomChapter, getRoomDetails } from "./db/roomContext";
+import { RoomsWebSocketServer } from "./roomsWebSocketServer";
+import { getRoomDetails } from "./db/roomContext";
 import { RoomsDb } from "./db/roomsDb";
 import { ConflictError, NotFoundError } from "./errors";
-import { resolveChapter } from "./http/chapterContext";
-import { readParam, readQueryParam } from "./http/params";
-import { resolveChapterQuestion } from "./http/resolveChapterQuestion";
-import { respondWithError } from "./http/respondWithError";
-import { ensureAnswer, ensureBaseRevision } from "./http/validation";
+import { resolveChapter } from "./httpHelpers/chapterContext";
+import { readParam } from "./httpHelpers/params";
+import { resolveChapterQuestion } from "./httpHelpers/resolveChapterQuestion";
+import { respondWithError } from "./httpHelpers/respondWithError";
+import { ensureAnswer, ensureBaseRevision } from "./httpHelpers/validation";
 import { Tutor } from "./services/tutor";
 import { loadSystemPrompt } from "./prompts/loadSystemPrompt";
 import { userPromptForItem } from "./prompts/user-prompt";
@@ -32,6 +32,7 @@ const PORT = Number(process.env.PORT) || 3001;
 const HOST = process.env.HOST ?? "127.0.0.1";
 const roomsDb = new RoomsDb();
 roomsDb.createRoomsTable();
+const roomsWebSocketServer = new RoomsWebSocketServer((roomId) => getRoomDetails(roomId, roomsDb));
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5173",
@@ -75,16 +76,6 @@ app.get("/chapters", (_req: Request, res: Response) => {
   res.json(payload);
 });
 
-app.get("/rooms/:roomId", (req: Request, res: Response): void => {
-  try {
-    const room = getRoomDetails(readParam(req.params.roomId), roomsDb);
-    assertRoomChapter(room, readQueryParam(req.query.chapterId));
-    res.json(room);
-  } catch (error: unknown) {
-    respondWithError(res, error);
-  }
-});
-
 app.post("/rooms/:roomId/questions/:questionId/check", async (req: Request, res: Response): Promise<void> => {
   const roomId = readParam(req.params.roomId);
 
@@ -125,6 +116,7 @@ app.post("/rooms/:roomId/questions/:questionId/check", async (req: Request, res:
       baseRevision,
     });
 
+    roomsWebSocketServer.broadcastRoomSnapshot(getRoomDetails(room.roomId, roomsDb));
     res.json({ ...result, revision });
   } catch (error: unknown) {
     respondWithError(res, error, "Failed to evaluate answer.", {
@@ -170,11 +162,9 @@ app.post("/rooms", (req: Request, res: Response): void => {
   }
 });
 
-const draftRelay = new DraftRelay();
 const httpServer = createServer(app);
-draftRelay.attach(httpServer, roomDraftsWebSocketPath());
+roomsWebSocketServer.attach(httpServer, roomsWebSocketBasePath());
 
 httpServer.listen(PORT, HOST, () => {
-  // eslint-disable-next-line no-console
   console.log(`Backend server running on http://${HOST}:${PORT}`);
 });

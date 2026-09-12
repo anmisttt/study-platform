@@ -107,9 +107,9 @@ server {
     try_files \$uri /index.html;
   }
 
-  location /api/drafts/ws {
+  location /api/ws/rooms/ {
     limit_conn ws_per_ip ${NGINX_WS_CONN_LIMIT};
-    proxy_pass http://127.0.0.1:${API_PORT}/drafts/ws;
+    proxy_pass http://127.0.0.1:${API_PORT}/ws/rooms/;
     proxy_http_version 1.1;
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection "upgrade";
@@ -151,9 +151,9 @@ server {
     try_files \$uri /index.html;
   }
 
-  location /api/drafts/ws {
+  location /api/ws/rooms/ {
     limit_conn ws_per_ip ${NGINX_WS_CONN_LIMIT};
-    proxy_pass http://127.0.0.1:${API_PORT}/drafts/ws;
+    proxy_pass http://127.0.0.1:${API_PORT}/ws/rooms/;
     proxy_http_version 1.1;
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection "upgrade";

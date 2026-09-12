@@ -5,6 +5,8 @@ import App from "./App";
 import { chapterMeta, roomDetails } from "./test/fixtures";
 import { chapterOverviewPath, chapterQuestionPath, chaptersPath } from "./routes/paths";
 
+let webSocketCount = 0;
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -22,6 +24,7 @@ function renderApp(initialEntry: string) {
 
 describe("App routing", () => {
   beforeEach(() => {
+    webSocketCount = 0;
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
@@ -44,21 +47,49 @@ describe("App routing", () => {
       onmessage: ((event: MessageEvent) => void) | null = null;
       onerror: ((event: Event) => void) | null = null;
       onclose: ((event: CloseEvent) => void) | null = null;
-      constructor(_url: string) {
+      private roomId: string | null = null;
+      constructor(url: string | URL) {
+        const roomSegment = new URL(String(url), window.location.href).pathname.split("/").pop();
+        this.roomId = roomSegment ? decodeURIComponent(roomSegment) : null;
+        webSocketCount += 1;
         queueMicrotask(() => {
           this.readyState = MockWebSocket.OPEN;
           this.onopen?.(new Event("open"));
+
+          if (this.roomId === "MISSING") {
+            this.onmessage?.(
+              new MessageEvent("message", {
+                data: JSON.stringify({ type: "error", message: "Room not found." }),
+              }),
+            );
+            return;
+          }
+
+          if (this.roomId) {
+            this.onmessage?.(
+              new MessageEvent("message", {
+                data: JSON.stringify({
+                  type: "room_snapshot",
+                  room: { ...roomDetails, roomId: this.roomId },
+                }),
+              }),
+            );
+          }
         });
       }
       send(data: string) {
-        const message = JSON.parse(data) as { type?: string; roomId?: string; questionId?: string };
-        if (message.type === "subscribe" && message.roomId && message.questionId) {
+        const message = JSON.parse(data) as { type?: string; questionId?: string };
+        if (
+          message.type === "watch_question" &&
+          this.roomId &&
+          this.roomId !== "MISSING" &&
+          message.questionId
+        ) {
           queueMicrotask(() => {
             this.onmessage?.(
               new MessageEvent("message", {
                 data: JSON.stringify({
                   type: "snapshot",
-                  roomId: message.roomId,
                   questionId: message.questionId,
                   update: "",
                 }),
@@ -99,18 +130,6 @@ describe("App routing", () => {
   });
 
   it("keeps roomId on question deep links and renders the practice shell", async () => {
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes("/chapters") && !url.includes("/rooms")) {
-        return Promise.resolve(jsonResponse([chapterMeta]));
-      }
-      if (url.includes("/rooms/ABC123")) {
-        return Promise.resolve(jsonResponse(roomDetails));
-      }
-      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
-    });
-
     renderApp(chapterQuestionPath(chapterMeta.number, "theory-0", "ABC123"));
 
     expect(await screen.findByText("Theory 1")).toBeTruthy();
@@ -119,12 +138,23 @@ describe("App routing", () => {
     const roomLabels = screen.getAllByText("Room ID:");
     expect(roomLabels.length).toBeGreaterThan(0);
     expect(screen.getAllByText("ABC123").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+    expect(await screen.findByText("Practice 1")).toBeTruthy();
+    expect(webSocketCount).toBe(1);
   });
 
   it("redirects practice routes without a roomId back to overview with an error", async () => {
     renderApp(chapterQuestionPath(chapterMeta.number, "theory-0"));
 
     expect(await screen.findByText("A room ID is required to practice.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Generate new room" })).toBeTruthy();
+  });
+
+  it("reports room connection errors and returns to the overview", async () => {
+    renderApp(chapterQuestionPath(chapterMeta.number, "theory-0", "MISSING"));
+
+    expect(await screen.findByText("Room not found.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Generate new room" })).toBeTruthy();
   });
 
@@ -137,9 +167,6 @@ describe("App routing", () => {
       }
       if (url.endsWith("/rooms") && init?.method === "POST") {
         return Promise.resolve(jsonResponse({ roomId: "ABC123" }));
-      }
-      if (url.includes("/rooms/ABC123")) {
-        return Promise.resolve(jsonResponse(roomDetails));
       }
       return Promise.reject(new Error(`Unexpected fetch: ${url}`));
     });
@@ -154,18 +181,6 @@ describe("App routing", () => {
   });
 
   it("redirects unknown question refs back to the chapter overview", async () => {
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes("/chapters") && !url.includes("/rooms")) {
-        return Promise.resolve(jsonResponse([chapterMeta]));
-      }
-      if (url.includes("/rooms/ABC123")) {
-        return Promise.resolve(jsonResponse(roomDetails));
-      }
-      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
-    });
-
     renderApp(chapterQuestionPath(chapterMeta.number, "theory-99", "ABC123"));
 
     await waitFor(() => {
@@ -175,18 +190,6 @@ describe("App routing", () => {
   });
 
   it("redirects legacy chapter id URLs to chapter number URLs", async () => {
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes("/chapters") && !url.includes("/rooms")) {
-        return Promise.resolve(jsonResponse([chapterMeta]));
-      }
-      if (url.includes("/rooms/ABC123")) {
-        return Promise.resolve(jsonResponse(roomDetails));
-      }
-      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
-    });
-
     renderApp(`/chapters/${chapterMeta.id}/questions/theory-0?roomId=ABC123`);
 
     expect(await screen.findByText("Theory 1")).toBeTruthy();

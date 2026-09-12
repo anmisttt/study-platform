@@ -200,7 +200,7 @@ function ChapterQuestionPage({ chapters, roomSessions, roomId, onSessionChange, 
 
   return (
     <Contest
-      key={`${roomId}-${questionRef}`}
+      key={roomId}
       chapterMeta={chapterMeta}
       chapterSession={chapterSession}
       apiBase={API_BASE}

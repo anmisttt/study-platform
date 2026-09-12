@@ -16,10 +16,6 @@ export function parseQuestionRef(ref: string): { type: QuestionType; index: numb
   };
 }
 
-export function roomApiPath(roomId: string): string {
-  return `/rooms/${roomId}`;
-}
-
 export function roomQuestionCheckApiPath(roomId: string, questionRef: string): string {
   return `/rooms/${roomId}/questions/${questionRef}/check`;
 }
@@ -28,8 +24,12 @@ export function createRoomApiPath(): string {
   return "/rooms";
 }
 
-export function roomDraftsWebSocketPath(): string {
-  return "/drafts/ws";
+export function roomsWebSocketBasePath(): string {
+  return "/ws/rooms";
+}
+
+export function roomWebSocketPath(roomId: string): string {
+  return `${roomsWebSocketBasePath()}/${encodeURIComponent(roomId)}`;
 }
 
 export function realtimeTranscriptionTokenPath(): string {

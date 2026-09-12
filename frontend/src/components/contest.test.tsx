@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { useRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Contest from "./contest";
+import type { RoomDetails } from "@study-platform/shared";
 import type { ChapterSession } from "./contest-types";
 import { createInitialChapterSession } from "./contest-types";
 import {
@@ -29,6 +30,14 @@ const draftApi = vi.hoisted(() => ({
   clearLocalAnswerChecking: vi.fn(() => {
     draftApi.isAnswerChecking = false;
   }),
+  onRoomSnapshot: undefined as ((room: RoomDetails) => void) | undefined,
+  onRoomError: undefined as ((message: string) => void) | undefined,
+  emitRoomSnapshot(room: RoomDetails) {
+    draftApi.onRoomSnapshot?.(room);
+  },
+  emitRoomError(message: string) {
+    draftApi.onRoomError?.(message);
+  },
   reset() {
     draftApi.answerInput = "";
     draftApi.isDraftHydrated = true;
@@ -38,6 +47,8 @@ const draftApi = vi.hoisted(() => ({
     draftApi.clearCollaborativeDraft.mockClear();
     draftApi.setAnswerChecking.mockClear();
     draftApi.clearLocalAnswerChecking.mockClear();
+    draftApi.onRoomSnapshot = undefined;
+    draftApi.onRoomError = undefined;
   },
 }));
 
@@ -51,7 +62,12 @@ const voiceApi = vi.hoisted(() => ({
 }));
 
 vi.mock("../hooks/useCollaborativeDraft", () => ({
-  useCollaborativeDraft: () => {
+  useCollaborativeDraft: (options: {
+    onRoomSnapshot?: (room: RoomDetails) => void;
+    onRoomError?: (message: string) => void;
+  }) => {
+    draftApi.onRoomSnapshot = options.onRoomSnapshot;
+    draftApi.onRoomError = options.onRoomError;
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     return {
       get answerInput() {
@@ -175,9 +191,7 @@ describe("Contest", () => {
 
   it("creates a room and navigates to the first question", async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock
-      .mockResolvedValueOnce(jsonResponse({ roomId: "ABC123" }))
-      .mockResolvedValueOnce(jsonResponse(roomDetails));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ roomId: "ABC123" }));
 
     const { onQuestionNavigate } = renderContest();
 
@@ -187,24 +201,17 @@ describe("Contest", () => {
       expect(onQuestionNavigate).toHaveBeenCalledWith("theory-0", "ABC123");
     });
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
+    expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/rooms`,
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ chapterId: chapterMeta.id }),
       }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      `${API_BASE}/rooms/ABC123?chapterId=${encodeURIComponent(chapterMeta.id)}`,
-    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("joins an existing room and navigates to the first question", async () => {
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValueOnce(jsonResponse(roomDetails));
-
     const { onQuestionNavigate } = renderContest();
 
     fireEvent.change(screen.getByPlaceholderText("Room ID..."), {
@@ -212,12 +219,8 @@ describe("Contest", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Join room" }));
 
-    await waitFor(() => {
-      expect(onQuestionNavigate).toHaveBeenCalledWith("theory-0", "ABC123");
-    });
-    expect(fetchMock).toHaveBeenCalledWith(
-      `${API_BASE}/rooms/ABC123?chapterId=${encodeURIComponent(chapterMeta.id)}`,
-    );
+    expect(onQuestionNavigate).toHaveBeenCalledWith("theory-0", "ABC123");
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("shows an error when join is submitted without a room id", async () => {
@@ -360,7 +363,7 @@ describe("Contest", () => {
     expectResultField(/Your answer:/, "Peer answer");
   });
 
-  it("polls the room and merges peer results into progress", async () => {
+  it("merges peer results received through the room connection", async () => {
     const peerRoom = roomDetailsWithAnswer({
       practiceAnswer: {
         answer: "Peer practice answer",
@@ -369,17 +372,6 @@ describe("Contest", () => {
         revision: 1,
       },
     });
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValue(jsonResponse(peerRoom));
-
-    const pollCallbacks: Array<() => void> = [];
-    vi.spyOn(window, "setInterval").mockImplementation(((handler: TimerHandler, timeout?: number) => {
-      if (timeout === 5000 && typeof handler === "function") {
-        pollCallbacks.push(handler as () => void);
-      }
-      return 0 as unknown as ReturnType<typeof setInterval>;
-    }) as typeof setInterval);
-
     renderContest({
       roomId: "ABC123",
       questionRef: "practice-0",
@@ -387,18 +379,15 @@ describe("Contest", () => {
     });
 
     expect(document.querySelector(".dot.rating-3")).toBeNull();
-    expect(pollCallbacks.length).toBeGreaterThanOrEqual(1);
 
-    await act(async () => {
-      pollCallbacks[0]!();
+    act(() => {
+      draftApi.emitRoomSnapshot(peerRoom);
     });
 
     await waitFor(() => {
       expect(document.querySelector(".dot.rating-3")).toBeTruthy();
     });
-    expect(fetchMock).toHaveBeenCalledWith(
-      `${API_BASE}/rooms/ABC123?chapterId=${encodeURIComponent(chapterMeta.id)}`,
-    );
+    expect(fetch).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: /Show (previous|reference) answer/ }));
     expectResultField(/Rating:/, "3/5");
@@ -462,10 +451,7 @@ describe("Contest", () => {
     expect(onQuestionNavigate).toHaveBeenCalledWith("theory-0", "ABC123");
   });
 
-  it("loads room details when practice starts without a cached session", async () => {
-    const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValueOnce(jsonResponse(roomDetails));
-
+  it("loads room details from the room connection without a cached session", async () => {
     renderContest({
       roomId: "ABC123",
       questionRef: "theory-0",
@@ -474,27 +460,26 @@ describe("Contest", () => {
 
     expect(screen.getByText("Loading room questions...")).toBeTruthy();
 
-    expect(await screen.findByText("Theory 1")).toBeTruthy();
+    act(() => {
+      draftApi.emitRoomSnapshot(roomDetails);
+    });
+
+    expect(screen.getByText("Theory 1")).toBeTruthy();
     expect(screen.getByText("What is a process?")).toBeTruthy();
     expect(within(screen.getByText(/Room ID:/).parentElement as HTMLElement).getByText("ABC123")).toBeTruthy();
   });
 
   it("reports room access errors to the parent", async () => {
-    const fetchMock = vi.mocked(fetch);
-    // Keep the follow-up sync from clearing the error before the effect runs.
-    fetchMock.mockImplementation(() => new Promise(() => {}));
-
     const { onRoomAccessError } = renderContest({
       roomId: "MISSING",
       questionRef: "theory-0",
-      initialSession: {
-        ...createInitialChapterSession(),
-        error: "Room not found.",
-      },
+      initialSession: createInitialChapterSession(),
     });
 
-    await waitFor(() => {
-      expect(onRoomAccessError).toHaveBeenCalledWith("Room not found.");
+    act(() => {
+      draftApi.emitRoomError("Room not found.");
     });
+
+    expect(onRoomAccessError).toHaveBeenCalledWith("Room not found.");
   });
 });

@@ -57,8 +57,6 @@ export function sessionWithRoom(details: RoomDetails = roomDetails): ChapterSess
   return {
     ...createInitialChapterSession(),
     ...mergeRoomDetailsIntoSession(createInitialChapterSession(), details),
-    loading: false,
-    error: "",
   };
 }
 
