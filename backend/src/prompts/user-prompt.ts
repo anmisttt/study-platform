@@ -1,6 +1,14 @@
-import type { PracticeItem, TheoryItem } from "@study-platform/shared";
+import type { PracticeItem, QuestionType, TheoryItem } from "@study-platform/shared";
 
 type PromptItem = TheoryItem | Pick<PracticeItem, "task" | "question">;
+
+export type TutorEvaluationRequest = {
+  itemType: QuestionType;
+  question: string;
+  userResponse: string;
+  referenceAnswer: string;
+  llmPrompt: string;
+};
 
 function formatQuestion(item: PromptItem): string {
   if ("task" in item) {
@@ -32,4 +40,17 @@ export function userPromptForItem(answer: string, item: PromptItem): string {
     null,
     2,
   );
+}
+
+export function tutorEvaluationRequestForItem(
+  answer: string,
+  item: TheoryItem | PracticeItem,
+): TutorEvaluationRequest {
+  return {
+    itemType: "task" in item ? "practice" : "theory",
+    question: formatQuestion(item),
+    userResponse: answer,
+    referenceAnswer: item.answer,
+    llmPrompt: userPromptForItem(answer, item),
+  };
 }

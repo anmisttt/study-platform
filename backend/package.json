@@ -16,6 +16,10 @@
   },
   "dependencies": {
     "@langfuse/client": "^5.11.1",
+    "@langfuse/openai": "5.11.1",
+    "@langfuse/otel": "5.11.1",
+    "@langfuse/tracing": "5.11.1",
+    "@opentelemetry/sdk-node": "0.222.0",
     "@study-platform/shared": "file:../shared",
     "better-sqlite3": "^12.10.0",
     "cors": "2.8.6",

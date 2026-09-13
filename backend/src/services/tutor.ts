@@ -1,14 +1,42 @@
 import type { CheckResult } from "@study-platform/shared";
+import type { TextPromptClient } from "@langfuse/client";
+import { observeOpenAI, type LangfuseConfig } from "@langfuse/openai";
 import { OpenAI } from "openai";
+import type { TutorEvaluationRequest } from "../prompts/user-prompt";
+import { initializeLangfuseTracing } from "../observability/langfuse";
+
+export type TutorTraceContext = {
+  sessionId?: string;
+  metadata?: Record<string, string>;
+};
+
+export function tutorLangfuseConfig(
+  request: TutorEvaluationRequest,
+  systemPrompt: TextPromptClient,
+  traceContext: TutorTraceContext = {},
+): LangfuseConfig {
+  return {
+    traceName: "evaluate-tutor-answer",
+    sessionId: traceContext.sessionId,
+    tags: ["tutor", "answer-evaluation", request.itemType],
+    generationName: "grade-answer",
+    langfusePrompt: systemPrompt,
+    generationMetadata: {
+      ...traceContext.metadata,
+      reference_answer: request.referenceAnswer,
+    },
+  };
+}
 
 export class Tutor {
-  private readonly systemPrompt: string;
+  private readonly systemPrompt: TextPromptClient;
   private readonly model: string;
   private readonly temperature: number;
   private readonly maxTokens?: number;
   private readonly client: OpenAI;
 
-  constructor({systemPrompt, model, apiKey, temperature, maxTokens}: {systemPrompt: string, model: string, apiKey: string, temperature: number, maxTokens?: number }) {
+  constructor({systemPrompt, model, apiKey, temperature, maxTokens}: {systemPrompt: TextPromptClient, model: string, apiKey: string, temperature: number, maxTokens?: number }) {
+    initializeLangfuseTracing();
     this.systemPrompt = systemPrompt;
     this.model = model;
     this.temperature = temperature;
@@ -16,12 +44,19 @@ export class Tutor {
     this.client = new OpenAI({ apiKey });
   }
 
-  private async evaluateAnswerWithLLM(prompt: string): Promise<{rating: number, comment: string}> {
-    const response = await this.client.chat.completions.create({
+  private async evaluateAnswerWithLLM(
+    request: TutorEvaluationRequest,
+    traceContext: TutorTraceContext,
+  ): Promise<{rating: number, comment: string}> {
+    const client = observeOpenAI(
+      this.client,
+      tutorLangfuseConfig(request, this.systemPrompt, traceContext),
+    );
+    const response = await client.chat.completions.create({
       model: this.model,
       messages: [
-        { role: "system", content: this.systemPrompt },
-        { role: "user", content: prompt },
+        { role: "system", content: this.systemPrompt.compile() },
+        { role: "user", content: request.llmPrompt },
       ],
       temperature: this.temperature,
       max_tokens: this.maxTokens,
@@ -50,8 +85,11 @@ export class Tutor {
     return JSON.parse(response.choices[0].message.content) as {rating: number, comment: string};
   }
 
-  public async evaluateAnswer(prompt: string): Promise<CheckResult> {
-    return this.evaluateAnswerWithLLM(prompt);
+  public async evaluateAnswer(
+    request: TutorEvaluationRequest,
+    traceContext: TutorTraceContext = {},
+  ): Promise<CheckResult> {
+    return this.evaluateAnswerWithLLM(request, traceContext);
   }
 
 }

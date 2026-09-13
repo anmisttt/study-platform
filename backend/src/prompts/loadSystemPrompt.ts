@@ -1,13 +1,9 @@
-import { LangfuseClient } from "@langfuse/client";
-import {
-  systemPromptByType,
-} from "./system-prompt";
-import { QuestionType } from "@study-platform/shared";
+import { LangfuseClient, type TextPromptClient } from "@langfuse/client";
+import type { QuestionType } from "@study-platform/shared";
 
-export type LangfusePromptGetter = {
-  prompt: {
-    get: LangfuseClient["prompt"]["get"];
-  };
+const systemPromptNameByType: Record<QuestionType, string> = {
+  practice: "practice-system-prompt",
+  theory: "theory-system-prompt",
 };
 
 let client: LangfuseClient | undefined;
@@ -27,16 +23,12 @@ function getLangfuseClient(): LangfuseClient {
   return client;
 }
 
-export async function loadSystemPrompt(
+export function loadSystemPrompt(
   type: QuestionType,
-  langfuse: LangfusePromptGetter = getLangfuseClient(),
-): Promise<string> {
-  const fallback = systemPromptByType[type].defaultPrompt;
-
-  const prompt = await langfuse.prompt.get(systemPromptByType[type].langfusePrompt, {
+  langfuse: LangfuseClient = getLangfuseClient(),
+): Promise<TextPromptClient> {
+  return langfuse.prompt.get(systemPromptNameByType[type], {
     label: "production",
     type: "text",
-    fallback,
   });
-  return prompt.compile();
 }

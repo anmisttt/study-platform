@@ -225,9 +225,13 @@ npm ci --omit=dev
 if ! restore_app_env; then
   cat > "${APP_ENV}" <<EOF
 OPENAI_API_KEY=replace_me
+LANGFUSE_PUBLIC_KEY=replace_me
+LANGFUSE_SECRET_KEY=replace_me
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+LANGFUSE_TRACING_ENVIRONMENT=production
 PORT=${API_PORT}
 EOF
-  echo "Created ${APP_ENV} template. Fill OPENAI_API_KEY and re-run this script."
+  echo "Created ${APP_ENV} template. Fill the OpenAI and Langfuse keys, then re-run this script."
   exit 1
 fi
 
@@ -263,11 +267,19 @@ if [[ -z "${OPENAI_API_KEY:-}" || "${OPENAI_API_KEY}" == "replace_me" ]]; then
   exit 1
 fi
 
+if [[ -z "${LANGFUSE_PUBLIC_KEY:-}" || "${LANGFUSE_PUBLIC_KEY}" == "replace_me" ||
+      -z "${LANGFUSE_SECRET_KEY:-}" || "${LANGFUSE_SECRET_KEY}" == "replace_me" ||
+      -z "${LANGFUSE_BASE_URL:-}" ]]; then
+  echo "Langfuse credentials or base URL are missing in ${APP_ENV}"
+  echo "Set LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, and LANGFUSE_BASE_URL, then re-run this script."
+  exit 1
+fi
+
 chmod 600 "${APP_ENV}" "${BACKEND_ENV}"
 chown "$(id -u)":"$(id -g)" "${APP_ENV}" "${BACKEND_ENV}" 2>/dev/null || true
 
 # Load secrets from .env at runtime (dotenv), not via PM2's saved environment.
-unset OPENAI_API_KEY OPENAI_TRANSCRIBE_MODEL
+unset OPENAI_API_KEY OPENAI_TRANSCRIBE_MODEL LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY LANGFUSE_BASE_URL
 
 if pm2 describe "${BACKEND_PROCESS_NAME}" >/dev/null 2>&1; then
   pm2 delete "${BACKEND_PROCESS_NAME}"

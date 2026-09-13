@@ -1,17 +1,19 @@
 import fs from "fs";
 import path from "path";
+import { randomUUID } from "node:crypto";
 import dotenv from "dotenv";
 import type { PracticeItem } from "@study-platform/shared";
 import { chapters, getChapterById } from "../chapters";
+import { shutdownLangfuseTracing } from "../observability/langfuse";
 import { loadSystemPrompt } from "../prompts/loadSystemPrompt";
-import { userPromptForItem } from "../prompts/user-prompt";
+import { tutorEvaluationRequestForItem } from "../prompts/user-prompt";
 import { Tutor } from "../services/tutor";
 
 dotenv.config({ path: path.join(__dirname, "../../.env") });
 dotenv.config();
 
 type Trial = { rating: number; comment: string };
-type PracticeBrief = Pick<PracticeItem, "task" | "question">;
+type PracticeBrief = Pick<PracticeItem, "task" | "question" | "answer">;
 
 type Aggregate = {
   mean: number;
@@ -100,11 +102,24 @@ function aggregateTrials(trials: Trial[]): Aggregate {
   return { mean, min, max, majorityGte5, pass: majorityGte5 };
 }
 
-async function runTrials(tutor: Tutor, item: PracticeBrief, answer: string, trials: number): Promise<Trial[]> {
+async function runTrials(
+  tutor: Tutor,
+  item: PracticeBrief,
+  answer: string,
+  trials: number,
+  sessionId: string,
+  traceMetadata: Record<string, string>,
+): Promise<Trial[]> {
   const results: Trial[] = [];
   for (let i = 0; i < trials; i++) {
-    const prompt = userPromptForItem(answer, item);
-    const result = await tutor.evaluateAnswer(prompt);
+    const request = tutorEvaluationRequestForItem(answer, item);
+    const result = await tutor.evaluateAnswer(request, {
+      sessionId,
+      metadata: {
+        ...traceMetadata,
+        trial: String(i + 1),
+      },
+    });
     results.push({ rating: result.rating, comment: result.comment });
   }
   return results;
@@ -195,7 +210,17 @@ async function main(): Promise<void> {
   if (args.answerFile) {
     const answerPath = path.resolve(args.answerFile);
     const answer = fs.readFileSync(answerPath, "utf8");
-    const trials = await runTrials(tutor, item, answer, args.trials);
+    const trials = await runTrials(
+      tutor,
+      item,
+      answer,
+      args.trials,
+      `grade-practice-${randomUUID()}`,
+      {
+        chapter_id: chapter.id,
+        practice_index: String(args.index),
+      },
+    );
     const agg = aggregateTrials(trials);
     report.blind = { answerSource: answerPath, trials, aggregate: agg };
     report.pass = report.pass && agg.pass;
@@ -208,10 +233,10 @@ async function main(): Promise<void> {
     console.error(report.pass ? "PASS" : "FAIL");
   }
 
-  process.exit(report.pass ? 0 : 2);
+  process.exitCode = report.pass ? 0 : 2;
 }
 
 main().catch((error: unknown) => {
   console.error(error);
-  process.exit(1);
-});
+  process.exitCode = 1;
+}).finally(shutdownLangfuseTracing);

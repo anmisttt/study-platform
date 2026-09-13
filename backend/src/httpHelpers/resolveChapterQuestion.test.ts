@@ -7,7 +7,10 @@ import {
 } from "@study-platform/shared";
 import { describe, expect, it } from "vitest";
 import { resolveChapterQuestion } from "./resolveChapterQuestion";
-import { userPromptForItem } from "../prompts/user-prompt";
+import {
+  tutorEvaluationRequestForItem,
+  userPromptForItem,
+} from "../prompts/user-prompt";
 
 const chapter: Chapter = {
   id: "test_chapter",
@@ -114,4 +117,15 @@ describe("check path ↔ evaluate item identity", () => {
       expectPromptForItem(questionId!, expected);
     },
   );
+});
+
+describe("tutor evaluation request", () => {
+  it("keeps a practice reference answer in trace context but out of the LLM prompt", () => {
+    const item = chapter.practice[0];
+    const request = tutorEvaluationRequestForItem("student answer", item);
+
+    expect(request.referenceAnswer).toBe(item.answer);
+    expect(request.userResponse).toBe("student answer");
+    expect(request.llmPrompt).not.toContain(item.answer);
+  });
 });

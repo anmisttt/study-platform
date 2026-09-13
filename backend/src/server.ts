@@ -15,7 +15,7 @@ import { respondWithError } from "./httpHelpers/respondWithError";
 import { ensureAnswer, ensureBaseRevision } from "./httpHelpers/validation";
 import { Tutor } from "./services/tutor";
 import { loadSystemPrompt } from "./prompts/loadSystemPrompt";
-import { userPromptForItem } from "./prompts/user-prompt";
+import { tutorEvaluationRequestForItem } from "./prompts/user-prompt";
 import { Transcriber } from "./services/transcriber";
 
 dotenv.config();
@@ -104,7 +104,16 @@ app.post("/rooms/:roomId/questions/:questionId/check", async (req: Request, res:
       apiKey: openaiApiKey,
       temperature: 1,
     });
-    const result = await tutor.evaluateAnswer(userPromptForItem(answer, resolved.item));
+    const result = await tutor.evaluateAnswer(
+      tutorEvaluationRequestForItem(answer, resolved.item),
+      {
+        sessionId: room.roomId,
+        metadata: {
+          chapter_id: chapter.id,
+          question_id: questionId,
+        },
+      },
+    );
 
     const revision = roomsDb.updateAnswer({
       roomId: room.roomId,

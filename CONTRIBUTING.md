@@ -48,6 +48,10 @@ The backend reads configuration from `backend/.env`:
 
 ```env
 OPENAI_API_KEY=sk-your-key   # required for grading and transcription
+LANGFUSE_PUBLIC_KEY=pk-lf-your-key   # required for tutor prompts and tracing
+LANGFUSE_SECRET_KEY=sk-lf-your-key   # required for tutor prompts and tracing
+LANGFUSE_BASE_URL=https://cloud.langfuse.com   # use your Langfuse region/self-hosted URL
+LANGFUSE_TRACING_ENVIRONMENT=development   # optional, defaults to development locally
 PORT=3001                    # optional, default 3001
 HOST=127.0.0.1               # optional, default 127.0.0.1
 OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe   # optional
@@ -79,6 +83,11 @@ Then open `http://localhost:5173`.
   `watch_question` whenever the active question changes.
 
 Check responses are produced by OpenAI grading and include `rating`, `comment`, and the saved `revision`.
+Each tutor check also emits an `evaluate-tutor-answer` Langfuse trace. The trace records the
+system prompt name/version, user response, reference answer, tutor comment,
+and score. The nested `grade-answer` generation is linked to the Langfuse prompt version and
+captures the OpenAI model, tokens, cost, latency, and evaluation context. Student answers and
+reference answers are therefore sent to the configured Langfuse project.
 
 ## Upload to VM
 
@@ -106,6 +115,10 @@ sudo nano /var/www/study-platform/.env
 
 ```env
 OPENAI_API_KEY=sk-your-key
+LANGFUSE_PUBLIC_KEY=pk-lf-your-key
+LANGFUSE_SECRET_KEY=sk-lf-your-key
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+LANGFUSE_TRACING_ENVIRONMENT=production
 PORT=3001
 ```
 
