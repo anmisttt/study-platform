@@ -180,7 +180,7 @@ Prerequisites: Docker Engine 24+ (or Docker Desktop).
 Setup:
 
 ```bash
-docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/lab:ch4-p5 init
+docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/lab:ch4-p9 init
 docker compose up -d
 ```
 

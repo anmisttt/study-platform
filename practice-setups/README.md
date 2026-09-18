@@ -22,7 +22,7 @@ docker rm -f lab-ch1-p1
 Multi-service tasks (Kafka, RabbitMQ, Citus, ClickHouse, etc.) use `docker compose`. Client CLIs always go through `docker compose exec` — never a bare host `psql` / `clickhouse-client` / `mysql`:
 
 ```bash
-docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/lab:ch4-p5 init
+docker run --rm -v "$PWD:/out" ghcr.io/anmisttt/lab:ch4-p9 init
 docker compose up -d
 docker compose exec -T clickhouse clickhouse-client --multiquery < setup.sql
 docker compose exec clickhouse clickhouse-client

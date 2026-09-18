@@ -9,7 +9,7 @@ services:
     volumes:
       - ./seed.sql:/docker-entrypoint-initdb.d/01-seed.sql:ro
   lab:
-    image: ghcr.io/anmisttt/lab:ch4-p4
+    image: ghcr.io/anmisttt/lab:ch4-p8
     entrypoint: ["sleep", "infinity"]
     working_dir: /work
     volumes:

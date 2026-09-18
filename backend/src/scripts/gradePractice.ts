@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "node:crypto";
+import { homedir } from "node:os";
 import dotenv from "dotenv";
 import type { PracticeItem } from "@study-platform/shared";
 import { chapters, getChapterById } from "../chapters";
@@ -10,7 +11,7 @@ import { tutorEvaluationRequestForItem } from "../prompts/user-prompt";
 import { Tutor } from "../services/tutor";
 
 dotenv.config({ path: path.join(__dirname, "../../.env") });
-dotenv.config();
+dotenv.config({ path: path.join(homedir(), ".env") });
 
 type Trial = { rating: number; comment: string };
 type PracticeBrief = Pick<PracticeItem, "task" | "question" | "answer">;

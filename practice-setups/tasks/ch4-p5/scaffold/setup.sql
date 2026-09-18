@@ -1,72 +1,49 @@
--- setup.sql — clickstream analytics stub
-DROP TABLE IF EXISTS events;
-DROP TABLE IF EXISTS events_daily_country_device;
+-- setup.sql — PostgreSQL operational schema (stubs)
+DROP TABLE IF EXISTS order_items CASCADE;
+DROP TABLE IF EXISTS orders CASCADE;
+DROP TABLE IF EXISTS products CASCADE;
 
-CREATE TABLE events (
-  event_time       DateTime,
-  event_date       Date DEFAULT toDate(event_time),
-  user_id          UInt64,
-  session_id       UUID,
-  country          String,            -- choose LowCardinality(FixedString(2))
-  device_type      String,            -- choose LowCardinality(String)
-  os               String,            -- choose LowCardinality(String)
-  browser          String,            -- choose LowCardinality(String)
-  referrer         String,
-  utm_source       String,            -- choose LowCardinality(String)
-  utm_campaign     String,            -- choose LowCardinality(String)
-  page_path        String,
-  page_load_ms     UInt32
-)
-ENGINE = MergeTree
-PARTITION BY tuple()                  -- choose PARTITION BY toYYYYMM(event_date)
-ORDER BY tuple()                      -- choose ORDER BY (event_date, country, device_type, user_id)
-SETTINGS index_granularity = 8192;
+CREATE TABLE products (
+  id       BIGINT PRIMARY KEY,
+  name     TEXT NOT NULL,
+  category TEXT NOT NULL
+);
 
--- optional: bloom_filter skip index on utm_campaign for Q2
--- ALTER TABLE events ADD INDEX idx_utm_campaign utm_campaign TYPE bloom_filter GRANULARITY 4;
+CREATE TABLE orders (
+  id            BIGINT PRIMARY KEY,
+  customer_id   BIGINT        NOT NULL,
+  status        TEXT          NOT NULL,
+  total_amount  NUMERIC(10,2) NOT NULL,
+  created_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
 
--- implement daily-by-country/device MV with SummingMergeTree (optional data-cube)
--- CREATE MATERIALIZED VIEW events_daily_country_device
--- ENGINE = SummingMergeTree
--- PARTITION BY ...
--- ORDER BY ...
--- AS SELECT ... FROM events GROUP BY ...;
+-- choose indexes for:
+--   WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 20
+-- optional: partial index for open statuses (pending/processing)
+-- (PRIMARY KEY on id already covers WHERE id = $1)
 
--- Laptop-friendly seed (~200k rows across ~90 days). Production would be ~1B.
-INSERT INTO events
-  (event_time, user_id, session_id, country, device_type, os, browser,
-   referrer, utm_source, utm_campaign, page_path, page_load_ms)
-SELECT
-  now() - toIntervalDay(number % 90) - toIntervalSecond(number % 86400),
-  number % 50000,
-  generateUUIDv4(),
-  ['DE','US','GB','FR','BR','IN','JP','CA','AU','NL'][1 + (number % 10)],
-  ['desktop','mobile','tablet'][1 + (number % 3)],
-  ['macOS','Windows','iOS','Android','Linux'][1 + (number % 5)],
-  ['Chrome','Safari','Firefox','Edge'][1 + (number % 4)],
-  if(number % 7 = 0, 'https://news.example/', ''),
-  ['google','newsletter','direct','partner'][1 + (number % 4)],
-  if(number % 11 = 0, 'spring_sale_2026',
-     ['winter_push','brand_always','retarget'][1 + (number % 3)]),
-  concat('/page/', toString(number % 200)),
-  50 + (number % 950)
-FROM numbers(200000);
+CREATE TABLE order_items (
+  order_id    BIGINT  NOT NULL REFERENCES orders(id),
+  product_id  BIGINT  NOT NULL REFERENCES products(id),
+  quantity    INT     NOT NULL,
+  unit_price  NUMERIC(10,2) NOT NULL
+  -- choose PRIMARY KEY (order_id, product_id)
+);
 
--- Q1 — DAU per country, last 30 days, desktop + mobile only
--- SELECT toDate(event_time) AS day, country, uniq(user_id) AS dau
--- FROM   events
--- WHERE  event_time >= now() - INTERVAL 30 DAY
---   AND  country IN ('DE','US','GB','FR','BR','IN','JP')
---   AND  device_type IN ('desktop','mobile')
--- GROUP  BY day, country
--- ORDER  BY day, dau DESC
--- LIMIT  20;
+INSERT INTO products (id, name, category) VALUES
+  (1, 'Keyboard', 'Electronics'),
+  (2, 'Hoodie', 'Clothing');
+INSERT INTO orders (id, customer_id, status, total_amount, created_at) VALUES
+  (1001, 42, 'pending', 79.98, now() - interval '2 days'),
+  (1002, 42, 'shipped', 49.99, now() - interval '1 day'),
+  (1003, 7,  'pending', 29.99, now());
+INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES
+  (1001, 1, 1, 49.99),
+  (1001, 2, 1, 29.99),
+  (1002, 2, 1, 49.99),
+  (1003, 1, 1, 29.99);
 
--- Q2 — Browser distribution for a single campaign
--- SELECT browser, count() AS hits
--- FROM   events
--- WHERE  utm_campaign = 'spring_sale_2026'
---   AND  event_time >= now() - INTERVAL 90 DAY
--- GROUP  BY browser
--- ORDER  BY hits DESC
--- LIMIT  10;
+-- Demo workload A (uncomment after apply)
+-- SELECT id, customer_id, status, total_amount, created_at FROM orders WHERE id = 1001;
+-- SELECT id, status, total_amount, created_at FROM orders WHERE customer_id = 42 ORDER BY created_at DESC LIMIT 20;
