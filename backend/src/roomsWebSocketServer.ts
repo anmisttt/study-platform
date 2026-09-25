@@ -3,6 +3,8 @@ import * as Y from "yjs";
 import { WebSocket, WebSocketServer } from "ws";
 import {
   DRAFT_YTEXT_NAME,
+  formatQuestionRef,
+  parseQuestionRef,
   type DraftClientMessage,
   type DraftServerMessage,
   type DraftUpdateMessage,
@@ -22,6 +24,20 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function canonicalQuestionRef(value: unknown): string | null {
+  if (!isNonEmptyString(value)) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  const parsed = parseQuestionRef(trimmed);
+  if (!parsed || formatQuestionRef(parsed.type, parsed.index) !== trimmed) {
+    return null;
+  }
+
+  return trimmed;
+}
+
 export function parseClientMessage(raw: string): DraftClientMessage | null {
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -31,19 +47,21 @@ export function parseClientMessage(raw: string): DraftClientMessage | null {
 
     const message = parsed as Record<string, unknown>;
     if (message.type === "watch_question") {
-      if (!isNonEmptyString(message.questionId)) {
+      const questionId = canonicalQuestionRef(message.questionId);
+      if (!questionId) {
         return null;
       }
 
       return {
         type: "watch_question",
-        questionId: message.questionId.trim(),
+        questionId,
       };
     }
 
     if (message.type === "update") {
+      const questionId = canonicalQuestionRef(message.questionId);
       if (
-        !isNonEmptyString(message.questionId) ||
+        !questionId ||
         typeof message.update !== "string"
       ) {
         return null;
@@ -51,7 +69,7 @@ export function parseClientMessage(raw: string): DraftClientMessage | null {
 
       return {
         type: "update",
-        questionId: message.questionId.trim(),
+        questionId,
         update: message.update,
       };
     }

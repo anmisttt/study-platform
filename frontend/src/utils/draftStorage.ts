@@ -1,5 +1,5 @@
 const DB_NAME = "study-platform.drafts";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = "drafts";
 
 type DraftRecord = {
@@ -15,10 +15,12 @@ function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: "key" });
+      } else if ((event as IDBVersionChangeEvent).oldVersion < DB_VERSION) {
+        request.transaction?.objectStore(STORE_NAME).clear();
       }
     };
 

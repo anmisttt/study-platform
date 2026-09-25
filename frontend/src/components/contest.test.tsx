@@ -200,7 +200,7 @@ describe("Contest", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate new room" }));
 
     await waitFor(() => {
-      expect(onQuestionNavigate).toHaveBeenCalledWith("theory-0", "ABC123");
+      expect(onQuestionNavigate).toHaveBeenCalledWith("theory-1", "ABC123");
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -221,7 +221,7 @@ describe("Contest", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Join room" }));
 
-    expect(onQuestionNavigate).toHaveBeenCalledWith("theory-0", "ABC123");
+    expect(onQuestionNavigate).toHaveBeenCalledWith("theory-1", "ABC123");
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -243,7 +243,7 @@ describe("Contest", () => {
     draftApi.answerInput = "A process is a running program.";
     renderContest({
       roomId: "ABC123",
-      questionRef: "theory-0",
+      questionRef: "theory-1",
       initialSession: sessionWithRoom(),
     });
 
@@ -259,7 +259,7 @@ describe("Contest", () => {
     expect(draftApi.setAnswerChecking).not.toHaveBeenCalled();
     expect(voiceApi.stop).toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
-      `${API_BASE}/rooms/ABC123/questions/theory-0/check`,
+      `${API_BASE}/rooms/ABC123/questions/theory-1/check`,
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -279,7 +279,7 @@ describe("Contest", () => {
     draftApi.answerInput = "Use an atomic integer.";
     renderContest({
       roomId: "ABC123",
-      questionRef: "practice-0",
+      questionRef: "practice-1",
       initialSession: sessionWithRoom(),
     });
 
@@ -289,7 +289,7 @@ describe("Contest", () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        `${API_BASE}/rooms/ABC123/questions/practice-0/check`,
+        `${API_BASE}/rooms/ABC123/questions/practice-1/check`,
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({
@@ -311,7 +311,7 @@ describe("Contest", () => {
     draftApi.answerInput = "practice answer";
     renderContest({
       roomId: "ABC123",
-      questionRef: "practice-0",
+      questionRef: "practice-1",
       initialSession: sessionWithRoom(),
     });
 
@@ -325,7 +325,7 @@ describe("Contest", () => {
     );
     expect(checkCalls).toHaveLength(1);
     expect(String(checkCalls[0][0])).toBe(
-      `${API_BASE}/rooms/ABC123/questions/practice-0/check`,
+      `${API_BASE}/rooms/ABC123/questions/practice-1/check`,
     );
     expect(String(checkCalls[0][0])).not.toContain("theory");
   });
@@ -347,7 +347,7 @@ describe("Contest", () => {
     draftApi.answerInput = "Stale local answer";
     renderContest({
       roomId: "ABC123",
-      questionRef: "theory-0",
+      questionRef: "theory-1",
       initialSession: sessionWithRoom(),
     });
 
@@ -375,7 +375,7 @@ describe("Contest", () => {
     });
     renderContest({
       roomId: "ABC123",
-      questionRef: "practice-0",
+      questionRef: "practice-1",
       initialSession: sessionWithRoom(),
     });
 
@@ -400,7 +400,7 @@ describe("Contest", () => {
     draftApi.isAnswerChecking = true;
     const view = renderContest({
       roomId: "ABC123",
-      questionRef: "practice-0",
+      questionRef: "practice-1",
       initialSession: sessionWithRoom(),
     });
 
@@ -411,7 +411,7 @@ describe("Contest", () => {
     view.rerender(
       <ContestHarness
         roomId="ABC123"
-        questionRef="practice-0"
+        questionRef="practice-1"
         initialSession={sessionWithRoom()}
       />,
     );
@@ -453,7 +453,7 @@ describe("Contest", () => {
 
     renderContest({
       roomId: "ABC123",
-      questionRef: "theory-0",
+      questionRef: "theory-1",
       initialSession: answered,
     });
 
@@ -480,7 +480,7 @@ describe("Contest", () => {
     );
     const view = renderContest({
       roomId: "ABC123",
-      questionRef: "theory-0",
+      questionRef: "theory-1",
       initialSession: answered,
     });
 
@@ -493,7 +493,7 @@ describe("Contest", () => {
     view.rerender(
       <ContestHarness
         roomId="ABC123"
-        questionRef="practice-0"
+        questionRef="practice-1"
         initialSession={answered}
       />,
     );
@@ -502,7 +502,7 @@ describe("Contest", () => {
     view.rerender(
       <ContestHarness
         roomId="ABC123"
-        questionRef="theory-0"
+        questionRef="theory-1"
         initialSession={answered}
       />,
     );
@@ -513,7 +513,7 @@ describe("Contest", () => {
   it("calls onResetProgress when Start again is clicked", () => {
     const { onResetProgress } = renderContest({
       roomId: "ABC123",
-      questionRef: "theory-0",
+      questionRef: "theory-1",
       initialSession: sessionWithRoom(),
     });
 
@@ -526,21 +526,21 @@ describe("Contest", () => {
   it("navigates between questions while keeping the room id", () => {
     const { onQuestionNavigate } = renderContest({
       roomId: "ABC123",
-      questionRef: "theory-0",
+      questionRef: "theory-1",
       initialSession: sessionWithRoom(),
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Next question" }));
-    expect(onQuestionNavigate).toHaveBeenCalledWith("practice-0", "ABC123");
+    expect(onQuestionNavigate).toHaveBeenCalledWith("practice-1", "ABC123");
 
     fireEvent.click(screen.getByRole("button", { name: "Open question 1" }));
-    expect(onQuestionNavigate).toHaveBeenCalledWith("theory-0", "ABC123");
+    expect(onQuestionNavigate).toHaveBeenCalledWith("theory-1", "ABC123");
   });
 
   it("loads room details from the room connection without a cached session", async () => {
     renderContest({
       roomId: "ABC123",
-      questionRef: "theory-0",
+      questionRef: "theory-1",
       initialSession: createInitialChapterSession(),
     });
 
@@ -558,7 +558,7 @@ describe("Contest", () => {
   it("reports room access errors to the parent", async () => {
     const { onRoomAccessError } = renderContest({
       roomId: "MISSING",
-      questionRef: "theory-0",
+      questionRef: "theory-1",
       initialSession: createInitialChapterSession(),
     });
 

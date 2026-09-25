@@ -125,7 +125,7 @@ async function mockBackend(page: Page): Promise<void> {
       return;
     }
 
-    if (request.method() === "POST" && path === "/rooms/ABC123/questions/theory-0/check") {
+    if (request.method() === "POST" && path === "/rooms/ABC123/questions/theory-1/check") {
       await fulfillJson(route, {
         rating: 4,
         comment: "Solid answer.",

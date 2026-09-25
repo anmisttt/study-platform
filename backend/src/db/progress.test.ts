@@ -15,7 +15,7 @@ describe("derived progress", () => {
       const summary = profileRoomSummary(db.listParticipatedRooms("owner")[0], "owner");
       expect(summary?.progress.checked).toBe(chapter.theory.length + chapter.practice.length);
       expect(summary?.progress.averageScore).toBe(2);
-      expect(summary?.continueQuestionRef).toBe("theory-0");
+      expect(summary?.continueQuestionRef).toBe("theory-1");
     } finally { db.close(); }
   });
 });

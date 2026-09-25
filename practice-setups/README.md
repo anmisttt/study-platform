@@ -82,4 +82,4 @@ Fifteen stdlib-only Python tasks have no image (unchanged briefs).
 
 ## Tag convention
 
-`ch<N>-p<I>` uses a one-based practice ordinal. It maps to `practice[I - 1]` in chapter `<N>` and frontend question id `practice-<I - 1>` (for example, `first_chapter` practice 1 uses `ch1-p1` and question id `practice-0`).
+`ch<N>-p<I>` uses a one-based practice ordinal. It maps to array item `practice[I - 1]` in chapter `<N>` and frontend question ref `practice-<I>` (for example, `first_chapter` practice 1 uses `ch1-p1` and question ref `practice-1`).

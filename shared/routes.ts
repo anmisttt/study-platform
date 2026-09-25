@@ -1,18 +1,18 @@
 export type QuestionType = "theory" | "practice";
 
-export function formatQuestionRef(type: QuestionType, index: number): string {
-  return `${type}-${index}`;
+export function formatQuestionRef(type: QuestionType, zeroBasedIndex: number): string {
+  return `${type}-${zeroBasedIndex + 1}`;
 }
 
 export function parseQuestionRef(ref: string): { type: QuestionType; index: number } | null {
-  const match = /^(theory|practice)-(\d+)$/.exec(ref);
+  const match = /^(theory|practice)-([1-9]\d*)$/.exec(ref);
   if (!match) {
     return null;
   }
 
   return {
     type: match[1] as QuestionType,
-    index: Number.parseInt(match[2], 10),
+    index: Number.parseInt(match[2], 10) - 1,
   };
 }
 

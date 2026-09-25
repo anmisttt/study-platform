@@ -2,23 +2,23 @@ import { describe, expect, it } from "vitest";
 import { parseClientMessage, roomIdFromWebSocketUrl } from "../roomsWebSocketServer.js";
 
 describe("parseClientMessage", () => {
-  it("accepts a question watch and trims the id", () => {
+  it("accepts a canonical one-based question watch and trims the id", () => {
     const message = parseClientMessage(
-      JSON.stringify({ type: "watch_question", questionId: " q1 " }),
+      JSON.stringify({ type: "watch_question", questionId: " practice-1 " }),
     );
-    expect(message).toEqual({ type: "watch_question", questionId: "q1" });
+    expect(message).toEqual({ type: "watch_question", questionId: "practice-1" });
   });
 
   it("accepts a valid update message", () => {
     const message = parseClientMessage(
-      JSON.stringify({ type: "update", questionId: "q", update: "abc" }),
+      JSON.stringify({ type: "update", questionId: "theory-2", update: "abc" }),
     );
-    expect(message).toEqual({ type: "update", questionId: "q", update: "abc" });
+    expect(message).toEqual({ type: "update", questionId: "theory-2", update: "abc" });
   });
 
   it("rejects client-authored checking messages", () => {
     const message = parseClientMessage(
-      JSON.stringify({ type: "checking", questionId: "q", checking: true }),
+      JSON.stringify({ type: "checking", questionId: "theory-1", checking: true }),
     );
     expect(message).toBeNull();
   });
@@ -36,7 +36,7 @@ describe("parseClientMessage", () => {
 
   it("rejects unknown message types", () => {
     expect(
-      parseClientMessage(JSON.stringify({ type: "snapshot", questionId: "q" })),
+      parseClientMessage(JSON.stringify({ type: "snapshot", questionId: "theory-1" })),
     ).toBeNull();
     expect(
       parseClientMessage(JSON.stringify({ type: "join_room", roomId: "ROOM1" })),
@@ -52,16 +52,24 @@ describe("parseClientMessage", () => {
     ).toBeNull();
   });
 
+  it("rejects zero-based, leading-zero, and malformed question ids", () => {
+    for (const questionId of ["practice-0", "theory-01", "q1"]) {
+      expect(
+        parseClientMessage(JSON.stringify({ type: "watch_question", questionId })),
+      ).toBeNull();
+    }
+  });
+
   it("rejects update with a non-string update field", () => {
     expect(
-      parseClientMessage(JSON.stringify({ type: "update", questionId: "q", update: 5 })),
+      parseClientMessage(JSON.stringify({ type: "update", questionId: "theory-1", update: 5 })),
     ).toBeNull();
   });
 
   it("rejects checking with a non-boolean checking field", () => {
     expect(
       parseClientMessage(
-        JSON.stringify({ type: "checking", questionId: "q", checking: "yes" }),
+        JSON.stringify({ type: "checking", questionId: "theory-1", checking: "yes" }),
       ),
     ).toBeNull();
   });

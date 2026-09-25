@@ -37,7 +37,7 @@ export const roomDetails: RoomDetails = {
 };
 
 export const theoryItem: TheoryQuestionItem = {
-  id: "theory-0",
+  id: "theory-1",
   type: "theory",
   questionId: 0,
   title: "Theory 1",
@@ -46,7 +46,7 @@ export const theoryItem: TheoryQuestionItem = {
 };
 
 export const practiceItem: PracticeQuestionItem = {
-  id: "practice-0",
+  id: "practice-1",
   type: "practice",
   questionId: 0,
   title: "Practice 1",

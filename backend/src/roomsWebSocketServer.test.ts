@@ -9,7 +9,7 @@ import {
 } from "./wsHelpers/testClient.js";
 
 const ROOM = "room1";
-const Q = "practice-0";
+const Q = "practice-1";
 const roomDetails: RoomDetails = {
   hasOwnerLlmKey: false,
   roomId: ROOM,
@@ -92,7 +92,7 @@ describe("RoomsWebSocketServer", () => {
     const b = await connect();
     const otherRoom = await connect("room2");
     a.watchQuestion(Q);
-    b.watchQuestion("practice-1");
+    b.watchQuestion("practice-2");
     otherRoom.watchQuestion(Q);
 
     expect(await a.waitForType("room_snapshot")).toMatchObject({ room: roomDetails });
@@ -172,7 +172,7 @@ describe("RoomsWebSocketServer", () => {
     const a = await connect();
     const b = await connect();
     a.watchQuestion(Q);
-    b.watchQuestion("practice-1");
+    b.watchQuestion("practice-2");
     await a.waitForType("snapshot");
     await b.waitForType("snapshot");
 
@@ -333,7 +333,7 @@ describe("RoomsWebSocketServer", () => {
       client.sendUpdate(Q, buildInsertUpdate("keep across navigation").update);
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      client.watchQuestion("practice-1");
+      client.watchQuestion("practice-2");
       await client.waitForType("snapshot");
       client.watchQuestion(Q);
 

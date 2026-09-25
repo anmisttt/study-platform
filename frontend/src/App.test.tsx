@@ -132,7 +132,7 @@ describe("App routing", () => {
   });
 
   it("keeps roomId on question deep links and renders the practice shell", async () => {
-    renderApp(chapterQuestionPath(chapterMeta.number, "theory-0", "ABC123"));
+    renderApp(chapterQuestionPath(chapterMeta.number, "theory-1", "ABC123"));
 
     expect(await screen.findByText("Theory 1")).toBeTruthy();
     expect(screen.getByText("What is a process?")).toBeTruthy();
@@ -154,14 +154,14 @@ describe("App routing", () => {
   });
 
   it("redirects practice routes without a roomId back to overview with an error", async () => {
-    renderApp(chapterQuestionPath(chapterMeta.number, "theory-0"));
+    renderApp(chapterQuestionPath(chapterMeta.number, "theory-1"));
 
     expect(await screen.findByText("A room ID is required to practice.")).toBeTruthy();
     expect(await screen.findByRole("button", { name: "Generate new room" })).toBeTruthy();
   });
 
   it("reports room connection errors and returns to the overview", async () => {
-    renderApp(chapterQuestionPath(chapterMeta.number, "theory-0", "MISSING"));
+    renderApp(chapterQuestionPath(chapterMeta.number, "theory-1", "MISSING"));
 
     expect(await screen.findByText("Room not found.")).toBeTruthy();
     expect(await screen.findByRole("button", { name: "Generate new room" })).toBeTruthy();
@@ -200,8 +200,15 @@ describe("App routing", () => {
     expect(screen.queryByText("Theory 1")).toBeNull();
   });
 
+  it("redirects zero-based question refs back to the chapter overview", async () => {
+    renderApp(chapterQuestionPath(chapterMeta.number, "theory-0", "ABC123"));
+
+    expect(await screen.findByRole("button", { name: "Generate new room" })).toBeTruthy();
+    expect(screen.queryByText("Theory 1")).toBeNull();
+  });
+
   it("redirects legacy chapter id URLs to chapter number URLs", async () => {
-    renderApp(`/chapters/${chapterMeta.id}/questions/theory-0?roomId=ABC123`);
+    renderApp(`/chapters/${chapterMeta.id}/questions/theory-1?roomId=ABC123`);
 
     expect(await screen.findByText("Theory 1")).toBeTruthy();
     expect(screen.getByText("What is a process?")).toBeTruthy();

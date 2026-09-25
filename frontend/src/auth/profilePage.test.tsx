@@ -11,7 +11,7 @@ function room(roomId: string, isAuthor: boolean): ProfileRoomSummary {
   return {
     roomId, isAuthor, chapterId: "chapter", chapterNumber: 1, chapterName: `Chapter for ${roomId}`,
     createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-02-01T00:00:00Z",
-    joinedAt: "2026-01-01T00:00:00Z", lastOpenedAt: "2026-02-02T00:00:00Z", continueQuestionRef: "theory-0",
+    joinedAt: "2026-01-01T00:00:00Z", lastOpenedAt: "2026-02-02T00:00:00Z", continueQuestionRef: "theory-1",
     progress: { checked: 2, total: 4, theory: { checked: 1, total: 2 }, practice: { checked: 1, total: 2 }, averageScore: 4 },
   };
 }
@@ -36,7 +36,7 @@ it("filters All, Author and Participant, showing deletion only for the author", 
   const joined = within(screen.getByRole("article", { name: "Chapter for joined" }));
   expect(owned.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   expect(joined.queryByRole("button", { name: /Delete/ })).not.toBeInTheDocument();
-  expect(joined.getByRole("link", { name: "Continue" })).toHaveAttribute("href", "/chapters/1/questions/theory-0?roomId=joined");
+  expect(joined.getByRole("link", { name: "Continue" })).toHaveAttribute("href", "/chapters/1/questions/theory-1?roomId=joined");
   expect(joined.getByText("Shared progress")).toBeInTheDocument();
   expect(joined.getByText(/Last opened/)).toHaveTextContent("Progress updated");
   fireEvent.click(filters().getByRole("button", { name: "Participant 1" }));

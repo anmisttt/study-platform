@@ -88,7 +88,7 @@ export function renderDraft(initial: Partial<HarnessProps> = {}): Harness {
   let props: HarnessProps = {
     apiBase: API_BASE,
     roomId: "room1",
-    questionId: "practice-0",
+    questionId: "practice-1",
     enabled: true,
     ...initial,
   };
@@ -132,7 +132,7 @@ export async function connectAndSnapshot(
   harness: Harness,
   options: { questionId?: string; snapshot?: string } = {},
 ): Promise<void> {
-  const questionId = options.questionId ?? "practice-0";
+  const questionId = options.questionId ?? "practice-1";
   const snapshot = options.snapshot ?? "";
 
   await act(async () => {
@@ -156,7 +156,7 @@ export async function deliverSnapshot(
   harness: Harness,
   options: { questionId?: string; snapshot?: string } = {},
 ): Promise<void> {
-  const questionId = options.questionId ?? "practice-0";
+  const questionId = options.questionId ?? "practice-1";
   const snapshot = options.snapshot ?? "";
   await act(async () => {
     harness.ws().simulateMessage(
@@ -173,7 +173,7 @@ export async function deliverUpdate(
   update: string,
   options: { questionId?: string } = {},
 ): Promise<void> {
-  const questionId = options.questionId ?? "practice-0";
+  const questionId = options.questionId ?? "practice-1";
   await act(async () => {
     harness.ws().simulateMessage(JSON.stringify({ type: "update", questionId, update }));
     await Promise.resolve();

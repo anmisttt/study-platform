@@ -1,5 +1,6 @@
 import {
   formatQuestionRef,
+  parseQuestionRef,
   roomQuestionCheckApiPath,
   type Chapter,
   type PracticeItem,
@@ -40,6 +41,22 @@ const chapter: Chapter = {
   ],
 };
 
+describe("question references", () => {
+  it("formats zero-based indices as one-based references and parses them back", () => {
+    expect(formatQuestionRef("theory", 0)).toBe("theory-1");
+    expect(formatQuestionRef("practice", 3)).toBe("practice-4");
+    expect(parseQuestionRef("theory-1")).toEqual({ type: "theory", index: 0 });
+    expect(parseQuestionRef("practice-4")).toEqual({ type: "practice", index: 3 });
+  });
+
+  it.each(["theory-0", "practice-0", "theory-01", "practice--1", "other-1"])(
+    "rejects noncanonical reference %s",
+    (questionRef) => {
+      expect(parseQuestionRef(questionRef)).toBeNull();
+    },
+  );
+});
+
 function expectPromptForItem(
   questionId: string,
   expected: TheoryItem | PracticeItem,
@@ -61,19 +78,19 @@ function expectPromptForItem(
 }
 
 describe("resolveChapterQuestion", () => {
-  it("maps theory-N to the theory item at index N", () => {
-    expectPromptForItem("theory-0", chapter.theory[0]);
-    expectPromptForItem("theory-1", chapter.theory[1]);
+  it("maps one-based theory-N to the zero-based theory item", () => {
+    expectPromptForItem("theory-1", chapter.theory[0]);
+    expectPromptForItem("theory-2", chapter.theory[1]);
   });
 
-  it("maps practice-N to the practice item at index N", () => {
-    expectPromptForItem("practice-0", chapter.practice[0]);
-    expectPromptForItem("practice-1", chapter.practice[1]);
+  it("maps one-based practice-N to the zero-based practice item", () => {
+    expectPromptForItem("practice-1", chapter.practice[0]);
+    expectPromptForItem("practice-2", chapter.practice[1]);
   });
 
   it("does not cross theory and practice at the same index", () => {
-    const theory = resolveChapterQuestion(chapter, "theory-0");
-    const practice = resolveChapterQuestion(chapter, "practice-0");
+    const theory = resolveChapterQuestion(chapter, "theory-1");
+    const practice = resolveChapterQuestion(chapter, "practice-1");
 
     expect(theory?.item).toEqual(chapter.theory[0]);
     expect(practice?.item).toEqual(chapter.practice[0]);
@@ -91,6 +108,9 @@ describe("resolveChapterQuestion", () => {
   it("returns null for unknown or out-of-range ids", () => {
     expect(resolveChapterQuestion(chapter, "theory-99")).toBeNull();
     expect(resolveChapterQuestion(chapter, "practice-99")).toBeNull();
+    expect(resolveChapterQuestion(chapter, "theory-0")).toBeNull();
+    expect(resolveChapterQuestion(chapter, "practice-0")).toBeNull();
+    expect(resolveChapterQuestion(chapter, "theory-01")).toBeNull();
     expect(resolveChapterQuestion(chapter, "other-0")).toBeNull();
     expect(resolveChapterQuestion(chapter, "0")).toBeNull();
   });

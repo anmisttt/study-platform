@@ -60,7 +60,7 @@ describe("useCollaborativeDraft", () => {
     expect(harness.ws().url).toBe("ws://localhost/api/ws/rooms/room1");
     expect(harness.ws().sentMessagesOfType("watch_question").at(-1)).toEqual({
       type: "watch_question",
-      questionId: "practice-0",
+      questionId: "practice-1",
     });
   });
 
@@ -100,7 +100,7 @@ describe("useCollaborativeDraft", () => {
     expect(harness.ws().sentMessagesOfType("update").length).toBe(baseline + 1);
     expect(harness.ws().sentMessagesOfType("update").at(-1)).toMatchObject({
       type: "update",
-      questionId: "practice-0",
+      questionId: "practice-1",
     });
     expect(harness.ws().sentMessagesOfType("update").at(-1)).not.toHaveProperty("roomId");
   });
@@ -115,7 +115,7 @@ describe("useCollaborativeDraft", () => {
   });
 
   it("merges a locally-persisted draft with an empty server snapshot without duplication", async () => {
-    await saveDraftUpdate("room1", "practice-0", bytesFor("local draft"));
+    await saveDraftUpdate("room1", "practice-1", bytesFor("local draft"));
 
     const harness = renderDraft();
     await connectAndSnapshot(harness);
@@ -129,25 +129,25 @@ describe("useCollaborativeDraft", () => {
     await connectAndSnapshot(harness);
 
     act(() => {
-      harness.api().onAnswerInputChange("answer for q0");
+      harness.api().onAnswerInputChange("answer for question 1");
     });
     await settle();
 
     // Switch to a different question.
-    harness.rerender({ questionId: "practice-1" });
+    harness.rerender({ questionId: "practice-2" });
     expect(harness.ws().sentMessagesOfType("watch_question").at(-1)).toEqual({
       type: "watch_question",
-      questionId: "practice-1",
+      questionId: "practice-2",
     });
-    await deliverSnapshot(harness, { questionId: "practice-1" });
+    await deliverSnapshot(harness, { questionId: "practice-2" });
     expect(harness.api().answerInput).toBe("");
     expect(MockWebSocket.instances).toHaveLength(1);
 
     // Return to the original question; its draft should rehydrate from storage.
-    harness.rerender({ questionId: "practice-0" });
-    await deliverSnapshot(harness, { questionId: "practice-0" });
+    harness.rerender({ questionId: "practice-1" });
+    await deliverSnapshot(harness, { questionId: "practice-1" });
     await settle();
-    expect(harness.api().answerInput).toBe("answer for q0");
+    expect(harness.api().answerInput).toBe("answer for question 1");
   });
 
   it("opens a new room-scoped socket when switching rooms", async () => {
@@ -165,7 +165,7 @@ describe("useCollaborativeDraft", () => {
     expect(socket.readyState).toBe(MockWebSocket.CLOSED);
     expect(socket.sentMessagesOfType("update").at(-1)).toMatchObject({
       type: "update",
-      questionId: "practice-0",
+      questionId: "practice-1",
     });
     expect(harness.ws()).not.toBe(socket);
     expect(harness.ws().url).toBe("ws://localhost/api/ws/rooms/room2");
@@ -174,7 +174,7 @@ describe("useCollaborativeDraft", () => {
       harness.ws().simulateOpen();
     });
     expect(harness.ws().sentMessagesOfType("watch_question")).toEqual([
-      { type: "watch_question", questionId: "practice-0" },
+      { type: "watch_question", questionId: "practice-1" },
     ]);
 
     await deliverSnapshot(harness);
@@ -192,7 +192,7 @@ describe("useCollaborativeDraft", () => {
     });
 
     expect(onRoomSnapshot).toHaveBeenCalledWith(roomDetails);
-    harness.rerender({ questionId: "practice-1" });
+    harness.rerender({ questionId: "practice-2" });
     expect(MockWebSocket.instances).toHaveLength(1);
   });
 
@@ -223,7 +223,7 @@ describe("useCollaborativeDraft", () => {
     await settle();
 
     expect(harness.api().answerInput).toBe("");
-    expect(await loadDraftUpdate("room1", "practice-0")).toBeNull();
+    expect(await loadDraftUpdate("room1", "practice-1")).toBeNull();
   });
 
   it("appends text with a separating space", async () => {
@@ -260,7 +260,7 @@ describe("useCollaborativeDraft", () => {
     expect(harness.ws().url).toBe("ws://localhost/api/ws/rooms/room1");
     expect(harness.ws().sentMessagesOfType("watch_question").at(-1)).toEqual({
       type: "watch_question",
-      questionId: "practice-0",
+      questionId: "practice-1",
     });
   });
 
@@ -270,14 +270,14 @@ describe("useCollaborativeDraft", () => {
 
     await act(async () => {
       harness.ws().simulateMessage(
-        JSON.stringify({ type: "checking", questionId: "practice-0", checking: true }),
+        JSON.stringify({ type: "checking", questionId: "practice-1", checking: true }),
       );
       await Promise.resolve();
     });
     expect(harness.api().isAnswerChecking).toBe(true);
 
     act(() => {
-      harness.ws().simulateMessage(JSON.stringify({ type: "checking", questionId: "practice-0", checking: false }));
+      harness.ws().simulateMessage(JSON.stringify({ type: "checking", questionId: "practice-1", checking: false }));
     });
     expect(harness.ws().sentMessagesOfType("checking")).toEqual([]);
     expect(harness.api().isAnswerChecking).toBe(false);
