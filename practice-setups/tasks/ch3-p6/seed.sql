@@ -1,5 +1,5 @@
 -- PostgreSQL
-CREATE TABLE ch2_job_postings_raw (
+CREATE TABLE job_postings_raw (
   id           SERIAL PRIMARY KEY,
   title        TEXT NOT NULL,
   company_name TEXT NOT NULL,
@@ -7,7 +7,7 @@ CREATE TABLE ch2_job_postings_raw (
   category     TEXT NOT NULL
 );
 
-INSERT INTO ch2_job_postings_raw (title, company_name, city, category) VALUES
+INSERT INTO job_postings_raw (title, company_name, city, category) VALUES
   ('Backend Engineer',   'Acme Corp',      'Berlin',    'Engineering'),
   ('Data Analyst',       'Acme Corp',      'Berlin',    'Analytics'),
   ('iOS Developer',      'Acme Corp',      'London',    'Engineering'),

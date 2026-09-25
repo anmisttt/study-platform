@@ -1,4 +1,3 @@
--- Task 1: dependencies reachable from myapp.
 WITH RECURSIVE all_deps(dep_id, depth, path) AS (
   -- implement: direct dependencies
   SELECT NULL::INT, NULL::INT, ARRAY[]::INT[]
@@ -13,11 +12,10 @@ WITH RECURSIVE all_deps(dep_id, depth, path) AS (
 )
 SELECT p.name, p.version, MIN(ad.depth) AS min_hops
 FROM all_deps ad
-JOIN ch2_packages p ON p.id = ad.dep_id
+JOIN packages p ON p.id = ad.dep_id
 GROUP BY p.name, p.version
 ORDER BY min_hops, p.name;
 
--- Task 2: packages affected by a change to utils.
 WITH RECURSIVE impacted(pkg_id, depth, path) AS (
   -- implement: direct dependents
   SELECT NULL::INT, NULL::INT, ARRAY[]::INT[]
@@ -32,6 +30,6 @@ WITH RECURSIVE impacted(pkg_id, depth, path) AS (
 )
 SELECT p.name, p.version, MIN(i.depth) AS hops_from_utils
 FROM impacted i
-JOIN ch2_packages p ON p.id = i.pkg_id
+JOIN packages p ON p.id = i.pkg_id
 GROUP BY p.name, p.version
 ORDER BY hops_from_utils, p.name;

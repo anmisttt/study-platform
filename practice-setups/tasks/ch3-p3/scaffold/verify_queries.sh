@@ -6,17 +6,61 @@ expected_pg=$'logger,2.0.0,1\nwebserver,2.3.1,1\nrouter,1.4.0,2\nutils,1.1.0,2\n
 test "$pg_output" = "$expected_pg"
 
 orient_output="$(docker compose exec -T orientdb /orientdb/bin/console.sh /lab/orient_compare.osql)"
-grep -q 'min_hops' <<<"$orient_output"
-grep -q 'hops_from_utils' <<<"$orient_output"
-for row in '1[[:space:]]*\|[[:space:]]*logger[[:space:]]*\|[[:space:]]*2\.0\.0' \
-  '1[[:space:]]*\|[[:space:]]*webserver[[:space:]]*\|[[:space:]]*2\.3\.1' \
-  '2[[:space:]]*\|[[:space:]]*router[[:space:]]*\|[[:space:]]*1\.4\.0' \
-  '2[[:space:]]*\|[[:space:]]*utils[[:space:]]*\|[[:space:]]*1\.1\.0' \
-  '3[[:space:]]*\|[[:space:]]*crypto[[:space:]]*\|[[:space:]]*4\.2\.0' \
-  '3[[:space:]]*\|[[:space:]]*http-lib[[:space:]]*\|[[:space:]]*3\.1\.0' \
-  '2[[:space:]]*\|[[:space:]]*myapp[[:space:]]*\|[[:space:]]*1\.0\.0' \
-  '2[[:space:]]*\|[[:space:]]*webserver[[:space:]]*\|[[:space:]]*2\.3\.1'; do
-  grep -Eq "$row" <<<"$orient_output"
-done
+
+extract_orient_rows() {
+  local hop_column="$1"
+
+  awk -F'|' -v hop_column="$hop_column" '
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+
+    /^[[:space:]]*\|/ {
+      for (i = 1; i <= NF; i++) {
+        field[i] = trim($i)
+      }
+
+      if (field[2] == "#") {
+        active = field[3] == hop_column
+        if (active) {
+          headers++
+          if (NF != 6 || field[4] != "name" || field[5] != "version") {
+            invalid = 1
+          }
+        }
+        next
+      }
+
+      if (active && field[2] ~ /^[0-9]+$/) {
+        if (NF != 6) {
+          invalid = 1
+          next
+        }
+        print field[3] "|" field[4] "|" field[5]
+        next
+      }
+
+      if (active) {
+        invalid = 1
+      }
+    }
+
+    END {
+      if (headers != 1 || invalid) {
+        exit 1
+      }
+    }
+  ' <<<"$orient_output"
+}
+
+orient_forward="$(extract_orient_rows min_hops)"
+expected_orient_forward=$'1|logger|2.0.0\n1|webserver|2.3.1\n2|router|1.4.0\n2|utils|1.1.0\n3|crypto|4.2.0\n3|http-lib|3.1.0'
+test "$orient_forward" = "$expected_orient_forward"
+
+orient_reverse="$(extract_orient_rows hops_from_utils)"
+expected_orient_reverse=$'1|logger|2.0.0\n2|myapp|1.0.0\n2|webserver|2.3.1'
+test "$orient_reverse" = "$expected_orient_reverse"
 
 echo 'All dependency traversal checks passed.'

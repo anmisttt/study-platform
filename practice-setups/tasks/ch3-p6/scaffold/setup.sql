@@ -1,4 +1,3 @@
--- PostgreSQL
 -- implement: denormalized rename
 -- implement: lookup tables
 -- implement: normalized postings table

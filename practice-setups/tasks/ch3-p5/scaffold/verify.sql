@@ -12,7 +12,7 @@ BEGIN
     SELECT 1
     FROM information_schema.columns
     WHERE table_schema = 'public'
-      AND table_name = 'ch2_notif_relational'
+      AND table_name = 'notif_relational'
       AND column_name = 'priority'
       AND data_type = 'text'
       AND is_nullable = 'NO'
@@ -24,7 +24,7 @@ BEGIN
   SELECT count(*) FILTER (WHERE type = 'sms' AND priority = 'high'),
          count(*) FILTER (WHERE type <> 'sms' AND priority = 'normal')
   INTO relational_sms_count, relational_normal_count
-  FROM ch2_notif_relational;
+  FROM notif_relational;
 
   IF relational_sms_count <> 1 OR relational_normal_count <> 3 THEN
     RAISE EXCEPTION 'relational priorities do not match the seeded notifications';
@@ -38,7 +38,7 @@ BEGIN
   INTO relational_projection
   FROM (
     SELECT id, user_id, type, message, priority, created_at
-    FROM ch2_notif_relational
+    FROM notif_relational
   ) AS projected;
 
   IF relational_projection <> '[
@@ -54,18 +54,18 @@ BEGIN
     SELECT 1
     FROM information_schema.columns
     WHERE table_schema = 'public'
-      AND table_name = 'ch2_notif_document'
+      AND table_name = 'notif_document'
       AND column_name IN ('priority', 'ttl_seconds')
   ) THEN
     RAISE EXCEPTION 'document attributes must remain inside payload';
   END IF;
 
-  IF (SELECT count(*) FROM ch2_notif_document
+  IF (SELECT count(*) FROM notif_document
       WHERE type = 'push' AND payload @> '{"ttl_seconds": 86400}'::jsonb) <> 2
-     OR (SELECT count(*) FROM ch2_notif_document
+     OR (SELECT count(*) FROM notif_document
          WHERE user_id = 2 AND type = 'push'
            AND payload @> '{"message": "New message from Sarah", "device_token": "tok_xyz", "badge": 3, "ttl_seconds": 3600}'::jsonb) <> 1
-     OR EXISTS (SELECT 1 FROM ch2_notif_document
+     OR EXISTS (SELECT 1 FROM notif_document
                 WHERE type IN ('email', 'sms') AND payload ? 'ttl_seconds') THEN
     RAISE EXCEPTION 'document TTL outcomes do not match the required evolution';
   END IF;
@@ -77,7 +77,7 @@ BEGIN
            type,
            payload ->> 'message' AS message,
            COALESCE(payload ->> 'priority', 'normal') AS priority
-    FROM ch2_notif_document
+    FROM notif_document
   ) AS projected;
 
   IF document_priority_projection <> '[
@@ -99,7 +99,7 @@ BEGIN
     SELECT type,
            payload ->> 'message' AS message,
            payload ->> 'ttl_seconds' AS ttl
-    FROM ch2_notif_document
+    FROM notif_document
   ) AS projected;
 
   IF document_ttl_projection <> '[

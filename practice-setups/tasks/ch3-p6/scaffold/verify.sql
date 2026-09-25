@@ -6,24 +6,24 @@ DECLARE
   joined_rows integer;
   joined_acme_rows integer;
 BEGIN
-  IF (SELECT count(*) FROM ch2_job_postings_raw WHERE company_name = 'Acme Technologies') <> 5
-     OR EXISTS (SELECT 1 FROM ch2_job_postings_raw WHERE company_name = 'Acme Corp') THEN
+  IF (SELECT count(*) FROM job_postings_raw WHERE company_name = 'Acme Technologies') <> 5
+     OR EXISTS (SELECT 1 FROM job_postings_raw WHERE company_name = 'Acme Corp') THEN
     RAISE EXCEPTION 'denormalized rename is incomplete';
   END IF;
 
-  IF (SELECT count(*) FROM ch2_companies) <> 2
-     OR (SELECT count(*) FROM ch2_cities) <> 3
-     OR (SELECT count(*) FROM ch2_job_categories) <> 4
-     OR (SELECT count(*) FROM ch2_job_postings) <> 8 THEN
+  IF (SELECT count(*) FROM companies) <> 2
+     OR (SELECT count(*) FROM cities) <> 3
+     OR (SELECT count(*) FROM job_categories) <> 4
+     OR (SELECT count(*) FROM job_postings) <> 8 THEN
     RAISE EXCEPTION 'lookup or posting migration is incomplete';
   END IF;
 
   IF (
     SELECT count(*)
       FROM (VALUES
-        ('ch2_companies'::regclass),
-        ('ch2_cities'::regclass),
-        ('ch2_job_categories'::regclass)
+        ('companies'::regclass),
+        ('cities'::regclass),
+        ('job_categories'::regclass)
       ) AS expected(table_oid)
      WHERE EXISTS (
        SELECT 1
@@ -47,7 +47,7 @@ BEGIN
         ON column_def.attrelid = constraint_def.conrelid
        AND column_def.attnum = constraint_def.conkey[1]
      WHERE constraint_def.contype = 'p'
-       AND constraint_def.conrelid = 'ch2_job_postings'::regclass
+       AND constraint_def.conrelid = 'job_postings'::regclass
        AND cardinality(constraint_def.conkey) = 1
        AND column_def.attname = 'id'
   ) THEN
@@ -57,9 +57,9 @@ BEGIN
   IF (
     SELECT count(*)
       FROM (VALUES
-        ('company_id', 'ch2_companies'::regclass, 'id'),
-        ('city_id', 'ch2_cities'::regclass, 'id'),
-        ('category_id', 'ch2_job_categories'::regclass, 'id')
+        ('company_id', 'companies'::regclass, 'id'),
+        ('city_id', 'cities'::regclass, 'id'),
+        ('category_id', 'job_categories'::regclass, 'id')
       ) AS expected(source_column, target_table, target_column)
      WHERE EXISTS (
        SELECT 1
@@ -71,7 +71,7 @@ BEGIN
            ON target_def.attrelid = constraint_def.confrelid
           AND target_def.attnum = constraint_def.confkey[1]
         WHERE constraint_def.contype = 'f'
-          AND constraint_def.conrelid = 'ch2_job_postings'::regclass
+          AND constraint_def.conrelid = 'job_postings'::regclass
           AND constraint_def.confrelid = expected.target_table
           AND cardinality(constraint_def.conkey) = 1
           AND cardinality(constraint_def.confkey) = 1
@@ -82,26 +82,26 @@ BEGIN
     RAISE EXCEPTION 'normalized posting foreign keys are incomplete';
   END IF;
 
-  IF (SELECT count(*) FROM ch2_companies WHERE name = 'Acme Corp Inc') <> 1
-     OR EXISTS (SELECT 1 FROM ch2_companies WHERE name = 'Acme Technologies') THEN
+  IF (SELECT count(*) FROM companies WHERE name = 'Acme Corp Inc') <> 1
+     OR EXISTS (SELECT 1 FROM companies WHERE name = 'Acme Technologies') THEN
     RAISE EXCEPTION 'single-row lookup rename is incomplete';
   END IF;
 
   SELECT count(*),
          count(*) FILTER (WHERE companies.name = 'Acme Corp Inc')
     INTO joined_rows, joined_acme_rows
-    FROM ch2_job_postings AS postings
-    JOIN ch2_companies AS companies ON companies.id = postings.company_id
-    JOIN ch2_cities AS cities ON cities.id = postings.city_id
-    JOIN ch2_job_categories AS categories ON categories.id = postings.category_id;
+    FROM job_postings AS postings
+    JOIN companies AS companies ON companies.id = postings.company_id
+    JOIN cities AS cities ON cities.id = postings.city_id
+    JOIN job_categories AS categories ON categories.id = postings.category_id;
 
   SELECT count(*)
     INTO migrated_rows
-    FROM ch2_job_postings_raw AS raw
-    JOIN ch2_job_postings AS postings ON postings.title = raw.title
-    JOIN ch2_companies AS companies ON companies.id = postings.company_id
-    JOIN ch2_cities AS cities ON cities.id = postings.city_id
-    JOIN ch2_job_categories AS categories ON categories.id = postings.category_id
+    FROM job_postings_raw AS raw
+    JOIN job_postings AS postings ON postings.title = raw.title
+    JOIN companies AS companies ON companies.id = postings.company_id
+    JOIN cities AS cities ON cities.id = postings.city_id
+    JOIN job_categories AS categories ON categories.id = postings.category_id
    WHERE companies.name = CASE
            WHEN raw.company_name = 'Acme Technologies' THEN 'Acme Corp Inc'
            ELSE raw.company_name

@@ -45,6 +45,17 @@ if [ "${1:-}" = "init" ]; then
       done < <(find /lab/image -mindepth 1 -print0)
     fi
   fi
+
+  # PostgreSQL lab images bake their schema and fixture rows from seed.sql.
+  # Expose the same source through init so learners can inspect the preloaded
+  # database state without digging into the image.
+  if [ -f /lab/seed.sql ]; then
+    mkdir -p "$out/preloaded_data"
+    cp /lab/seed.sql "$out/preloaded_data/seed.sql"
+    if [ -n "$owner" ]; then
+      chown -h "$owner" "$out/preloaded_data" "$out/preloaded_data/seed.sql"
+    fi
+  fi
   exit 0
 fi
 
