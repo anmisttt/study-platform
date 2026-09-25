@@ -2,11 +2,12 @@ import type { CheckResult } from "@study-platform/shared";
 import type { TextPromptClient } from "@langfuse/client";
 import { observeOpenAI, type LangfuseConfig } from "@langfuse/openai";
 import { OpenAI } from "openai";
-import type { TutorEvaluationRequest } from "../prompts/user-prompt";
-import { initializeLangfuseTracing } from "../observability/langfuse";
+import type { TutorEvaluationRequest } from "../prompts/user-prompt.js";
+import { initializeLangfuseTracing } from "../observability/langfuse.js";
 
 export type TutorTraceContext = {
   sessionId?: string;
+  userId?: string;
   metadata?: Record<string, string>;
 };
 
@@ -18,6 +19,7 @@ export function tutorLangfuseConfig(
   return {
     traceName: "evaluate-tutor-answer",
     sessionId: traceContext.sessionId,
+    ...(traceContext.userId ? { userId: traceContext.userId } : {}),
     tags: ["tutor", "answer-evaluation", request.itemType],
     generationName: "grade-answer",
     langfusePrompt: systemPrompt,

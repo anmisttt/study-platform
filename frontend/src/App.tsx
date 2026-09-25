@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { matchPath, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import "./styles/App.css";
+import "./styles/account.css";
+import { AuthProvider } from "./auth/context";
+import AccountNav from "./auth/accountNav";
+import AuthPage from "./auth/authPage";
+import ProfilePage from "./auth/profilePage";
 import Contest from "./components/contest";
 import { flattenItems } from "./utils/questions";
 import TableOfContents from "./components/table-of-contents";
@@ -17,6 +22,7 @@ import {
   roomIdFromSearch,
 } from "./routes/paths";
 import { clearRoomDraftUpdates } from "./utils/draftStorage";
+import { useRoomParticipation } from "./hooks/useRoomParticipation";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 const GITHUB_REPO_URL = "https://github.com/anmisttt/study-platform";
@@ -236,7 +242,7 @@ function ChapterIdRedirect({ chapters }: { chapters: Map<string, ChapterMeta> })
   return <Navigate to={chapterOverviewPath(chapterMeta.number, roomId ?? undefined)} replace />;
 }
 
-function App() {
+function AppContent() {
   const [chapters, setChapters] = useState<Map<string, ChapterMeta>>(new Map());
   const [loadingChapters, setLoadingChapters] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string>("");
@@ -247,7 +253,9 @@ function App() {
   const activeChapterId = resolveChapterMeta(activeChapterKey, chapters)?.id ?? "";
   const roomId = roomIdFromSearch(searchParams.toString());
   const isHomeRoute = location.pathname === chaptersPath() || location.pathname === "/";
-  const isPracticeRoute = /^\/chapters\/[^/]+\/questions\//.test(location.pathname);
+  const isRoomRoute = Boolean(matchPath("/chapters/:chapterId/overview", location.pathname)
+    || matchPath("/chapters/:chapterId/questions/:questionRef", location.pathname));
+  const participation = useRoomParticipation(isRoomRoute ? roomId : null);
 
   useEffect(() => {
     let mounted = true;
@@ -323,13 +331,21 @@ function App() {
       {!isHomeRoute && <TableOfContents chapters={chaptersList} activeChapterId={activeChapterId} />}
 
       <main className="content">
-        {roomId && isPracticeRoute && (
-          <div className="room-id-corner">
-            <span>Room ID:</span>
-            <code>{roomId}</code>
-          </div>
-        )}
+        <div className="account-header">
+          <AccountNav />
+        </div>
+        {participation.status === "saved" && <p className="account-notice participation-notice" role="status">Room saved to your profile.</p>}
+        {participation.status === "error" && <div className="account-error participation-notice" role="alert">
+          <span>Couldn't save this room to your profile.</span>
+          <button className="secondary-button" onClick={participation.retry}>Retry</button>
+        </div>}
         <Routes>
+          <Route path="/login" element={<AuthPage key="login" mode="login" />} />
+          <Route path="/register" element={<AuthPage key="register" mode="register" />} />
+          <Route path="/verify-email" element={<AuthPage key="verify" mode="verify" />} />
+          <Route path="/forgot-password" element={<AuthPage key="forgot" mode="forgot" />} />
+          <Route path="/reset-password" element={<AuthPage key="reset" mode="reset" />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/" element={<Navigate to={chaptersPath()} replace />} />
           <Route path="/chapters" element={<ChaptersIndexPage chapters={chaptersList} />} />
           <Route path="/chapters/:chapterId" element={<ChapterIdRedirect chapters={chapters} />} />
@@ -342,4 +358,4 @@ function App() {
   );
 }
 
-export default App;
+export default function App() { return <AuthProvider><AppContent /></AuthProvider>; }

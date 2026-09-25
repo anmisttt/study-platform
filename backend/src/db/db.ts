@@ -10,7 +10,11 @@ export abstract class Db {
   constructor(dbPath: string = process.env.DATABASE_PATH ?? DEFAULT_DB_PATH) {
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
     this.db = new Database(dbPath);
+    this.db.pragma("foreign_keys = ON");
+    this.db.pragma("busy_timeout = 5000");
   }
+
+  get connection(): Database.Database { return this.db; }
 
   run(sql: string, params: unknown[] = []): Database.RunResult {
     return this.db.prepare(sql).run(...params);

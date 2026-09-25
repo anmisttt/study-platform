@@ -29,6 +29,8 @@ describe("App routing", () => {
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
+        if (url.endsWith("/participants/me")) return Promise.resolve(jsonResponse({ participationCreated: false }));
+        if (url.endsWith("/me")) return Promise.resolve(jsonResponse({ id: "owner", email: "test@example.com", llmKey: { configured: false, lastFour: null, updatedAt: null } }));
         if (url.endsWith("/chapters") || url.includes("/chapters")) {
           return Promise.resolve(jsonResponse([chapterMeta]));
         }
@@ -125,7 +127,7 @@ describe("App routing", () => {
     fireEvent.click(await screen.findByRole("button", { name: /1\. Introduction/ }));
 
     expect(await screen.findByRole("heading", { name: "Introduction" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Generate new room" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Generate new room" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Join room" })).toBeTruthy();
   });
 
@@ -135,33 +137,42 @@ describe("App routing", () => {
     expect(await screen.findByText("Theory 1")).toBeTruthy();
     expect(screen.getByText("What is a process?")).toBeTruthy();
 
-    const roomLabels = screen.getAllByText("Room ID:");
-    expect(roomLabels.length).toBeGreaterThan(0);
-    expect(screen.getAllByText("ABC123").length).toBeGreaterThan(0);
+    expect(screen.getByText("Room ID:")).toBeTruthy();
+    expect(screen.getByText("ABC123")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Next question" }));
     expect(await screen.findByText("Practice 1")).toBeTruthy();
     expect(webSocketCount).toBe(1);
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/participants/me"))).toHaveLength(1));
+  });
+
+  it("registers overview links without opening a WebSocket or editing an answer", async () => {
+    renderApp(chapterOverviewPath(chapterMeta.number, "ABC123"));
+    await screen.findByRole("heading", { name: "Introduction" });
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/rooms/ABC123/participants/me", expect.objectContaining({ method: "POST", credentials: "include" })));
+    expect(webSocketCount).toBe(0);
   });
 
   it("redirects practice routes without a roomId back to overview with an error", async () => {
     renderApp(chapterQuestionPath(chapterMeta.number, "theory-0"));
 
     expect(await screen.findByText("A room ID is required to practice.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Generate new room" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Generate new room" })).toBeTruthy();
   });
 
   it("reports room connection errors and returns to the overview", async () => {
     renderApp(chapterQuestionPath(chapterMeta.number, "theory-0", "MISSING"));
 
     expect(await screen.findByText("Room not found.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Generate new room" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Generate new room" })).toBeTruthy();
   });
 
   it("preserves roomId when generating a room from overview", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.endsWith("/participants/me")) return Promise.resolve(jsonResponse({ participationCreated: false }));
+        if (url.endsWith("/me")) return Promise.resolve(jsonResponse({ id: "owner", email: "test@example.com", llmKey: { configured: false, lastFour: null, updatedAt: null } }));
       if (url.includes("/chapters") && !url.includes("/rooms")) {
         return Promise.resolve(jsonResponse([chapterMeta]));
       }
@@ -183,8 +194,8 @@ describe("App routing", () => {
   it("redirects unknown question refs back to the chapter overview", async () => {
     renderApp(chapterQuestionPath(chapterMeta.number, "theory-99", "ABC123"));
 
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Generate new room" })).toBeTruthy();
+    await waitFor(async () => {
+      expect(await screen.findByRole("button", { name: "Generate new room" })).toBeTruthy();
     });
     expect(screen.queryByText("Theory 1")).toBeNull();
   });

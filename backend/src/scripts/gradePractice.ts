@@ -4,13 +4,13 @@ import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import dotenv from "dotenv";
 import type { PracticeItem } from "@study-platform/shared";
-import { chapters, getChapterById } from "../chapters";
-import { shutdownLangfuseTracing } from "../observability/langfuse";
-import { loadSystemPrompt } from "../prompts/loadSystemPrompt";
-import { tutorEvaluationRequestForItem } from "../prompts/user-prompt";
-import { Tutor } from "../services/tutor";
+import { chapters, getChapterById } from "../chapters.js";
+import { shutdownLangfuseTracing } from "../observability/langfuse.js";
+import { loadSystemPrompt } from "../prompts/loadSystemPrompt.js";
+import { tutorEvaluationRequestForItem } from "../prompts/user-prompt.js";
+import { Tutor } from "../services/tutor.js";
 
-dotenv.config({ path: path.join(__dirname, "../../.env") });
+dotenv.config({ path: path.join(import.meta.dirname, "../../.env") });
 dotenv.config({ path: path.join(homedir(), ".env") });
 
 type Trial = { rating: number; comment: string };
@@ -161,7 +161,7 @@ async function main(): Promise<void> {
   }
 
   if (args.dumpBrief) {
-    const repoRoot = path.resolve(__dirname, "../../..");
+    const repoRoot = path.resolve(import.meta.dirname, "../../..");
     const brief = {
       chapterId: chapter.id,
       practiceIndex: args.index,

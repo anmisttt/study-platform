@@ -10,3 +10,7 @@ artifacts/
 .practice-validation/
 books/
 .codex/
+
+!backend/.env.example
+frontend/test-results/
+frontend/playwright-report/

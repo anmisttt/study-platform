@@ -6,11 +6,11 @@ import {
   type TheoryItem,
 } from "@study-platform/shared";
 import { describe, expect, it } from "vitest";
-import { resolveChapterQuestion } from "./resolveChapterQuestion";
+import { resolveChapterQuestion } from "./resolveChapterQuestion.js";
 import {
   tutorEvaluationRequestForItem,
   userPromptForItem,
-} from "../prompts/user-prompt";
+} from "../prompts/user-prompt.js";
 
 const chapter: Chapter = {
   id: "test_chapter",

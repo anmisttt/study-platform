@@ -6,11 +6,12 @@ import {
   decodeAnswerText,
   startRoomsWebSocketServer,
   TestClient,
-} from "./wsHelpers/testClient";
+} from "./wsHelpers/testClient.js";
 
 const ROOM = "room1";
 const Q = "practice-0";
 const roomDetails: RoomDetails = {
+  hasOwnerLlmKey: false,
   roomId: ROOM,
   chapterId: "chapter-1",
   number: 1,
@@ -43,6 +44,46 @@ afterEach(async () => {
 });
 
 describe("RoomsWebSocketServer", () => {
+  it("validates the browser origin before accepting a connection", async () => {
+    await server.close();
+    server = await startRoomsWebSocketServer(undefined, ["https://study.example"]);
+    for (const origin of [undefined, "https://untrusted.example"]) {
+      const rejected = new TestClient(server.port, ROOM, origin);
+      clients.push(rejected);
+      await expect(rejected.ready()).rejects.toThrow();
+    }
+    const allowed = new TestClient(server.port, ROOM, "https://study.example");
+    clients.push(allowed);
+    await allowed.ready();
+    allowed.watchQuestion(Q);
+    expect(await allowed.waitForType("snapshot")).toMatchObject({ questionId: Q });
+  });
+
+  it("rejects client-authored checking status", async () => {
+    const client = await connect();
+    client.watchQuestion(Q);
+    await client.waitForType("checking");
+    client.sendChecking(Q, true);
+    expect(await client.waitForType("error")).toMatchObject({ message: "Invalid room message." });
+    client.watchQuestion(Q);
+    expect(await client.waitForType("checking")).toMatchObject({ checking: false });
+  });
+
+  it("clears drafts and checking when deleting a room, including messages already in transit", async () => {
+    const client = await connect();
+    client.watchQuestion(Q);
+    await client.waitForType("snapshot");
+    server.webSocketServer.setChecking(ROOM, Q, true);
+    client.sendUpdate(Q, buildInsertUpdate("late update").update);
+    server.webSocketServer.removeRoom(ROOM);
+    expect(await client.waitForType("error")).toMatchObject({ message: "This room has been deleted." });
+    // The fixture allows reusing an ID; no old collaboration state may survive.
+    const next = await connect();
+    next.watchQuestion(Q);
+    expect(decodeAnswerText((await next.waitForType("snapshot")).update as string)).toBe("");
+    expect(await next.waitForType("checking")).toMatchObject({ checking: false });
+  });
+
   it("sends room state on connection and broadcasts later room changes to every question", async () => {
     await server.close();
     server = await startRoomsWebSocketServer((roomId) => ({ ...roomDetails, roomId }));
@@ -226,11 +267,11 @@ describe("RoomsWebSocketServer", () => {
       await a.waitForType("checking");
       await b.waitForType("checking");
 
-      a.sendChecking(Q, true);
+      server.webSocketServer.setChecking(ROOM, Q, true);
       const on = await b.waitForType("checking");
       expect(on).toMatchObject({ checking: true });
 
-      a.sendChecking(Q, false);
+      server.webSocketServer.setChecking(ROOM, Q, false);
       const off = await b.waitForType("checking");
       expect(off).toMatchObject({ checking: false });
     });
@@ -240,7 +281,7 @@ describe("RoomsWebSocketServer", () => {
       a.watchQuestion(Q);
       await a.waitForType("snapshot");
       await a.waitForType("checking");
-      a.sendChecking(Q, true);
+      server.webSocketServer.setChecking(ROOM, Q, true);
 
       await new Promise((resolve) => setTimeout(resolve, 50));
 

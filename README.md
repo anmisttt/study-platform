@@ -10,7 +10,7 @@ Right now, it focuses on software engineering topics based on *Designing Data-In
 
 It also includes rooms that share the same state between different participants and collaborative editing with CRDT allowing several people in one room to work on an answer together.
 
-To start practicing, you just need to choose a chapter and generate a new room.
+Sign in with Google, GitHub, or a verified email/password account to create a room. Anyone with its link can collaborate. Add an OpenAI key in your profile to enable answer checks and voice input for everyone in your rooms. Your profile lists rooms you created or opened while signed in, with All, Author, and Participant filters and shared progress. Only a room's author can delete it.
 
 ## Stack
 
@@ -19,7 +19,7 @@ To start practicing, you just need to choose a chapter and generate a new room.
 - LLM: OpenAI (answer grading + audio transcription)
 - Storage: SQLite (`better-sqlite3`) for rooms and saved answers
 - Collaboration: Yjs drafts synced over WebSocket (per room)
-- Auth: none (no authorization)
+- Auth: Better Auth with database sessions, Google/GitHub, and verified email/password accounts
 
 ## Develop
 

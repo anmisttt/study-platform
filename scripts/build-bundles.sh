@@ -19,8 +19,8 @@ npm run build
 echo "==> Building backend bundle"
 cd "${BACKEND_DIR}"
 npm ci
+rm -rf dist
 npm run build
-rm -rf dist/data
 # Avoid macOS AppleDouble (._*) files in the bundle — they break JSON.parse on Linux.
 export COPYFILE_DISABLE=1
 cp -R src/data dist/data

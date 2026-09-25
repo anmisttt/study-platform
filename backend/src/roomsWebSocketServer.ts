@@ -3,13 +3,12 @@ import * as Y from "yjs";
 import { WebSocket, WebSocketServer } from "ws";
 import {
   DRAFT_YTEXT_NAME,
-  type DraftCheckingMessage,
   type DraftClientMessage,
   type DraftServerMessage,
   type DraftUpdateMessage,
   type RoomDetails,
 } from "@study-platform/shared";
-import { decodeUpdateBase64, encodeUpdateBase64 } from "./wsHelpers/wireCodec";
+import { decodeUpdateBase64, encodeUpdateBase64 } from "./wsHelpers/wireCodec.js";
 
 const EMPTY_SNAPSHOT = encodeUpdateBase64(new Uint8Array());
 
@@ -57,20 +56,6 @@ export function parseClientMessage(raw: string): DraftClientMessage | null {
       };
     }
 
-    if (message.type === "checking") {
-      if (
-        !isNonEmptyString(message.questionId) ||
-        typeof message.checking !== "boolean"
-      ) {
-        return null;
-      }
-
-      return {
-        type: "checking",
-        questionId: message.questionId.trim(),
-        checking: message.checking,
-      };
-    }
 
     return null;
   } catch {
@@ -128,6 +113,7 @@ export class RoomsWebSocketServer {
 
   constructor(
     private readonly loadRoom?: (roomId: string) => RoomDetails,
+    private readonly allowedOrigins?: string[],
   ) {}
 
   broadcastRoomSnapshot(room: RoomDetails): void {
@@ -145,7 +131,7 @@ export class RoomsWebSocketServer {
     const wss = new WebSocketServer({ noServer: true });
 
     server.on("upgrade", (request, socket, head) => {
-      if (!roomIdFromWebSocketUrl(request.url, roomsPath)) {
+      if ((this.allowedOrigins && (!request.headers.origin || !this.allowedOrigins.includes(request.headers.origin))) || !roomIdFromWebSocketUrl(request.url, roomsPath)) {
         socket.destroy();
         return;
       }
@@ -171,6 +157,7 @@ export class RoomsWebSocketServer {
             type: "error",
             message: error instanceof Error ? error.message : "Failed to connect to room.",
           });
+          ws.close(1008, "Room unavailable");
           return;
         }
       }
@@ -183,6 +170,7 @@ export class RoomsWebSocketServer {
       roomSubscribers.add(ws);
 
       ws.on("message", (data, isBinary) => {
+        if (!this.roomSubscribers.get(roomId)?.has(ws) || ws.readyState !== WebSocket.OPEN) return;
         if (isBinary) {
           sendMessage(ws, { type: "error", message: "Binary frames are not supported." });
           return;
@@ -197,11 +185,6 @@ export class RoomsWebSocketServer {
 
         if (message.type === "watch_question") {
           this.watchQuestion(ws, roomId, message.questionId);
-          return;
-        }
-
-        if (message.type === "checking") {
-          this.handleChecking(ws, roomId, message);
           return;
         }
 
@@ -265,34 +248,24 @@ export class RoomsWebSocketServer {
     });
   }
 
-  private handleChecking(ws: WebSocket, roomId: string, message: DraftCheckingMessage): void {
-    const key = draftKey(roomId, message.questionId);
-    if (this.socketQuestions.get(ws) !== key) {
-      sendMessage(ws, { type: "error", message: "Watch the question before sending question state." });
-      return;
+  setChecking(roomId: string, questionId: string, checking: boolean): void {
+    const key = draftKey(roomId, questionId);
+    if (checking) this.checkingByKey.set(key, true);
+    else this.checkingByKey.delete(key);
+    for (const ws of this.questionSubscribers.get(key) ?? []) {
+      sendMessage(ws, { type: "checking", questionId, checking });
     }
+  }
 
-    if (message.checking) {
-      this.checkingByKey.set(key, true);
-    } else {
-      this.checkingByKey.delete(key);
+  removeRoom(roomId: string): void {
+    for (const ws of this.roomSubscribers.get(roomId) ?? []) {
+      sendMessage(ws, { type: "error", message: "This room has been deleted." });
+      ws.close(1008, "Room deleted");
     }
-
-    const subscribers = this.questionSubscribers.get(key);
-    if (!subscribers) {
-      return;
-    }
-
-    for (const peer of subscribers) {
-      if (peer === ws || peer.readyState !== WebSocket.OPEN) {
-        continue;
-      }
-
-      sendMessage(peer, {
-        type: "checking",
-        questionId: message.questionId,
-        checking: message.checking,
-      });
+    this.roomSubscribers.delete(roomId);
+    this.deleteRoomState(roomId);
+    for (const key of this.checkingByKey.keys()) {
+      if (key.startsWith(`${roomId}:`)) this.checkingByKey.delete(key);
     }
   }
 
@@ -361,8 +334,9 @@ export class RoomsWebSocketServer {
     const prefix = `${roomId}:`;
     for (const key of this.docs.keys()) {
       if (key.startsWith(prefix)) {
+        this.docs.get(key)?.destroy();
         this.docs.delete(key);
-        this.checkingByKey.delete(key);
+        this.questionSubscribers.delete(key);
       }
     }
   }

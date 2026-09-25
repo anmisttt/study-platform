@@ -264,7 +264,7 @@ describe("useCollaborativeDraft", () => {
     });
   });
 
-  it("reflects checking state from the server and broadcasts local checking", async () => {
+  it("reflects checking state only from server broadcasts", async () => {
     const harness = renderDraft();
     await connectAndSnapshot(harness);
 
@@ -277,14 +277,9 @@ describe("useCollaborativeDraft", () => {
     expect(harness.api().isAnswerChecking).toBe(true);
 
     act(() => {
-      harness.api().setAnswerChecking(false);
+      harness.ws().simulateMessage(JSON.stringify({ type: "checking", questionId: "practice-0", checking: false }));
     });
-    const checkingSent = harness.ws().sentMessagesOfType("checking");
-    expect(checkingSent.at(-1)).toEqual({
-      type: "checking",
-      questionId: "practice-0",
-      checking: false,
-    });
+    expect(harness.ws().sentMessagesOfType("checking")).toEqual([]);
     expect(harness.api().isAnswerChecking).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import type { Chapter } from "@study-platform/shared";
-import { getChapterById } from "../chapters";
-import { NotFoundError, UserError } from "../errors";
+import { getChapterById } from "../chapters.js";
+import { NotFoundError, UserError } from "../errors.js";
 
 export function resolveChapter(chapterId: string | null): { chapterId: string; chapter: Chapter } {
   if (!chapterId) {

@@ -8,8 +8,8 @@ type UseVoiceRecorderOptions = {
   apiBase: string;
   onTranscript: (text: string) => void;
   onError?: (message: string) => void;
-  /** Optional stable id bound to the ephemeral token (e.g. roomId). */
-  safetyIdentifier?: string;
+  /** The server resolves the room owner’s key. */
+  roomId?: string;
 };
 
 type UseVoiceRecorderResult = {
@@ -69,7 +69,7 @@ export function useVoiceRecorder({
   apiBase,
   onTranscript,
   onError,
-  safetyIdentifier,
+  roomId,
 }: UseVoiceRecorderOptions): UseVoiceRecorderResult {
   const [isListening, setIsListening] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -77,7 +77,7 @@ export function useVoiceRecorder({
   const onTranscriptRef = useRef(onTranscript);
   const onErrorRef = useRef(onError);
   const apiBaseRef = useRef(apiBase);
-  const safetyIdentifierRef = useRef(safetyIdentifier);
+  const roomIdRef = useRef(roomId);
   const startGenerationRef = useRef(0);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -90,7 +90,7 @@ export function useVoiceRecorder({
     onTranscriptRef.current = onTranscript;
     onErrorRef.current = onError;
     apiBaseRef.current = apiBase;
-    safetyIdentifierRef.current = safetyIdentifier;
+    roomIdRef.current = roomId;
   });
 
   const isSupported =
@@ -193,6 +193,8 @@ export function useVoiceRecorder({
       return;
     }
 
+    if (!roomIdRef.current) { onErrorRef.current?.("A room is required for voice input."); return; }
+
     const generation = ++startGenerationRef.current;
     cleanupSession();
 
@@ -201,11 +203,12 @@ export function useVoiceRecorder({
 
       const tokenRes = await fetch(`${apiBaseRef.current}${realtimeTranscriptionTokenPath()}`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           languages: languageHintsFromNavigator(),
-          ...(safetyIdentifierRef.current
-            ? { safetyIdentifier: safetyIdentifierRef.current }
+          ...(roomIdRef.current
+            ? { roomId: roomIdRef.current }
             : {}),
         }),
       });

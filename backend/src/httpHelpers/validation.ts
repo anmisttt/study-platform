@@ -1,5 +1,5 @@
 import { MAX_ANSWER_LENGTH } from "@study-platform/shared";
-import { UserError } from "../errors";
+import { UserError } from "../errors.js";
 
 export function ensureAnswer(answer: unknown): string {
   if (typeof answer !== "string") {

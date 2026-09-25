@@ -1,5 +1,5 @@
 import type { PracticeItem, RoomPracticeItem, RoomTheoryItem, TheoryItem } from "@study-platform/shared";
-import type { AnswerFieldsJson } from "./typings";
+import type { AnswerFieldsJson } from "./typings.js";
 
 export function answerFieldsForIndex(
   answers: AnswerFieldsJson[],

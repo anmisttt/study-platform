@@ -1,4 +1,4 @@
-export { Db } from "./db";
-export { RoomsDb } from "./roomsDb";
-export { ROOMS_TABLE_SCHEMA } from "./schemas";
-export type { RoomsRow } from "./typings";
+export { Db } from "./db.js";
+export { RoomsDb } from "./roomsDb.js";
+export { DATABASE_SCHEMA } from "./schemas.js";
+export type { RoomsRow } from "./typings.js";

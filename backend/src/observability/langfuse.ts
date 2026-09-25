@@ -1,4 +1,5 @@
 import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { redactTraceSpan } from "./redaction.js";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 
 let sdk: NodeSDK | undefined;
@@ -32,6 +33,8 @@ export function initializeLangfuseTracing(): void {
     environment: tracingEnvironment(),
     release: process.env.LANGFUSE_RELEASE,
   });
+  const exportSpan = spanProcessor.onEnd.bind(spanProcessor);
+  spanProcessor.onEnd = span => { redactTraceSpan(span); exportSpan(span); };
   sdk = new NodeSDK({ spanProcessors: [spanProcessor] });
   sdk.start();
 }

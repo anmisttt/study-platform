@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import type { Chapter, RawChapter } from "@study-platform/shared";
 
-const dataDir = path.join(__dirname, "data");
+const dataDir = path.join(import.meta.dirname, "data");
 
 export const chapters: Chapter[] = fs
   .readdirSync(dataDir)

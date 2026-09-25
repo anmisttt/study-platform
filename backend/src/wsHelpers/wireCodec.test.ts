@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeUpdateBase64, encodeUpdateBase64 } from "./wireCodec";
+import { decodeUpdateBase64, encodeUpdateBase64 } from "./wireCodec.js";
 
 // Mirrors the frontend btoa-based encoder in useCollaborativeDraft.ts so we can
 // assert the two independent implementations agree on the wire format.

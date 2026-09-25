@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseClientMessage, roomIdFromWebSocketUrl } from "../roomsWebSocketServer";
+import { parseClientMessage, roomIdFromWebSocketUrl } from "../roomsWebSocketServer.js";
 
 describe("parseClientMessage", () => {
   it("accepts a question watch and trims the id", () => {
@@ -16,11 +16,11 @@ describe("parseClientMessage", () => {
     expect(message).toEqual({ type: "update", questionId: "q", update: "abc" });
   });
 
-  it("accepts a valid checking message", () => {
+  it("rejects client-authored checking messages", () => {
     const message = parseClientMessage(
       JSON.stringify({ type: "checking", questionId: "q", checking: true }),
     );
-    expect(message).toEqual({ type: "checking", questionId: "q", checking: true });
+    expect(message).toBeNull();
   });
 
   it("rejects invalid JSON", () => {

@@ -3,6 +3,7 @@ export type RoomsRow = {
   created_at: string;
   updated_at: string;
   chapter_id: string;
+  owner_user_id: string | null;
   theory?: string;
   practice?: string;
   theory_answers: string;
@@ -14,4 +15,9 @@ export type AnswerFieldsJson = {
   rating?: number;
   comment?: string;
   revision?: number;
+};
+
+export type ProfileRoomRow = RoomsRow & {
+  joined_at: string;
+  last_opened_at: string;
 };

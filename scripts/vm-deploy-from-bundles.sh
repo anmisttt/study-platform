@@ -53,6 +53,11 @@ for required_cmd in tar node npm pm2 nginx crontab; do
   fi
 done
 
+if [[ "$(node -p 'process.versions.node.split(".")[0]')" != "24" ]]; then
+  echo "Node.js 24 is required. Run vm-provision-ubuntu.sh first."
+  exit 1
+fi
+
 for bundle_path in "${BACKEND_BUNDLE}" "${FRONTEND_BUNDLE}"; do
   if [[ ! -f "${bundle_path}" ]]; then
     echo "Bundle is missing: ${bundle_path}"
@@ -118,7 +123,17 @@ server {
     proxy_set_header X-Forwarded-Proto \$scheme;
   }
 
+  location /api/auth/ {
+    limit_req zone=api_per_ip burst=${NGINX_API_BURST} nodelay;
+    proxy_pass http://127.0.0.1:${API_PORT};
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+  }
+
   location /api/ {
+    limit_req zone=api_per_ip burst=${NGINX_API_BURST} nodelay;
     proxy_pass http://127.0.0.1:${API_PORT}/;
     proxy_http_version 1.1;
     proxy_set_header Host \$host;
@@ -159,6 +174,15 @@ server {
     proxy_set_header Connection "upgrade";
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
+  }
+
+  location /api/auth/ {
+    limit_req zone=api_per_ip burst=${NGINX_API_BURST} nodelay;
+    proxy_pass http://127.0.0.1:${API_PORT};
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-Proto \$scheme;
   }
 
   location /api/ {
@@ -207,31 +231,29 @@ restore_app_env() {
 echo "==> Preparing app directories (${APP_DIR})"
 mkdir -p "${APP_DIR}" "${BACKEND_DIR}" "${FRONTEND_DIR}"
 
-echo "==> Extracting bundles"
-# Clear previous build output so files removed in a newer build don't linger
-# (renamed modules, stale hashed frontend chunks). The bundles never contain a
-# .env and APP_ENV lives outside these dirs, so secrets survive extraction;
-# restore_app_env() (below) handles migrating a legacy .env on first deploy.
-rm -rf "${BACKEND_DIR}/dist" "${FRONTEND_DIR}/dist"
-tar -xzf "${BACKEND_BUNDLE}" -C "${APP_DIR}"
-tar -xzf "${FRONTEND_BUNDLE}" -C "${FRONTEND_DIR}"
-
-echo "==> Installing backend production dependencies"
-cd "${BACKEND_DIR}"
-bash "${DEPLOY_SCRIPT_DIR}/install-native-deps.sh"
-# ci (not install) for reproducible, lockfile-exact prod deps; also wipes node_modules first.
-npm ci --omit=dev
-
 if ! restore_app_env; then
   cat > "${APP_ENV}" <<EOF
-OPENAI_API_KEY=replace_me
+NODE_ENV=production
+PUBLIC_APP_URL=https://${PRIMARY_DOMAIN:-study-platform.me}
+BETTER_AUTH_SECRET=replace_me
+LLM_KEY_ENCRYPTION_SECRET=replace_me
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=
 LANGFUSE_PUBLIC_KEY=replace_me
 LANGFUSE_SECRET_KEY=replace_me
 LANGFUSE_BASE_URL=https://cloud.langfuse.com
 LANGFUSE_TRACING_ENVIRONMENT=production
 PORT=${API_PORT}
 EOF
-  echo "Created ${APP_ENV} template. Fill the OpenAI and Langfuse keys, then re-run this script."
+  echo "Created ${APP_ENV} template. Fill the authentication, encryption, SMTP, OAuth, and Langfuse settings, then re-run this script."
   exit 1
 fi
 
@@ -260,10 +282,12 @@ load_env_file() {
 }
 
 load_env_file "${APP_ENV}"
+BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-}"
 
-if [[ -z "${OPENAI_API_KEY:-}" || "${OPENAI_API_KEY}" == "replace_me" ]]; then
-  echo "OPENAI_API_KEY is missing or still set to the placeholder in ${APP_ENV}"
-  echo "Edit the file, set a real key, then re-run this script."
+if [[ "${NODE_ENV:-}" != "production" || "${PUBLIC_APP_URL:-}" != https://* ||
+      ${#BETTER_AUTH_SECRET} -lt 32 || ! "${LLM_KEY_ENCRYPTION_SECRET:-}" =~ ^[a-fA-F0-9]{64}$ ||
+      -z "${SMTP_HOST:-}" || -z "${SMTP_FROM:-}" ]]; then
+  echo "Set NODE_ENV=production, an HTTPS PUBLIC_APP_URL, BETTER_AUTH_SECRET (32+ characters), LLM_KEY_ENCRYPTION_SECRET (64 hex characters), SMTP_HOST and SMTP_FROM in ${APP_ENV}."
   exit 1
 fi
 
@@ -278,8 +302,32 @@ fi
 chmod 600 "${APP_ENV}" "${BACKEND_ENV}"
 chown "$(id -u)":"$(id -g)" "${APP_ENV}" "${BACKEND_ENV}" 2>/dev/null || true
 
+# Stop the old process before replacing its files.
+if pm2 describe "${BACKEND_PROCESS_NAME}" >/dev/null 2>&1; then
+  pm2 stop "${BACKEND_PROCESS_NAME}"
+fi
+
+echo "==> Extracting bundles"
+# Clear previous build output so files removed in a newer build don't linger
+# (renamed modules, stale hashed frontend chunks). The bundles never contain a
+# .env and APP_ENV lives outside these dirs, so secrets survive extraction;
+# restore_app_env() (below) handles migrating a legacy .env on first deploy.
+rm -rf "${BACKEND_DIR}/dist" "${FRONTEND_DIR}/dist"
+tar -xzf "${BACKEND_BUNDLE}" -C "${APP_DIR}"
+tar -xzf "${FRONTEND_BUNDLE}" -C "${FRONTEND_DIR}"
+
+echo "==> Installing backend production dependencies"
+cd "${BACKEND_DIR}"
+bash "${DEPLOY_SCRIPT_DIR}/install-native-deps.sh"
+# ci (not install) for reproducible, lockfile-exact prod deps; also wipes node_modules first.
+npm ci --omit=dev
+
+echo "==> Backing up SQLite"
+node dist/scripts/backupDatabase.js
+
 # Load secrets from .env at runtime (dotenv), not via PM2's saved environment.
 unset OPENAI_API_KEY OPENAI_TRANSCRIBE_MODEL LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY LANGFUSE_BASE_URL
+unset BETTER_AUTH_SECRET LLM_KEY_ENCRYPTION_SECRET GOOGLE_CLIENT_SECRET GITHUB_CLIENT_SECRET SMTP_PASSWORD
 
 if pm2 describe "${BACKEND_PROCESS_NAME}" >/dev/null 2>&1; then
   pm2 delete "${BACKEND_PROCESS_NAME}"

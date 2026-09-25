@@ -120,8 +120,6 @@ type UseCollaborativeDraftResult = {
   onAnswerInputChange: (value: string) => void;
   appendDraftText: (text: string, existingFallback?: string) => void;
   clearCollaborativeDraft: () => void;
-  setAnswerChecking: (checking: boolean) => void;
-  clearLocalAnswerChecking: () => void;
 };
 
 export function useCollaborativeDraft({
@@ -540,7 +538,7 @@ export function useCollaborativeDraft({
         handleServerMessage(message);
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         if (wsRef.current === ws) {
           wsRef.current = null;
         }
@@ -549,7 +547,8 @@ export function useCollaborativeDraft({
         }
         snapshotReceivedRef.current = false;
 
-        if (disposed) {
+        setIsAnswerChecking(false);
+        if (disposed || event.code === 1008) {
           return;
         }
 
@@ -698,30 +697,6 @@ export function useCollaborativeDraft({
     setAnswerInput("");
   }, [clearDebounceTimer, flushPendingUpdate]);
 
-  const setAnswerChecking = useCallback((checking: boolean) => {
-    const activeRoomId = roomIdRef.current;
-    const activeQuestionId = questionIdRef.current;
-    const ws = wsRef.current;
-
-    setIsAnswerChecking(checking);
-
-    if (!ws || ws.readyState !== WebSocket.OPEN || !activeRoomId || !activeQuestionId) {
-      return;
-    }
-
-    ws.send(
-      JSON.stringify({
-        type: "checking",
-        questionId: activeQuestionId,
-        checking,
-      }),
-    );
-  }, []);
-
-  const clearLocalAnswerChecking = useCallback(() => {
-    setIsAnswerChecking(false);
-  }, []);
-
   const hasActiveDraft = enabled && Boolean(roomId) && Boolean(questionId);
 
   return {
@@ -732,7 +707,5 @@ export function useCollaborativeDraft({
     onAnswerInputChange,
     appendDraftText,
     clearCollaborativeDraft,
-    setAnswerChecking,
-    clearLocalAnswerChecking,
   };
 }

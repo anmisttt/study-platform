@@ -51,6 +51,7 @@ export function mergeRoomDetailsIntoSession(
 
   return {
     ...session,
+    hasOwnerLlmKey: data.hasOwnerLlmKey === true,
     details,
     responses,
     revisions,

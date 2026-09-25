@@ -15,6 +15,7 @@ export const chapterMeta: ChapterMeta = {
 
 export const roomDetails: RoomDetails = {
   roomId: "ABC123",
+  hasOwnerLlmKey: true,
   chapterId: chapterMeta.id,
   number: chapterMeta.number,
   name: chapterMeta.name,

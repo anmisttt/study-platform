@@ -29,6 +29,7 @@ export type ResponseEntry = {
 
 export type ChapterSession = {
   details: Chapter | null;
+  hasOwnerLlmKey: boolean;
   responses: Record<string, ResponseEntry>;
   revisions: Record<string, number>;
 };
@@ -36,6 +37,7 @@ export type ChapterSession = {
 export function createInitialChapterSession(): ChapterSession {
   return {
     details: null,
+    hasOwnerLlmKey: false,
     responses: {},
     revisions: {},
   };

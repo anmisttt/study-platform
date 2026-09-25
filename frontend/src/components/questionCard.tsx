@@ -25,6 +25,7 @@ function getCheckButtonTooltip(
 }
 
 type QuestionCardProps = {
+  llmEnabled?: boolean;
   currentItem: QuestionItem;
   response: ResponseEntry | null;
   isEditingLocally: boolean;
@@ -41,6 +42,7 @@ type QuestionCardProps = {
 };
 
 function QuestionCard({
+  llmEnabled = true,
   currentItem,
   response,
   isEditingLocally,
@@ -73,8 +75,8 @@ function QuestionCard({
   }
 
   const isOverAnswerLimit = answerInput.length > MAX_ANSWER_LENGTH;
-  const isCheckDisabled = isChecking || !answerInput.trim() || isOverAnswerLimit;
-  const checkButtonTooltip = getCheckButtonTooltip(isChecking, answerInput, isOverAnswerLimit);
+  const isCheckDisabled = !llmEnabled || isChecking || !answerInput.trim() || isOverAnswerLimit;
+  const checkButtonTooltip = !llmEnabled ? "The room owner needs to add an OpenAI key." : getCheckButtonTooltip(isChecking, answerInput, isOverAnswerLimit);
   const showAnswer = !isChecking && (isAnswerVisible || (!isEditingLocally && response?.result));
   const showEditor = !isChecking && (isEditingLocally || !response?.result);
   const charRatio = Math.min(1, answerInput.length / MAX_ANSWER_LENGTH);
@@ -169,7 +171,7 @@ function QuestionCard({
                 type="button"
                 className={`voice-button ${isListening ? "recording" : ""}`}
                 onClick={onVoiceInput}
-                disabled={isTranscribing && !isListening}
+                disabled={(!llmEnabled || isTranscribing) && !isListening}
                 aria-label={isListening ? "Stop microphone" : "Use microphone"}
                 title={
                   isListening

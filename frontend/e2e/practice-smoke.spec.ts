@@ -10,6 +10,7 @@ const chapterMeta = {
 
 const roomDetails = {
   roomId: "ABC123",
+  hasOwnerLlmKey: true,
   chapterId: chapterMeta.id,
   number: chapterMeta.number,
   name: chapterMeta.name,
@@ -110,6 +111,10 @@ async function mockBackend(page: Page): Promise<void> {
     const url = new URL(request.url());
     const path = url.pathname.replace(/^\/api/, "") || "/";
 
+    if (request.method() === "GET" && path === "/me") {
+      await fulfillJson(route, { id: "owner", email: "owner@example.com", llmKey: { configured: true, lastFour: "1234", updatedAt: null } });
+      return;
+    }
     if (request.method() === "GET" && path === "/chapters") {
       await fulfillJson(route, [chapterMeta]);
       return;

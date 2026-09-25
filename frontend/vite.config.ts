@@ -20,8 +20,12 @@ export default defineConfig({
     host: true,
     allowedHosts: [".ngrok-free.dev"],
     proxy: {
+      "/api/auth/": {
+        target: process.env.VITE_DEV_API_TARGET ?? "http://localhost:3001",
+        changeOrigin: true,
+      },
       "/api": {
-        target: "http://localhost:3001",
+        target: process.env.VITE_DEV_API_TARGET ?? "http://localhost:3001",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
         ws: true,

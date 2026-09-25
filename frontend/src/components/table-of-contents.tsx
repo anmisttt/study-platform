@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { ChapterMeta } from "@study-platform/shared";
+import AccountNav from "../auth/accountNav";
 import { chapterOverviewPath, chaptersPath } from "../routes/paths";
 
 type TableOfContentsProps = {
@@ -43,6 +44,7 @@ function TableOfContents({ chapters, activeChapterId }: TableOfContentsProps) {
             Home
           </button>
         )}
+        <AccountNav />
         <button
           type="button"
           className="sidebar-toggle"

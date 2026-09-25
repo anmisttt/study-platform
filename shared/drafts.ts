@@ -37,8 +37,7 @@ export type DraftErrorMessage = {
 
 export type DraftClientMessage =
   | QuestionWatchMessage
-  | DraftUpdateMessage
-  | DraftCheckingMessage;
+  | DraftUpdateMessage;
 
 export type DraftServerMessage =
   | RoomSnapshotMessage

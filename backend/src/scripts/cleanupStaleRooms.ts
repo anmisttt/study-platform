@@ -1,8 +1,8 @@
 import path from "path";
 import dotenv from "dotenv";
-import { RoomsDb } from "../db/roomsDb";
+import { RoomsDb } from "../db/roomsDb.js";
 
-dotenv.config({ path: path.join(__dirname, "../../.env") });
+dotenv.config({ path: path.join(import.meta.dirname, "../../.env") });
 dotenv.config();
 
 function main(): void {

@@ -7,20 +7,21 @@ import {
   roomsWebSocketBasePath,
   type RoomDetails,
 } from "@study-platform/shared";
-import { RoomsWebSocketServer } from "../roomsWebSocketServer";
-import { encodeUpdateBase64 } from "./wireCodec";
+import { RoomsWebSocketServer } from "../roomsWebSocketServer.js";
+import { encodeUpdateBase64 } from "./wireCodec.js";
 
 export type ParsedMessage = Record<string, unknown>;
 
 export async function startRoomsWebSocketServer(
   loadRoom?: (roomId: string) => RoomDetails,
+  allowedOrigins?: string[],
 ): Promise<{
   server: Server;
   webSocketServer: RoomsWebSocketServer;
   port: number;
   close: () => Promise<void>;
 }> {
-  const webSocketServer = new RoomsWebSocketServer(loadRoom);
+  const webSocketServer = new RoomsWebSocketServer(loadRoom, allowedOrigins);
   const server = createServer();
   webSocketServer.attach(server, roomsWebSocketBasePath());
 
@@ -52,8 +53,8 @@ export class TestClient {
   private readonly consumed = new Set<number>();
   private readonly openPromise: Promise<void>;
 
-  constructor(port: number, roomId: string) {
-    this.ws = new WebSocket(`ws://localhost:${port}${roomWebSocketPath(roomId)}`);
+  constructor(port: number, roomId: string, origin?: string) {
+    this.ws = new WebSocket(`ws://localhost:${port}${roomWebSocketPath(roomId)}`, { origin });
     this.openPromise = new Promise<void>((resolve, reject) => {
       this.ws.on("open", resolve);
       this.ws.on("error", reject);

@@ -185,6 +185,7 @@ describe("useVoiceRecorder drain", () => {
     const hook = renderHook(() =>
       useVoiceRecorder({
         apiBase: "http://localhost/api",
+        roomId: "ABC123",
         onTranscript,
       }),
     );
@@ -199,6 +200,18 @@ describe("useVoiceRecorder drain", () => {
     const peer = MockRTCPeerConnection.latest();
     return { hook, onTranscript, peer, dataChannel: peer.dataChannel };
   }
+
+  it("sends cookies only to the application token endpoint", async () => {
+    await renderListeningRecorder();
+
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls[0]).toEqual([
+      "http://localhost/api/realtime/transcription-token",
+      expect.objectContaining({ credentials: "include" }),
+    ]);
+    expect(calls[1]?.[0]).toBe("https://api.openai.com/v1/realtime/calls");
+    expect(calls[1]?.[1]).not.toHaveProperty("credentials");
+  });
 
   it("stops the mic on toggle but keeps the realtime connection open and commits audio", async () => {
     const { hook, peer, dataChannel } = await renderListeningRecorder();

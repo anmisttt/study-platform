@@ -1,9 +1,9 @@
 import type { RoomDetails } from "@study-platform/shared";
-import { getChapterById } from "../chapters";
-import { NotFoundError, UserError } from "../errors";
-import { mergePracticeWithAnswers, mergeTheoryWithAnswers } from "./helpers";
-import type { RoomsDb } from "./roomsDb";
-import type { AnswerFieldsJson } from "./typings";
+import { getChapterById } from "../chapters.js";
+import { NotFoundError, UserError } from "../errors.js";
+import { mergePracticeWithAnswers, mergeTheoryWithAnswers } from "./helpers.js";
+import type { RoomsDb } from "./roomsDb.js";
+import type { AnswerFieldsJson } from "./typings.js";
 
 function parseRoomAnswers(room: { theory_answers: string; practice_answers: string }): {
   theoryAnswers: AnswerFieldsJson[];
@@ -33,6 +33,7 @@ export function getRoomDetails(roomId: string | null, roomsDb: RoomsDb): RoomDet
   const { theoryAnswers, practiceAnswers } = parseRoomAnswers(room);
   return {
     roomId,
+    hasOwnerLlmKey: roomsDb.hasOwnerLlmKey(roomId),
     chapterId: chapter.id,
     number: chapter.number,
     name: chapter.name,

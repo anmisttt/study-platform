@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { RoomsDb } from "./roomsDb";
+import { RoomsDb } from "./roomsDb.js";
 
 const SAVED_ANSWER = JSON.stringify([
   { user_answer: "an answer", rating: 5, comment: "ok", revision: 1 },
@@ -10,7 +10,7 @@ describe("RoomsDb.deleteStaleRooms", () => {
 
   beforeEach(() => {
     roomsDb = new RoomsDb(":memory:");
-    roomsDb.createRoomsTable();
+    roomsDb.initializeSchema();
   });
 
   afterEach(() => {
@@ -51,6 +51,17 @@ describe("RoomsDb.deleteStaleRooms", () => {
     expect(roomsDb.deleteStaleRooms()).toEqual({ deleted: 0, ids: [] });
     expect(remainingIds(roomsDb).sort()).toEqual(["active", "brand-new"]);
   });
+
+  it("retains owned rooms regardless of age and requires an existing owner", () => {
+    roomsDb.run('INSERT INTO "user" (id, email, createdAt, updatedAt) VALUES (?, ?, 0, 0)', ["owner", "owner@example.com"]);
+    roomsDb.addRoom({ roomId: "owned", chapterId: "chapter-1", ownerUserId: "owner" });
+    roomsDb.run("UPDATE rooms SET updated_at = datetime('now', '-60 days') WHERE id = 'owned'");
+    seedRoom(roomsDb, { id: "unowned", answers: SAVED_ANSWER, age: "-40 days" });
+
+    expect(roomsDb.deleteStaleRooms()).toEqual({ deleted: 1, ids: ["unowned"] });
+    expect(remainingIds(roomsDb)).toEqual(["owned"]);
+    expect(() => roomsDb.addRoom({ roomId: "bad", chapterId: "chapter-1", ownerUserId: "missing" })).toThrow(/FOREIGN KEY/);
+  });
 });
 
 describe("RoomsDb.hasRoomsTable", () => {
@@ -59,7 +70,7 @@ describe("RoomsDb.hasRoomsTable", () => {
 
     try {
       expect(roomsDb.hasRoomsTable()).toBe(false);
-      roomsDb.createRoomsTable();
+      roomsDb.initializeSchema();
       expect(roomsDb.hasRoomsTable()).toBe(true);
     } finally {
       roomsDb.close();

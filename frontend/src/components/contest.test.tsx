@@ -13,6 +13,8 @@ import {
   sessionWithRoom,
 } from "../test/fixtures";
 
+vi.mock("../auth/context", () => ({ useAuth: () => ({ profile: { id: "owner" }, loading: false }) }));
+
 const draftApi = vi.hoisted(() => ({
   answerInput: "",
   isDraftHydrated: true,
@@ -254,8 +256,7 @@ describe("Contest", () => {
     expectResultField(/Your answer:/, "A process is a running program.");
     expectResultField(/Comment:/, "Solid answer.");
     expect(draftApi.clearCollaborativeDraft).toHaveBeenCalled();
-    expect(draftApi.setAnswerChecking).toHaveBeenCalledWith(true);
-    expect(draftApi.setAnswerChecking).toHaveBeenCalledWith(false);
+    expect(draftApi.setAnswerChecking).not.toHaveBeenCalled();
     expect(voiceApi.stop).toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/rooms/ABC123/questions/theory-0/check`,

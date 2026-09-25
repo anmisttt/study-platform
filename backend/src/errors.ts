@@ -45,3 +45,9 @@ export function isHttpError(
     error instanceof ServerError
   );
 }
+export class HttpError extends Error {
+  constructor(readonly statusCode: number, readonly code: string, message: string) {
+    super(message);
+    this.name = "HttpError";
+  }
+}

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../auth/context";
+import { signInPath } from "../auth/client";
 import QuestionCard from "./questionCard";
 import Timer from "./timer";
 import type { ChapterMeta, RoomDetails } from "@study-platform/shared";
@@ -157,6 +159,7 @@ function Contest({
   onResetProgress,
 }: ContestProps) {
   const [isChecking, setIsChecking] = useState<boolean>(false);
+  const { profile, loading: accountLoading } = useAuth();
   const [roomInputState, setRoomInputState] = useState({
     roomId,
     value: roomId ?? "",
@@ -200,7 +203,7 @@ function Contest({
     stop: stopVoiceRecording,
   } = useVoiceRecorder({
     apiBase,
-    safetyIdentifier: roomId ?? undefined,
+    roomId: roomId ?? undefined,
     onTranscript: (text: string) => {
       if (!roomId || !currentItem) {
         return;
@@ -215,7 +218,6 @@ function Contest({
     },
   });
   const answerInput = collaborativeDraft.answerInput;
-  const clearLocalAnswerChecking = collaborativeDraft.clearLocalAnswerChecking;
   const questionId = currentItem?.id ?? null;
   const questionUiObservation: QuestionUiObservation = {
     questionId,
@@ -268,13 +270,6 @@ function Contest({
     return { average: total / ratings.length, total };
   }, [items, chapterSession.responses]);
 
-  useEffect(() => {
-    if (!currentResponse?.result) {
-      return;
-    }
-
-    clearLocalAnswerChecking();
-  }, [clearLocalAnswerChecking, currentResponse?.result]);
 
   const isCheckInProgress = isChecking || collaborativeDraft.isAnswerChecking || isCheckPending;
 
@@ -314,11 +309,16 @@ function Contest({
       return;
     }
 
+    if (!profile) {
+      window.location.assign(signInPath(`${window.location.pathname}${window.location.search}`));
+      return;
+    }
     setIsRoomActionPending(true);
     setStartError("");
     try {
       const res = await fetch(`${apiBase}${createRoomApiPath()}`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chapterId: chapterMeta.id }),
       });
@@ -346,13 +346,12 @@ function Contest({
   }
 
   async function handleCheck(): Promise<void> {
-    if (!roomId || !currentItem || !answerInput.trim()) {
+    if (!roomId || !currentItem || !answerInput.trim() || !chapterSession.hasOwnerLlmKey || isCheckInProgress) {
       return;
     }
 
     setIsChecking(true);
     setIsCheckPending(true);
-    collaborativeDraft.setAnswerChecking(true);
     const trimmedAnswer = answerInput.trim();
     const baseRevision = chapterSession.revisions[currentItem.id] ?? 0;
 
@@ -360,6 +359,7 @@ function Contest({
       const endpoint = `${apiBase}${roomQuestionCheckApiPath(roomId, currentItem.id)}`;
       const res = await fetch(endpoint, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answer: trimmedAnswer, baseRevision }),
       });
@@ -402,11 +402,9 @@ function Contest({
       }));
       setIsEditingLocally(false);
       setIsCheckPending(false);
-      collaborativeDraft.setAnswerChecking(false);
       stopVoiceRecording();
     } catch (error: unknown) {
       setIsCheckPending(false);
-      collaborativeDraft.setAnswerChecking(false);
       window.alert(errorMessage(error, "Request failed."));
     } finally {
       setIsChecking(false);
@@ -485,9 +483,9 @@ function Contest({
             onClick={() => {
               void generateNewRoom();
             }}
-            disabled={isRoomActionPending}
+            disabled={isRoomActionPending || accountLoading}
           >
-            Generate new room
+            {profile ? "Generate new room" : "Sign in to create a room"}
           </button>
         </div>
       </div>
@@ -576,7 +574,16 @@ function Contest({
           </div>
         </div>
 
+        {!chapterSession.hasOwnerLlmKey && (
+          <p className="room-key-notice">
+            AI features need an OpenAI key from this room’s owner.{" "}
+            <a href={`/profile?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`}>
+              Manage your key in Profile
+            </a>
+          </p>
+        )}
         <QuestionCard
+          llmEnabled={chapterSession.hasOwnerLlmKey}
           currentItem={currentItem}
           response={currentResponse}
           isEditingLocally={isEditingLocally}
@@ -587,7 +594,7 @@ function Contest({
           answer={questionAnswer}
           answerTextareaRef={roomId ? collaborativeDraft.textareaRef : undefined}
           onAnswerInputChange={collaborativeDraft.onAnswerInputChange}
-          onVoiceInput={toggleVoiceRecording}
+          onVoiceInput={() => { if (chapterSession.hasOwnerLlmKey) toggleVoiceRecording(); }}
           onCheck={handleCheck}
           onTryAgain={handleTryAgain}
         />

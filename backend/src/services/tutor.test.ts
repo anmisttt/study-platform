@@ -1,7 +1,7 @@
 import type { TextPromptClient } from "@langfuse/client";
-import type { TutorEvaluationRequest } from "../prompts/user-prompt";
+import type { TutorEvaluationRequest } from "../prompts/user-prompt.js";
 import { describe, expect, it } from "vitest";
-import { tutorLangfuseConfig } from "./tutor";
+import { tutorLangfuseConfig } from "./tutor.js";
 
 const request: TutorEvaluationRequest = {
   itemType: "theory",
@@ -38,4 +38,13 @@ describe("tutor Langfuse config", () => {
       },
     });
   });
+});
+
+it("attributes room costs to the owner and records the initiator separately", () => {
+  const config = tutorLangfuseConfig(request, systemPrompt(), {
+    userId: "owner", sessionId: "room", metadata: { actor_id: "guest-account" },
+  });
+  expect(config.userId).toBe("owner");
+  expect(config.sessionId).toBe("room");
+  expect(config.generationMetadata).toMatchObject({ actor_id: "guest-account" });
 });

@@ -1,6 +1,6 @@
 import type { LangfuseClient } from "@langfuse/client";
 import { describe, expect, it, vi } from "vitest";
-import { loadSystemPrompt } from "./loadSystemPrompt";
+import { loadSystemPrompt } from "./loadSystemPrompt.js";
 
 describe("loadSystemPrompt", () => {
   it.each([

@@ -21,7 +21,7 @@ export const API_BASE = "http://localhost/api";
 
 /** base64-encode a Yjs update, mirroring the frontend wire format. */
 export function encodeUpdate(update: Uint8Array): string {
-  return Buffer.from(update).toString("base64");
+  return btoa(Array.from(update, byte => String.fromCharCode(byte)).join(""));
 }
 
 /** Build a base64 snapshot/update whose answer text is `text`. */
