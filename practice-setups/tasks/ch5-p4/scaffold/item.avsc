@@ -1,0 +1,10 @@
+{
+  "type": "record",
+  "name": "Item",
+  "namespace": "encoding_lab",
+  "fields": [
+    {"name": "itemName", "type": "string"},
+    {"name": "quantity", "type": "int"},
+    {"name": "colors", "type": {"type": "array", "items": "string"}}
+  ]
+}

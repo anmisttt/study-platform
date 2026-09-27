@@ -12,7 +12,7 @@ CREATE TABLE seat_reservations (
   flight_id INT  NOT NULL REFERENCES flights(id),
   seat_no   TEXT NOT NULL,
   user_id   INT  NOT NULL
-  -- add UNIQUE (flight_id, seat_no) to prevent double-booking
+  -- TODO: reservation constraint
 );
 
 INSERT INTO flights VALUES (1, 'NYC-LON');

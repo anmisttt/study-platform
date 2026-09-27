@@ -27,24 +27,3 @@ INSERT INTO team_members VALUES
   (10, 1, 'admin'),
   (11, 1, 'admin'),
   (12, 1, 'member');
-
--- Task 1: attempt a CHECK that enforces "at least one admin per team"
--- (expect PostgreSQL to reject this — document why)
--- ALTER TABLE team_members ADD CONSTRAINT at_least_one_admin CHECK (
---   /* subquery / cross-row CHECK — fill in and observe the error */
--- );
-
--- Task 2–3: last-admin guard on UPDATE and DELETE
-CREATE OR REPLACE FUNCTION check_team_admin_coverage()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
-BEGIN
-  -- implement last-admin guard on UPDATE (block downgrade when no other admin)
-  -- implement last-admin guard on DELETE (block delete when no other admin)
-  -- use TG_OP to distinguish UPDATE vs DELETE; RAISE EXCEPTION on violation
-  RAISE EXCEPTION 'not implemented';
-END;
-$$;
-
-CREATE TRIGGER team_admin_coverage_check
-BEFORE UPDATE OR DELETE ON team_members
-FOR EACH ROW EXECUTE FUNCTION check_team_admin_coverage();

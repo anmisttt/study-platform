@@ -29,9 +29,7 @@ def print_percentiles(latencies_s: List[float]) -> None:
 
 
 def sleep_before_retry(attempt: int) -> None:
-    # implement exponential backoff with full jitter:
-    # base=0.1, factor=2, cap=5.0 → delay = random.uniform(0, min(cap, base * factor**attempt))
-    # Until Task 4, keep a fixed short pause so the loop still runs.
+    # TODO: full-jitter exponential backoff
     time.sleep(0.05)
 
 
@@ -77,7 +75,6 @@ def main() -> None:
         attempt = 0
         ok, elapsed, code = one_request(args.url, args.connect_timeout, args.read_timeout)
         while not ok and attempt < args.max_retries:
-            # retries already wired; only edit sleep_before_retry for Task 4
             attempt += 1
             retries_total += 1
             sleep_before_retry(attempt - 1)

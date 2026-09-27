@@ -10,6 +10,8 @@ services:
     <<: *citus
     container_name: ch7-row-coordinator
     ports: ["5434:5432"]
+    volumes:
+      - ./preloaded_data/seed.sql:/docker-entrypoint-initdb.d/01-seed.sql:ro
   worker1:
     <<: *citus
     container_name: ch7-row-worker1

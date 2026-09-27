@@ -31,9 +31,7 @@ CREATE OR REPLACE FUNCTION ch6_apply_cart_write(
 ) RETURNS INT
 LANGUAGE plpgsql AS $$
 BEGIN
-  -- implement: log op; new_version = max(version)+1;
-  -- delete siblings with version <= p_base_version (NULL base => delete nothing);
-  -- insert (p_cart_id, new_version, p_new_items); return new_version
+  -- TODO: apply a cart write
   RAISE EXCEPTION 'not implemented';
 END;
 $$;

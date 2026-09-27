@@ -13,16 +13,14 @@ variable "POSTGRES_TASKS" {
     { tag = "ch4-p7", db = "index_shape_lab" },
     { tag = "ch5-p2", db = "lab" },
     { tag = "ch5-p3", db = "lab" },
-    { tag = "ch5-p6", db = "lab" },
+    { tag = "ch5-p5", db = "lab" },
+    { tag = "ch6-p3", db = "lab" },
     { tag = "ch6-p4", db = "lab" },
-    { tag = "ch6-p5", db = "lab" },
     { tag = "ch7-p7", db = "ch7_rls_lab" },
     { tag = "ch8-p1", db = "ch8_txns" },
     { tag = "ch8-p2", db = "lab" },
     { tag = "ch8-p3", db = "ch8_seats" },
     { tag = "ch8-p4", db = "lab" },
-    { tag = "ch8-p5", db = "lab" },
-    { tag = "ch8-p6", db = "ch8_2pc_lab" },
     { tag = "ch11-p3", db = "batch_join_lab" },
     { tag = "ch12-p3", db = "ch12_cdc_lab" },
     { tag = "ch12-p4", db = "ch12_views_lab" },
@@ -40,6 +38,7 @@ variable "PYTHON_DELIVERY_TASKS" {
     { tag = "ch4-p8", apt = "" },
     { tag = "ch4-p9", apt = "" },
     { tag = "ch5-p1", apt = "" },
+    { tag = "ch5-p4", apt = "" },
     { tag = "ch7-p5", apt = "" },
     { tag = "ch7-p6", apt = "" },
     { tag = "ch9-p1", apt = "iproute2 iptables curl procps" },
@@ -62,7 +61,7 @@ variable "NODE_PYTHON_DELIVERY_TASKS" {
 }
 
 group "default" {
-  targets = ["postgres-task", "python-delivery-task", "node-python-delivery-task"]
+  targets = ["postgres-task", "python-delivery-task", "node-python-delivery-task", "task-ch9-p3"]
 }
 
 target "_common" {
@@ -117,4 +116,14 @@ target "node-python-delivery-task" {
     task = "tasks/${item.tag}"
   }
   tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${item.tag}${TAG_SUFFIX}"]
+}
+
+target "task-ch9-p3" {
+  inherits = ["_common"]
+  context = "."
+  dockerfile = "images/foundationdb-simulation.Dockerfile"
+  contexts = {
+    task = "tasks/ch9-p3"
+  }
+  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch9-p3${TAG_SUFFIX}"]
 }

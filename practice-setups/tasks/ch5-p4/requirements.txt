@@ -1,0 +1,4 @@
+msgpack==1.2.2
+protobuf==7.36.2
+grpcio-tools==1.84.0
+avro==1.12.2

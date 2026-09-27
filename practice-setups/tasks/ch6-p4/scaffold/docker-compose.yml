@@ -1,0 +1,52 @@
+services:
+  primary:
+    image: ghcr.io/anmisttt/lab:ch6-p4
+    entrypoint: ["/work/primary-entrypoint.sh"]
+    volumes:
+      - ./primary-entrypoint.sh:/work/primary-entrypoint.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lab"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  standby:
+    image: postgres:16-bookworm
+    environment:
+      PGDATA: /var/lib/postgresql/data
+    entrypoint: ["/work/standby-entrypoint.sh"]
+    volumes:
+      - standby-data:/var/lib/postgresql/data
+      - ./standby-entrypoint.sh:/work/standby-entrypoint.sh:ro
+    depends_on:
+      primary:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d lab && psql -U postgres -d lab -Atqc 'SELECT pg_is_in_recovery()' | grep -qx t",
+        ]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+
+  client:
+    image: postgres:16-bookworm
+    working_dir: /work
+    entrypoint: ["sleep", "infinity"]
+    volumes:
+      - .:/work
+    depends_on:
+      primary:
+        condition: service_healthy
+      standby:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "primary", "-U", "postgres", "-d", "lab"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  standby-data:

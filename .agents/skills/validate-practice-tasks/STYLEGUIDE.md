@@ -86,8 +86,8 @@ Allowed pattern:
 
 Tasks:
 
-1. Create `ch2_companies`, `ch2_cities`, and `ch2_job_categories`, each with an `id` and unique `name`.
-2. Create `ch2_job_postings` with foreign keys, then migrate `ch2_job_postings_raw` using distinct lookup inserts and a join-based migration. Use the renamed company values produced in Task 1.
+1. Create `companies`, `cities`, and `job_categories`, each with an `id` and unique `name`.
+2. Create `job_postings` with foreign keys, then migrate `job_postings_raw` using distinct lookup inserts and a join-based migration. Use the renamed company values produced in Task 1.
 
 ## 8. Prerequisites and install guidance
 
@@ -223,6 +223,13 @@ Stdlib-only Python tasks (no broker/DB) stay on native Python prerequisites and 
 - Do not substitute a mock, toy database, in-memory reimplementation, or hand-written simulator when the authentic tool can run safely in Docker. If the authentic workflow cannot be made runnable, choose a different practical exercise rather than silently teaching an imitation.
 - Verify version-specific commands and APIs against the tool version pinned by the setup, then smoke-test the documented workflow before considering the item complete.
 
+## 12. Coherent identifiers without stray prefixes
+
+- Use clear, domain-relevant names for tables, collections, topics, files, services, variables, and other learner-facing artifacts.
+- Do not carry unrelated, legacy, or copied prefixes into a lab. For example, a Chapter 3 practice must not expose tables named `ch2_packages`, and an isolated lab must not retain an old task tag or product name in its identifiers.
+- Do not add chapter-number or practice-number prefixes merely to make names unique. Isolated lab environments should normally use plain names such as `packages`, `dependencies`, or `job_postings`.
+- When a prefix is genuinely required to avoid a collision in a shared environment, make its purpose obvious, derive it from the current lab, explain it briefly, and use it consistently across the question, scaffold, seed data, verification tests, and accepted solution.
+
 ## Quick checklist
 
 | # | Rule | Where |
@@ -238,3 +245,4 @@ Stdlib-only Python tasks (no broker/DB) stay on native Python prerequisites and 
 | 9 | Docker tasks: GHCR image supplies non-task setup; task scaffolds may have terse markers, with details in numbered tasks | `question` |
 | 10 | Testable behavior has a compact outcome-focused test delivered in the Docker scaffold or inline for a non-Docker task; the brief gives only a short run instruction instead of repeating assertions, and test comments explain only non-obvious intent or timing | `question`, setup assets |
 | 11 | Task and setup use a verified real-world tool, native workflow, and matching versioned commands; scale reduction does not replace the tool with a toy | `question`, setup assets |
+| 12 | Learner-facing artifacts use clear domain names with no unrelated, legacy, copied, or unnecessary chapter/task prefixes | `question`, setup assets, `answer` |
