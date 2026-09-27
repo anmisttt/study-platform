@@ -1,7 +1,7 @@
 import type { TextPromptClient } from "@langfuse/client";
 import type { TutorEvaluationRequest } from "../prompts/user-prompt.js";
 import { describe, expect, it } from "vitest";
-import { tutorLangfuseConfig } from "./tutor.js";
+import { tutorLangfuseConfig, tutorLangfuseTraceAttributes } from "./tutor.js";
 
 const request: TutorEvaluationRequest = {
   itemType: "theory",
@@ -20,31 +20,38 @@ function systemPrompt(): TextPromptClient {
 }
 
 describe("tutor Langfuse config", () => {
-  it("uses one generation and only adds the missing reference answer to metadata", () => {
+  it("uses one generation and adds the reference answer to generation metadata", () => {
     expect(
-      tutorLangfuseConfig(request, systemPrompt(), {
+      tutorLangfuseConfig(request, systemPrompt()),
+    ).toEqual({
+      generationName: "grade-answer",
+      langfusePrompt: systemPrompt(),
+      generationMetadata: {
+        reference_answer: request.referenceAnswer,
+      },
+    });
+  });
+
+  it("adds chapter and question identifiers to trace-level metadata", () => {
+    expect(
+      tutorLangfuseTraceAttributes(request, {
         sessionId: "room-1",
-        metadata: { chapter_id: "chapter-1" },
+        metadata: { chapterNumber: "1", questionRef: "practice-1" },
       }),
     ).toEqual({
       traceName: "evaluate-tutor-answer",
       sessionId: "room-1",
       tags: ["tutor", "answer-evaluation", "theory"],
-      generationName: "grade-answer",
-      langfusePrompt: systemPrompt(),
-      generationMetadata: {
-        chapter_id: "chapter-1",
-        reference_answer: request.referenceAnswer,
-      },
+      metadata: { chapterNumber: "1", questionRef: "practice-1" },
     });
   });
 });
 
 it("attributes room costs to the owner and records the initiator separately", () => {
-  const config = tutorLangfuseConfig(request, systemPrompt(), {
-    userId: "owner", sessionId: "room", metadata: { actor_id: "guest-account" },
+  const attributes = tutorLangfuseTraceAttributes(request, {
+    userId: "owner", sessionId: "room", metadata: { actorId: "guest-account" },
   });
-  expect(config.userId).toBe("owner");
-  expect(config.sessionId).toBe("room");
-  expect(config.generationMetadata).toMatchObject({ actor_id: "guest-account" });
+  expect(attributes.userId).toBe("owner");
+  expect(attributes.sessionId).toBe("room");
+  expect(attributes.metadata).toMatchObject({ actorId: "guest-account" });
 });

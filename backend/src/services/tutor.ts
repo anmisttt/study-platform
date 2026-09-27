@@ -1,6 +1,7 @@
 import type { CheckResult } from "@study-platform/shared";
 import type { TextPromptClient } from "@langfuse/client";
 import { observeOpenAI, type LangfuseConfig } from "@langfuse/openai";
+import { propagateAttributes, type PropagateAttributesParams } from "@langfuse/tracing";
 import { OpenAI } from "openai";
 import type { TutorEvaluationRequest } from "../prompts/user-prompt.js";
 import { initializeLangfuseTracing } from "../observability/langfuse.js";
@@ -14,19 +15,26 @@ export type TutorTraceContext = {
 export function tutorLangfuseConfig(
   request: TutorEvaluationRequest,
   systemPrompt: TextPromptClient,
-  traceContext: TutorTraceContext = {},
 ): LangfuseConfig {
+  return {
+    generationName: "grade-answer",
+    langfusePrompt: systemPrompt,
+    generationMetadata: {
+      reference_answer: request.referenceAnswer,
+    },
+  };
+}
+
+export function tutorLangfuseTraceAttributes(
+  request: TutorEvaluationRequest,
+  traceContext: TutorTraceContext = {},
+): PropagateAttributesParams {
   return {
     traceName: "evaluate-tutor-answer",
     sessionId: traceContext.sessionId,
     ...(traceContext.userId ? { userId: traceContext.userId } : {}),
     tags: ["tutor", "answer-evaluation", request.itemType],
-    generationName: "grade-answer",
-    langfusePrompt: systemPrompt,
-    generationMetadata: {
-      ...traceContext.metadata,
-      reference_answer: request.referenceAnswer,
-    },
+    ...(traceContext.metadata ? { metadata: traceContext.metadata } : {}),
   };
 }
 
@@ -50,41 +58,46 @@ export class Tutor {
     request: TutorEvaluationRequest,
     traceContext: TutorTraceContext,
   ): Promise<{rating: number, comment: string}> {
-    const client = observeOpenAI(
-      this.client,
-      tutorLangfuseConfig(request, this.systemPrompt, traceContext),
-    );
-    const response = await client.chat.completions.create({
-      model: this.model,
-      messages: [
-        { role: "system", content: this.systemPrompt.compile() },
-        { role: "user", content: request.llmPrompt },
-      ],
-      temperature: this.temperature,
-      max_tokens: this.maxTokens,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "answer_evaluation",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              rating: { type: "number" },
-              comment: { type: "string" },
+    return propagateAttributes(
+      tutorLangfuseTraceAttributes(request, traceContext),
+      async () => {
+        const client = observeOpenAI(
+          this.client,
+          tutorLangfuseConfig(request, this.systemPrompt),
+        );
+        const response = await client.chat.completions.create({
+          model: this.model,
+          messages: [
+            { role: "system", content: this.systemPrompt.compile() },
+            { role: "user", content: request.llmPrompt },
+          ],
+          temperature: this.temperature,
+          max_tokens: this.maxTokens,
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "answer_evaluation",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  rating: { type: "number" },
+                  comment: { type: "string" },
+                },
+                required: ["rating", "comment"],
+                additionalProperties: false,
+              },
             },
-            required: ["rating", "comment"],
-            additionalProperties: false,
           },
-        },
+        });
+
+        if (!response.choices[0].message.content) {
+          throw new Error("No response from the model");
+        }
+
+        return JSON.parse(response.choices[0].message.content) as {rating: number, comment: string};
       },
-    });
-
-    if (!response.choices[0].message.content) {
-      throw new Error("No response from the model");
-    }
-
-    return JSON.parse(response.choices[0].message.content) as {rating: number, comment: string};
+    );
   }
 
   public async evaluateAnswer(

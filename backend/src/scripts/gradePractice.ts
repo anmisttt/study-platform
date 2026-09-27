@@ -218,8 +218,9 @@ async function main(): Promise<void> {
       args.trials,
       `grade-practice-${randomUUID()}`,
       {
-        chapter_id: chapter.id,
-        practice_index: String(args.index),
+        chapterId: chapter.id,
+        questionId: `practice-${args.index + 1}`,
+        actorId: "grade-practice",
       },
     );
     const agg = aggregateTrials(trials);

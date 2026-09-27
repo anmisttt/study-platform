@@ -235,8 +235,22 @@ describe("room owner credentials and progress", () => {
     expect((await api(check, "POST", { answer: "First answer", baseRevision: 0 })).status).toBe(200);
     expect((await api(check, "POST", { answer: "Better answer", baseRevision: 1 }, guestAccount.cookie)).status).toBe(200);
     expect(vi.mocked(services.grade).mock.calls.map(call => call[0])).toEqual([ownerKey, ownerKey]);
-    expect(vi.mocked(services.grade).mock.calls[0][3]).toMatchObject({ userId: owner.id, metadata: { actor_id: "anonymous" } });
-    expect(vi.mocked(services.grade).mock.calls[1][3]).toMatchObject({ userId: owner.id, metadata: { actor_id: guestAccount.id } });
+    expect(vi.mocked(services.grade).mock.calls[0][3]).toMatchObject({
+      userId: owner.id,
+      metadata: {
+        chapterId: "first_chapter",
+        questionId: "theory-1",
+        actorId: "anonymous",
+      },
+    });
+    expect(vi.mocked(services.grade).mock.calls[1][3]).toMatchObject({
+      userId: owner.id,
+      metadata: {
+        chapterId: "first_chapter",
+        questionId: "theory-1",
+        actorId: guestAccount.id,
+      },
+    });
     expect((await api("/realtime/transcription-token", "POST", { roomId: id, languages: ["en"] })).status).toBe(200);
     expect(services.transcribe).toHaveBeenCalledWith(ownerKey, ["en"], `${owner.id}:${id}`);
     const renewed = await api("/api/auth/sign-in/email", "POST", { email: "owner@example.com", password: "test-password-123" });

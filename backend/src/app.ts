@@ -130,7 +130,11 @@ export function createApplication({ roomsDb, config, sendEmail, llm = defaultLlm
       realtime.setChecking(roomId, questionId, true);
       const result = await llm.grade(apiKey, resolved.type, tutorEvaluationRequestForItem(answer, resolved.item), {
         userId: ownerId, sessionId: roomId,
-        metadata: { chapter_id: chapter.id, question_id: questionId, actor_id: actor?.user.id ?? "anonymous" },
+        metadata: {
+          chapterId: chapter.id,
+          questionId: questionId,
+          actorId: actor?.user.id ?? "anonymous",
+        },
       });
       if (!Number.isFinite(result.rating) || result.rating < 1 || result.rating > 5 || typeof result.comment !== "string") throw new HttpError(502, "LLM_INVALID_RESULT", "OpenAI returned an invalid grade. Please try again.");
       const revision = roomsDb.updateAnswer({ roomId, type: resolved.type, questionIndex: resolved.index, user_answer: answer, rating: result.rating, comment: result.comment, baseRevision });
