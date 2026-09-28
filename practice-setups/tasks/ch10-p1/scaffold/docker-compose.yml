@@ -1,0 +1,98 @@
+services:
+  etcd1:
+    image: quay.io/coreos/etcd:v3.5.15
+    container_name: lab-ch10-p1-etcd1
+    environment:
+      ETCDCTL_API: "3"
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd1
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd1-client:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd1-peer:2380
+      - --initial-cluster=etcd1=http://etcd1-peer:2380,etcd2=http://etcd2-peer:2380,etcd3=http://etcd3-peer:2380
+      - --initial-cluster-state=new
+      - --initial-cluster-token=consistency-lab
+    volumes:
+      - etcd1-data:/etcd-data
+    networks:
+      peer:
+        aliases: [etcd1-peer]
+      client:
+        aliases: [etcd1-client]
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  etcd2:
+    image: quay.io/coreos/etcd:v3.5.15
+    container_name: lab-ch10-p1-etcd2
+    environment:
+      ETCDCTL_API: "3"
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd2
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd2-client:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd2-peer:2380
+      - --initial-cluster=etcd1=http://etcd1-peer:2380,etcd2=http://etcd2-peer:2380,etcd3=http://etcd3-peer:2380
+      - --initial-cluster-state=new
+      - --initial-cluster-token=consistency-lab
+    volumes:
+      - etcd2-data:/etcd-data
+    networks:
+      peer:
+        aliases: [etcd2-peer]
+      client:
+        aliases: [etcd2-client]
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  etcd3:
+    image: quay.io/coreos/etcd:v3.5.15
+    container_name: lab-ch10-p1-etcd3
+    environment:
+      ETCDCTL_API: "3"
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd3
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd3-client:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd3-peer:2380
+      - --initial-cluster=etcd1=http://etcd1-peer:2380,etcd2=http://etcd2-peer:2380,etcd3=http://etcd3-peer:2380
+      - --initial-cluster-state=new
+      - --initial-cluster-token=consistency-lab
+    volumes:
+      - etcd3-data:/etcd-data
+    networks:
+      peer:
+        aliases: [etcd3-peer]
+      client:
+        aliases: [etcd3-client]
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+networks:
+  peer:
+    name: consistency-peer
+  client:
+    name: consistency-client
+
+volumes:
+  etcd1-data:
+  etcd2-data:
+  etcd3-data:

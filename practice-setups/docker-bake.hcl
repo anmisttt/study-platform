@@ -43,6 +43,9 @@ variable "PYTHON_DELIVERY_TASKS" {
     { tag = "ch7-p6", apt = "" },
     { tag = "ch9-p1", apt = "iproute2 iptables curl procps" },
     { tag = "ch9-p2", apt = "iproute2 tcpdump curl procps" },
+    { tag = "ch10-p1", apt = "" },
+    { tag = "ch10-p2", apt = "" },
+    { tag = "ch10-p3", apt = "" },
     { tag = "ch10-p6", apt = "" },
     { tag = "ch11-p5", apt = "" },
     { tag = "ch12-p1", apt = "" },
@@ -60,8 +63,15 @@ variable "NODE_PYTHON_DELIVERY_TASKS" {
   ]
 }
 
+variable "ETCD_DELIVERY_TASKS" {
+  default = [
+    { tag = "ch10-p4" },
+    { tag = "ch10-p5" },
+  ]
+}
+
 group "default" {
-  targets = ["postgres-task", "python-delivery-task", "node-python-delivery-task", "task-ch9-p3"]
+  targets = ["postgres-task", "python-delivery-task", "node-python-delivery-task", "etcd-delivery-task", "task-ch9-p3"]
 }
 
 target "_common" {
@@ -126,4 +136,18 @@ target "task-ch9-p3" {
     task = "tasks/ch9-p3"
   }
   tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch9-p3${TAG_SUFFIX}"]
+}
+
+target "etcd-delivery-task" {
+  inherits = ["_common"]
+  name = "task-${item.tag}"
+  matrix = {
+    item = ETCD_DELIVERY_TASKS
+  }
+  context = "."
+  dockerfile = "images/etcd-delivery.Dockerfile"
+  contexts = {
+    task = "tasks/${item.tag}"
+  }
+  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${item.tag}${TAG_SUFFIX}"]
 }
