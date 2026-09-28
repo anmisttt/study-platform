@@ -7,7 +7,10 @@ cd "$ROOT"
 
 refs="$(grep -rhoE 'ghcr\.io/anmisttt/lab:ch[0-9]+-p[0-9]+' backend/src/data \
   | sed 's/.*://' | sort -u)"
-configured="$(sed -nE 's/.*tag = "(ch[0-9]+-p[0-9]+)".*/\1/p' \
+# Include both matrix entries and literal tags on standalone Bake targets.
+configured="$(sed -nE \
+  -e 's/.*tag = "(ch[0-9]+-p[0-9]+)".*/\1/p' \
+  -e '/^[[:space:]]*tags[[:space:]]*=/s/.*:(ch[0-9]+-p[0-9]+)(\$\{TAG_SUFFIX\})?".*/\1/p' \
   practice-setups/docker-bake.hcl | sort -u)"
 directories="$(find practice-setups/tasks -mindepth 1 -maxdepth 1 -type d \
   -exec basename {} \; | sort -u)"
