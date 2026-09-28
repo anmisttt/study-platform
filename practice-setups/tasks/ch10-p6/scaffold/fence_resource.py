@@ -13,8 +13,8 @@ if STATE.exists():
 else:
     max_seen = 0
 
-# TODO: if token < max_seen, print REJECT line and exit 1
+# TODO: reject stale tokens
 raise NotImplementedError("compare token against maxSeen")
 
-# TODO: if token > max_seen, set max_seen = token; then persist STATE and print ACCEPT
+# TODO: persist accepted writes
 raise NotImplementedError("update maxSeen and accept write")
