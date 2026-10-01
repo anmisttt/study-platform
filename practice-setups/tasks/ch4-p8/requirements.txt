@@ -1,1 +1,1 @@
-mysql-connector-python
+qdrant-client[fastembed]==1.15.1

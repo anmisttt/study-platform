@@ -1,16 +1,29 @@
 services:
-  mysql:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: lab
-      MYSQL_DATABASE: ch4_lab
+  qdrant:
+    image: qdrant/qdrant:v1.15.5
     ports:
-      - "3306:3306"
+      - "6333:6333"
+      - "6334:6334"
     volumes:
-      - ./seed.sql:/docker-entrypoint-initdb.d/01-seed.sql:ro
+      - qdrant_storage:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/6333"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
   lab:
     image: ghcr.io/anmisttt/lab:ch4-p8
     entrypoint: ["sleep", "infinity"]
     working_dir: /work
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      FASTEMBED_CACHE_PATH: /opt/fastembed_cache
     volumes:
       - .:/work
+    depends_on:
+      qdrant:
+        condition: service_healthy
+
+volumes:
+  qdrant_storage:
