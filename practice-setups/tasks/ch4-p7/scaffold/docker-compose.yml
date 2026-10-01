@@ -1,0 +1,11 @@
+services:
+  lucene:
+    image: maven:3.9.11-eclipse-temurin-21
+    command: ["sleep", "infinity"]
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - maven_cache:/root/.m2
+
+volumes:
+  maven_cache:

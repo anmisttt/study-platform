@@ -16,6 +16,10 @@ RUN --mount=type=bind,from=task,source=.,target=/task \
     if [ -s /task/requirements.txt ]; then \
       pip install --no-cache-dir -r /task/requirements.txt; \
     fi
+RUN --mount=type=bind,from=task,source=.,target=/task \
+    if [ -f /task/prepare-image.sh ]; then \
+      bash /task/prepare-image.sh; \
+    fi
 COPY common/lab-init-entrypoint.sh /usr/local/bin/lab-entrypoint.sh
 COPY --from=task scaffold/ /lab/scaffold/
 RUN --mount=type=bind,from=task,source=.,target=/task \
