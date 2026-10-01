@@ -1,0 +1,44 @@
+services:
+  temporal:
+    image: temporalio/temporal:1.5.1
+    command: [server, start-dev, --ip, 0.0.0.0, --db-filename, /home/temporal/temporal.db]
+    ports:
+      - "127.0.0.1:7233:7233"
+      - "127.0.0.1:8233:8233"
+    volumes:
+      - temporal-data:/home/temporal
+    healthcheck:
+      test: [CMD, temporal, operator, cluster, health, --address, localhost:7233]
+      interval: 2s
+      timeout: 5s
+      retries: 40
+  postgres:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_PASSWORD: lab
+      POSTGRES_DB: exports
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./preloaded_data/seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d exports]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  app:
+    image: ghcr.io/anmisttt/lab:ch5-p6
+    working_dir: /work
+    command: [sleep, infinity]
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      DATABASE_URL: postgresql://postgres:lab@postgres:5432/exports
+    volumes:
+      - .:/work
+    depends_on:
+      temporal:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+volumes:
+  temporal-data:
+  postgres-data:

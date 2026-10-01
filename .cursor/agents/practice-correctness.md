@@ -31,6 +31,7 @@ You receive:
 4. Be strict but concrete: every failure is a finding with severity, location, and a fixable description.
 5. Do not invent product requirements beyond what the item teaches; flag gaps only when they make the requested work technically wrong, contradictory, unreproducible, or impossible to justify.
 6. For real-world workflows and version-specific commands, verify uncertain behavior against current official documentation or another primary source. Check against the version pinned by the setup.
+7. The tutor evaluates only the user-submitted text (or the local solver's `proposedSolution`), not local files or tool output. Check that the brief explicitly requests every graded deliverable in the submitted answer. Flag a required explanation requested only in `notes.txt`, or an equivalent unsubmitted artifact, as an error under `no_hidden_requirements`. Implementation files may remain part of the exercise, but their required answer content must be submitted explicitly.
 
 ## What to check
 

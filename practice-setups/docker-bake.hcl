@@ -39,6 +39,7 @@ variable "PYTHON_DELIVERY_TASKS" {
     { tag = "ch4-p10", apt = "" },
     { tag = "ch5-p1", apt = "" },
     { tag = "ch5-p4", apt = "" },
+    { tag = "ch5-p6", apt = "" },
     { tag = "ch7-p5", apt = "" },
     { tag = "ch7-p6", apt = "" },
     { tag = "ch9-p1", apt = "iproute2 iptables curl procps" },

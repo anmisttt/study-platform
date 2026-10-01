@@ -24,15 +24,16 @@ Prefer the CLI over HTTP room endpoints. Do not create rooms.
 
 ## Workflow
 
-1. Grade the proposed solution (`--answer-file`).
-2. Do not read, compare, or grade the stored `answer`.
-3. Pass only if aggregate score rules from the CLI succeed (default: majority of trials ≥ 5).
-4. If below 5, form a hypothesis using tutor comments + solver evidence.
+1. Check submission completeness against the brief using only the submitted answer (`--answer-file`), which represents the user's input or the local solver's full `proposedSolution`. Record `submissionComplete` and `missingFromSubmission`. Required code, explanations, and requested results must be present in that text; references to local files do not count.
+2. Grade that exact answer through the CLI. Do not read, compare, or grade the stored `answer`, open referenced local artifacts to fill gaps, or append tool output or solver evidence to the submission.
+3. Pass only if submission completeness passes and the aggregate score rules from the CLI succeed (default: majority of trials ≥ 5). Missing required content makes `blind.pass` false even when the CLI awards 5; preserve the CLI ratings unchanged in the report.
+4. Diagnose failures using tutor comments and the submitted answer. Separate solver execution evidence may explain setup/reproducibility problems, but cannot establish that missing answer content was supplied.
 
 ## Hypothesis guide
 
 | Signal | Hypothesis |
 | --- | --- |
+| Required answer content exists only in a local file or is merely claimed | `other` — incomplete submission; record the missing content without retrieving it |
 | Solver `setup_failed` / missing install steps | `missing_setup` |
 | Setup works but tutor penalizes requirements absent from the question | `tutor_rubric` |
 | Agent answer is plausible but the question permits conflicting interpretations | `ambiguous_task` |
@@ -48,6 +49,8 @@ End with a single JSON block:
   "status": "scored",
   "chapterId": "...",
   "practiceIndex": 0,
+  "submissionComplete": false,
+  "missingFromSubmission": ["required explanation is only referenced by a local file path"],
   "blind": {
     "trials": [{"rating": 4, "comment": "..."}],
     "pass": false,

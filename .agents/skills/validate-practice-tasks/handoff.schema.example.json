@@ -3,11 +3,24 @@
   "chapterId": "tenth_chapter",
   "practiceIndex": 0,
   "blind": {
-    "trials": [{ "rating": 4, "comment": "..." }],
+    "trials": [
+      {
+        "rating": 4,
+        "comment": "..."
+      }
+    ],
     "pass": false,
-    "aggregate": { "mean": 4.0, "min": 4, "majorityGte5": false }
+    "aggregate": {
+      "mean": 4.0,
+      "min": 4,
+      "majorityGte5": false
+    }
   },
   "hypothesis": "ambiguous_task",
-  "evidence": ["blind answer missed leadership epoch checks that the question never required"],
-  "feedbackForEditor": "State in the numbered tasks whether linearizable_read must reject non-leader callers."
+  "evidence": [
+    "blind answer missed leadership epoch checks that the question never required"
+  ],
+  "feedbackForEditor": "State in the numbered tasks whether linearizable_read must reject non-leader callers.",
+  "submissionComplete": true,
+  "missingFromSubmission": []
 }

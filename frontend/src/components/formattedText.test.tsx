@@ -3,6 +3,52 @@ import { describe, expect, it, vi } from "vitest";
 import FormattedText from "./formattedText";
 
 describe("FormattedText", () => {
+  it("renders Markdown references as links and preserves surrounding punctuation", () => {
+    const references = [
+      ["Python SDK 1.20.0", "https://github.com/temporalio/sdk-python/tree/1.20.0"],
+      ["durable timers", "https://docs.temporal.io/develop/python/workflows/timers"],
+      ["signals", "https://docs.temporal.io/develop/python/workflows/message-passing"],
+    ];
+    const [sdk, timers, signals] = references.map(([label, url]) => `[${label}](${url})`);
+    const { container } = render(<FormattedText text={`${sdk}, ${timers}, and ${signals}`} />);
+
+    for (const [label, url] of references) {
+      const link = screen.getByRole("link", { name: label });
+      expect(link).toHaveAttribute("href", url);
+      expect(link).toHaveAttribute("target", "_blank");
+      expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    }
+    expect(container).toHaveTextContent("Python SDK 1.20.0, durable timers, and signals");
+  });
+
+  it("renders links in numbered steps and expanded content", () => {
+    render(<FormattedText text={[
+      "1. Read [the guide](https://example.com/guide).",
+      ":::cut References",
+      "Read [the reference](https://example.com/reference).",
+      ":::",
+    ].join("\n")} />);
+
+    expect(screen.getByRole("link", { name: "the guide" }).closest("li")).toBeTruthy();
+    fireEvent.click(screen.getByText("References"));
+    expect(screen.getByRole("link", { name: "the reference" })).toHaveAttribute(
+      "href", "https://example.com/reference",
+    );
+  });
+
+  it("leaves code examples and non-HTTP link destinations as text", () => {
+    const reference = "[example](https://example.com)";
+    render(<FormattedText text={[
+      `Inline: \`${reference}\``,
+      "```text", reference, "```",
+      "[unsafe](javascript:alert) and [unfinished](https://example.com",
+    ].join("\n")} />);
+
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(document.querySelector(".formatted-text__inline-code")).toHaveTextContent(reference);
+    expect(document.querySelector("pre code")).toHaveTextContent(reference);
+  });
+
   it("styles lines that start with a number and a dot as design list items", () => {
     render(
       <FormattedText

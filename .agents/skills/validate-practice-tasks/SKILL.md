@@ -13,6 +13,14 @@ description: >-
 
 Goal: each practice item matches the [practice styleguide](STYLEGUIDE.md), has a technically sound task and setup, is reproducible from `task` + `question` alone, and yields a blind solution that gets tutor score 5 (majority of trials). The most recently accepted blind solution becomes the stored `answer` that the app displays as the practice reference.
 
+## Answer boundary
+
+- The answer is only the text the user submits. During local validation, it is only the blind solver's full `proposedSolution` output, copied verbatim into `answer.md` for the CLI.
+- Local files (including `notes.txt`), filesystem paths, tool output, runtime state, and the solver's separate `evidence` field are not part of the answer. They may establish reproducibility, but must not supply missing code, reasoning, or results for grading. A statement that a file contains an explanation is not the explanation.
+- Briefs must explicitly ask learners to include every graded deliverable in their submitted answer. Local implementation files remain valid exercise artifacts, but required explanations must not be requested only in a local notes file. Correctness review flags such gaps before solving.
+- Require the solver to include the actual code, explanations, and requested result excerpts in `proposedSolution`. Do not assemble an answer from other artifacts, substitute a different answer file, or add material on the solver's behalf. If the solver also writes `answer.md`, verify it exactly matches `proposedSolution`.
+- Before accepting a grade, check submission completeness using only the brief and submitted answer. Missing required content fails this check even if local tests pass or the tutor awards 5. Record the omission; do not infer it from unsubmitted artifacts.
+
 ## Subagents
 
 | Agent | Role |
@@ -136,7 +144,7 @@ Delegate to **practice-solver** with:
 
 If `status` is `setup_failed` or `blocked` → skip grader; go to editor with solver JSON (still run the artifact check below).
 
-If `solved` → write `proposedSolution` to `answer.md` in the workdir.
+If `solved` → write the complete `proposedSolution` verbatim to `answer.md` in the workdir. A summary or pointer to a local file is not a substitute for the submitted answer; enforce the answer boundary above.
 
 ### 2b. Artifact check (parent must enforce)
 
@@ -163,8 +171,7 @@ Also scan the repo root (and the solver's reported cwd, if different) for other 
 
 Delegate to **practice-grader** to run `--answer-file` on `answer.md`.
 
-Pass when CLI `pass` is true. The grader must not read or score the stored
-`answer`. On pass → continue to step 3b.
+Pass only when the grader reports `submissionComplete: true` and CLI `pass` is true. The grader checks required content using only the brief and `answer.md`, records any omissions in `missingFromSubmission`, and must not read or score the stored `answer` or supplement the submission from local artifacts. On pass → continue to step 3b.
 
 On fail → use grader `hypothesis` + `feedbackForEditor`.
 
@@ -199,7 +206,7 @@ After 5 failed rounds, stop and report remaining issues for human review. Do not
 
 1. Styleguide gate passed on the final item (`practice-styleguide` status `pass`).
 2. Correctness gate passed on the final item (`practice-correctness` status `pass`, no `error` findings).
-3. Blind agent answer: majority of `--trials` ratings ≥ 5.
+3. The submitted answer is self-contained for all graded requirements (`submissionComplete: true`, empty `missingFromSubmission`) and a majority of `--trials` ratings are ≥ 5. Local artifacts or execution evidence cannot fill gaps in the answer.
 4. Solver did not need steps absent from the question.
 5. Task, brief, starter scaffold, and container setup use the same verified real-world tool, native workflow, and versioned interfaces rather than a toy substitute.
 6. The exact most recently accepted blind solution is stored in `answer` without a second grading pass.

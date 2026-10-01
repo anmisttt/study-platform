@@ -40,23 +40,33 @@ function removeIndent(text: string, indent: string): string {
 
 function renderInlineText(text: string): ReactNode {
   const nodes: ReactNode[] = [];
-  const inlineCodePattern = /`([^`]+)`/g;
+  const inlinePattern = /`([^`]+)`|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g;
   let lastIndex = 0;
-  let match: RegExpExecArray | null = inlineCodePattern.exec(text);
+  let match: RegExpExecArray | null = inlinePattern.exec(text);
   let key = 0;
 
   while (match) {
     if (match.index > lastIndex) {
       nodes.push(text.slice(lastIndex, match.index));
     }
-    nodes.push(
+    nodes.push(match[1] !== undefined ? (
       <code key={`inline-code-${key}`} className="formatted-text__inline-code">
         {match[1]}
-      </code>,
-    );
+      </code>
+    ) : (
+      <a
+        key={`inline-link-${key}`}
+        className="formatted-text__link"
+        href={match[3]}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {match[2]}
+      </a>
+    ));
     key += 1;
     lastIndex = match.index + match[0].length;
-    match = inlineCodePattern.exec(text);
+    match = inlinePattern.exec(text);
   }
 
   if (lastIndex < text.length) {
