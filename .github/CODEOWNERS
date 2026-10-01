@@ -1,0 +1,5 @@
+# Publishing controls and every input that can change a published image.
+/.github/workflows/ @anmisttt
+/.github/CODEOWNERS @anmisttt
+/practice-setups/ @anmisttt
+/backend/src/data/*.json @anmisttt

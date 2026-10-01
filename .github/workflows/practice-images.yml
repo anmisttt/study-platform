@@ -25,7 +25,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
   pull-requests: read
 
 env:
@@ -172,7 +171,7 @@ jobs:
       - name: Verify bake targets match chapter JSON refs
         run: bash practice-setups/check-tag-drift.sh
 
-  build:
+  validate-build:
     needs: [changes, drift-check]
     if: needs.changes.outputs.targets != ''
     strategy:
@@ -193,34 +192,35 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Bake and push platform images
+      - name: Validate platform images
         uses: docker/bake-action@v6
         env:
           # HCL variables are overridden by env of the same name; --set
           # variable.FOO is parsed as a target named "variable".
-          TAG_SUFFIX: -${{ matrix.suffix }}-${{ github.sha }}
+          TAG_SUFFIX: -validation-${{ matrix.suffix }}-${{ github.sha }}
         with:
           # v6 loads bake files from the Git context by default; workdir is
           # ignored, so pin the remote subdirectory that contains docker-bake.hcl.
           source: "{{defaultContext}}:practice-setups"
           files: docker-bake.hcl
           targets: ${{ needs.changes.outputs.targets }}
-          push: ${{ github.event_name != 'pull_request' }}
+          push: false
           set: |
             *.platform=${{ matrix.platform }}
 
-  merge:
-    if: github.event_name != 'pull_request' && needs.changes.outputs.targets != ''
-    needs: [changes, build]
+  publish:
+    needs: [changes, drift-check, validate-build]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.changes.outputs.targets != ''
     runs-on: ubuntu-latest
+    environment:
+      name: ghcr-production
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
 
       - uses: docker/setup-buildx-action@v3
 
@@ -230,19 +230,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Merge multi-arch manifests
+      - name: Bake and publish multi-platform images
+        uses: docker/bake-action@v6
+        with:
+          source: "{{defaultContext}}:practice-setups"
+          files: docker-bake.hcl
+          targets: ${{ needs.changes.outputs.targets }}
+          push: true
+          set: |
+            *.platform=linux/amd64
+            *.platform+=linux/arm64
+
+      - name: Publish immutable SHA tags
         env:
           SHA: ${{ github.sha }}
           TAGS: ${{ needs.changes.outputs.tags }}
           SOURCE_URL: https://github.com/${{ github.repository }}
         run: |
           set -euo pipefail
-          cd practice-setups
           source_ann="index:org.opencontainers.image.source=${SOURCE_URL}"
           jq -r '.[]' <<< "$TAGS" | while IFS= read -r tag; do
             docker buildx imagetools create --annotation "$source_ann" \
               -t "${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${tag}" \
               -t "${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${tag}-${SHA:0:7}" \
-              "${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${tag}-amd64-${SHA}" \
-              "${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${tag}-arm64-${SHA}"
+              "${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${tag}"
           done
