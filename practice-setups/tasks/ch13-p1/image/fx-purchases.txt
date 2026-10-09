@@ -1,0 +1,3 @@
+EUR|{"purchaseId":"p1","currency":"EUR","amount":100.00,"purchasedAt":"2024-06-01T10:15:00Z"}
+GBP|{"purchaseId":"p2","currency":"GBP","amount":40.00,"purchasedAt":"2024-06-01T10:16:00Z"}
+EUR|{"purchaseId":"p3","currency":"EUR","amount":50.00,"purchasedAt":"2024-06-01T10:17:00Z"}

@@ -1,0 +1,24 @@
+plugins {
+    id 'application'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.apache.kafka:kafka-streams:3.9.1'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.2'
+    testImplementation 'org.apache.kafka:kafka-streams-test-utils:3.9.1'
+}
+
+application {
+    mainClass = 'lab.FxStreamsApplication'
+}
+
+tasks.register('verify', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.FxTopologyVerification'
+}

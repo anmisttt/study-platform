@@ -16,19 +16,19 @@ class MRTopURL(MRJob):
         ]
 
     def mapper_get_url(self, _, line):
-        # TODO: yield (url, 1) where url is whitespace field index 6 (7th token)
+        # TODO: parse the request URL
         raise NotImplementedError
 
     def combiner_count(self, url, counts):
-        # TODO: local pre-aggregate — yield (url, sum(counts))
+        # TODO: combine URL counts
         raise NotImplementedError
 
     def reducer_count(self, url, counts):
-        # TODO: yield (None, (total_count, url)) so step 2 sees one stream
+        # TODO: aggregate and re-key URL counts
         raise NotImplementedError
 
     def reducer_find_max(self, _, count_url_pairs):
-        # TODO: yield max(count_url_pairs)  # pairs are (count, url)
+        # TODO: select the global maximum
         raise NotImplementedError
 
 

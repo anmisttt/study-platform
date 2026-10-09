@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 
@@ -11,11 +12,53 @@ from kafka import KafkaAdminClient, KafkaConsumer, KafkaProducer, TopicPartition
 from kafka.admin import NewTopic
 from kafka.errors import TopicAlreadyExistsError, UnknownTopicOrPartitionError
 
-BOOTSTRAP = "localhost:9092"
+BOOTSTRAP = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 TOPIC = "ch12.credits"
 GROUP = "ledger"
 PARTITIONS = 1
-DB = "host=localhost port=5433 dbname=ch12_eos_lab user=postgres password=postgres"
+DB = os.environ.get(
+    "POSTGRES_DSN",
+    "host=localhost port=5433 dbname=ch12_eos_lab user=postgres password=postgres",
+)
+
+
+def _topic_ready(admin: KafkaAdminClient) -> bool:
+    try:
+        topics = admin.describe_topics([TOPIC])
+    except UnknownTopicOrPartitionError:
+        return False
+    topic = next((item for item in topics if item.get("topic") == TOPIC), None)
+    if topic is None or topic.get("error_code") != 0:
+        return False
+    partitions = topic.get("partitions", [])
+    return len(partitions) == PARTITIONS and all(
+        partition.get("error_code") == 0 and partition.get("leader", -1) >= 0
+        for partition in partitions
+    )
+
+
+def _wait_for_topic_deletion(admin: KafkaAdminClient, timeout_s: float = 20.0) -> None:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if TOPIC not in admin.list_topics():
+            return
+        time.sleep(0.2)
+    raise RuntimeError(f"timed out waiting for topic deletion: {TOPIC}")
+
+
+def _create_topic_when_ready(admin: KafkaAdminClient, timeout_s: float = 20.0) -> None:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if _topic_ready(admin):
+            return
+        try:
+            admin.create_topics(
+                [NewTopic(name=TOPIC, num_partitions=PARTITIONS, replication_factor=1)]
+            )
+        except TopicAlreadyExistsError:
+            pass
+        time.sleep(0.2)
+    raise RuntimeError(f"timed out waiting for topic readiness: {TOPIC}")
 
 
 def ensure_topic() -> None:
@@ -23,21 +66,14 @@ def ensure_topic() -> None:
     try:
         try:
             admin.delete_topics([TOPIC])
-            time.sleep(2.0)
         except UnknownTopicOrPartitionError:
             pass
+        _wait_for_topic_deletion(admin)
         try:
             admin.delete_consumer_groups([GROUP])
-            time.sleep(1.0)
         except Exception:
             pass
-        try:
-            admin.create_topics(
-                [NewTopic(name=TOPIC, num_partitions=PARTITIONS, replication_factor=1)]
-            )
-            time.sleep(1.0)
-        except TopicAlreadyExistsError:
-            pass
+        _create_topic_when_ready(admin)
     finally:
         admin.close()
 
@@ -78,6 +114,7 @@ def _join_consumer() -> KafkaConsumer:
         group_id=GROUP,
         auto_offset_reset="earliest",
         enable_auto_commit=False,
+        max_poll_records=3,
         value_deserializer=lambda b: json.loads(b.decode("utf-8")),
     )
     consumer.subscribe([TOPIC])
@@ -95,7 +132,6 @@ def _join_consumer() -> KafkaConsumer:
             consumer.seek(tp, consumer.beginning_offsets([tp])[tp])
         else:
             consumer.seek(tp, committed)
-    consumer.poll(timeout_ms=0)  # clear any pre-seek fetch buffer
     return consumer
 
 
@@ -151,14 +187,8 @@ def simulate_lost_ack() -> None:
 
 
 def consume_idempotent(idle_ms: int = 1500) -> int:
-    """Apply only if accounts.last_offset < msg.offset; store offset; then commit Kafka."""
-    # implement:
-    # - join via _join_consumer(); poll until idle
-    # - for each message: UPDATE eos.accounts
-    #     SET balance_cents = balance_cents + delta, last_offset = msg.offset
-    #     WHERE account_id = ... AND last_offset < msg.offset
-    # - then consumer.commit(); count every scanned message (including no-op updates)
-    # - close and return the scan count
+    """Consume credit events through the idempotent sink."""
+    # TODO: implement the idempotent sink
     raise NotImplementedError
 
 
@@ -192,25 +222,24 @@ def main() -> None:
         return
 
     if cmd == "demo":
-        # Full path used after you implement consume_idempotent
         ensure_topic()
         seed_events()
         reset_sink()
 
         consume_naive()
-        print(f"after_naive={balance()}")  # 175
+        print(f"after_naive={balance()}")
 
         simulate_lost_ack()
         consume_naive()
-        print(f"after_redelivery_naive={balance()}")  # 350
+        print(f"after_redelivery_naive={balance()}")
 
         reset_sink()
         simulate_lost_ack()
         consume_idempotent()
-        print(f"after_idempotent={balance()}")  # 175
+        print(f"after_idempotent={balance()}")
         simulate_lost_ack()
         consume_idempotent()
-        print(f"after_redelivery_idempotent={balance()}")  # 175
+        print(f"after_redelivery_idempotent={balance()}")
         return
 
     print(

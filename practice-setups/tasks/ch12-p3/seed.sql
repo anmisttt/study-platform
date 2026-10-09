@@ -11,6 +11,21 @@ CREATE TABLE cdc.orders (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE OR REPLACE FUNCTION cdc.reject_order_id_change()
+RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.order_id IS DISTINCT FROM OLD.order_id THEN
+    RAISE EXCEPTION 'order_id is immutable';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER orders_immutable_order_id
+BEFORE UPDATE OF order_id ON cdc.orders
+FOR EACH ROW EXECUTE FUNCTION cdc.reject_order_id_change();
+
 CREATE TABLE cdc.cdc_orders_changelog (
   seq        BIGSERIAL PRIMARY KEY,
   op         TEXT NOT NULL CHECK (op IN ('insert', 'update', 'delete')),
@@ -41,6 +56,8 @@ CREATE OR REPLACE FUNCTION cdc.orders_cdc_trigger()
 RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
+  PERFORM pg_advisory_xact_lock(1203001);
+
   IF TG_OP = 'INSERT' THEN
     INSERT INTO cdc.cdc_orders_changelog (op, order_id, email, status, total_cents, updated_at)
     VALUES ('insert', NEW.order_id, NEW.email, NEW.status, NEW.total_cents, NEW.updated_at);
@@ -69,10 +86,7 @@ DECLARE
   v_applied INT := 0;
   r RECORD;
 BEGIN
-  -- implement: read last_seq for consumer 'orders_search';
-  -- for each changelog row with seq > last_seq ORDER BY seq LIMIT p_limit:
-  --   insert/update -> upsert into orders_search; delete -> delete from orders_search;
-  -- advance last_seq to the highest applied seq; return count applied
+  -- implement: outbox consumer
   RAISE EXCEPTION 'not implemented';
 END;
 $$;
