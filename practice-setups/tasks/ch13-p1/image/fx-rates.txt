@@ -1,0 +1,3 @@
+EUR|{"currency":"EUR","usdPerUnit":1.10,"effectiveAt":"2024-06-01T09:00:00Z"}
+GBP|{"currency":"GBP","usdPerUnit":1.25,"effectiveAt":"2024-06-01T09:00:00Z"}
+EUR|{"currency":"EUR","usdPerUnit":1.12,"effectiveAt":"2024-06-01T10:00:00Z"}

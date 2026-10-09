@@ -11,7 +11,10 @@ RECENT_LIMIT = 100
 
 def psql(sql: str) -> str:
     return subprocess.check_output(
-        ["psql", "-d", DB, "-At", "-F", "\t", "-c", sql],
+        [
+            "docker", "exec", "-i", "lab-ch12-p4",
+            "psql", "-U", "postgres", "-d", DB, "-At", "-F", "\t", "-c", sql,
+        ],
         text=True,
     )
 
@@ -29,14 +32,7 @@ def fetch_events_after(seq: int) -> list[dict[str, Any]]:
     return rows
 
 def apply_event(ev: dict[str, Any]) -> None:
-    # TODO: update follows/posts state AND the three views:
-    # home_timeline, user_post_counts, recent_posts (keep <= RECENT_LIMIT)
-    # Rules:
-    # - post_created by U: insert social.posts; bump user_post_counts;
-    #   insert into home_timeline for every follower of U; upsert recent_posts
-    # - post_deleted: remove from posts, timelines, recent_posts; decrement count
-    # - followed: insert follows; backfill followee's existing posts into follower timeline
-    # - unfollowed: delete follows; remove followee posts from follower timeline
+    # TODO: apply one event to source state and materialized views
     raise NotImplementedError
 
 def run_consumer() -> int:
@@ -44,9 +40,7 @@ def run_consumer() -> int:
     n = 0
     for ev in fetch_events_after(last):
         apply_event(ev)
-        last = ev["seq"]
         n += 1
-    psql(f"UPDATE social.consumer_offset SET last_seq = {last} WHERE name = 'materializers';")
     return n
 
 def main() -> None:

@@ -19,7 +19,7 @@ variable "POSTGRES_TASKS" {
     { tag = "ch8-p2", db = "lab" },
     { tag = "ch8-p3", db = "ch8_seats" },
     { tag = "ch8-p4", db = "lab" },
-    { tag = "ch11-p3", db = "batch_join_lab" },
+    { tag = "ch11-p2", db = "batch_join_lab" },
     { tag = "ch12-p3", db = "ch12_cdc_lab" },
     { tag = "ch12-p4", db = "ch12_views_lab" },
   ]
@@ -48,10 +48,10 @@ variable "PYTHON_DELIVERY_TASKS" {
     { tag = "ch10-p2", apt = "" },
     { tag = "ch10-p3", apt = "" },
     { tag = "ch10-p6", apt = "" },
-    { tag = "ch11-p5", apt = "" },
+    { tag = "ch11-p1", apt = "" },
+    { tag = "ch11-p4", apt = "" },
     { tag = "ch12-p1", apt = "" },
     { tag = "ch12-p2", apt = "" },
-    { tag = "ch12-p5", apt = "" },
     { tag = "ch13-p1", apt = "" },
     { tag = "ch13-p2", apt = "" },
     { tag = "ch13-p3", apt = "" },
@@ -72,7 +72,7 @@ variable "ETCD_DELIVERY_TASKS" {
 }
 
 group "default" {
-  targets = ["postgres-task", "python-delivery-task", "node-python-delivery-task", "etcd-delivery-task", "task-ch9-p3"]
+  targets = ["postgres-task", "python-delivery-task", "node-python-delivery-task", "etcd-delivery-task", "task-ch9-p3", "task-ch12-p5"]
 }
 
 target "_common" {
@@ -113,6 +113,16 @@ target "python-delivery-task" {
     task = "tasks/${item.tag}"
   }
   tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:${item.tag}${TAG_SUFFIX}"]
+}
+
+target "task-ch12-p5" {
+  inherits = ["_common"]
+  context = "."
+  dockerfile = "tasks/ch12-p5/Dockerfile"
+  contexts = {
+    task = "tasks/ch12-p5"
+  }
+  tags = ["${REGISTRY}/${IMAGE_OWNER}/${TASK_PKG}:ch12-p5${TAG_SUFFIX}"]
 }
 
 target "node-python-delivery-task" {

@@ -31,7 +31,6 @@ def ensure_topics() -> None:
 
 
 def publish_claims(claims: list[tuple[str, str]]) -> None:
-    """claims: list of (request_id, username). Key MUST be username for co-location."""
     p = KafkaProducer(
         bootstrap_servers=BOOTSTRAP,
         key_serializer=lambda k: k.encode(),
@@ -49,24 +48,12 @@ def publish_claims(claims: list[tuple[str, str]]) -> None:
 
 
 def decide(taken: dict[str, str], claim: dict[str, Any]) -> dict[str, Any]:
-    """First claim for a username wins; later claims are rejected."""
-    # implement:
-    # - if username in taken: status rejected
-    # - else: taken[username] = request_id; status accepted
-    # - return {request_id, username, status}
+    # TODO: implement claim decision
     raise NotImplementedError
 
 
 def run_enforcer(expected: int = 5, timeout_s: float = 20.0) -> list[dict[str, Any]]:
-    """
-    Consume TOPIC_CLAIMS in log order per partition, emit decisions to TOPIC_DECISIONS.
-    Maintain local `taken` map (production: state store / local DB per shard).
-    """
-    # implement:
-    # - consumer group_id unique per run, auto_offset_reset earliest
-    # - producer for TOPIC_DECISIONS keyed by username
-    # - for each claim: decision = decide(taken, value); send to TOPIC_DECISIONS
-    # - collect `expected` decisions then return them
+    # TODO: implement Kafka claim enforcer
     raise NotImplementedError
 
 
@@ -95,8 +82,6 @@ def main() -> None:
         decisions = run_enforcer(expected=5)
         for d in sorted(decisions, key=lambda x: x["request_id"]):
             print(f"{d['request_id']} {d['username']} {d['status']}")
-        # expect: r1 neo accepted; r2 trinity accepted; r3 neo rejected;
-        #         r4 morpheus accepted; r5 trinity rejected
         return
     print("usage: python3 ch13_username_unique.py demo", file=sys.stderr)
     sys.exit(2)

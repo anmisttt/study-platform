@@ -1,4 +1,4 @@
--- ch12_views_setup.sql — event log + empty materialized tables
+-- setup.sql — event log, materialized tables, and fixture events
 DROP SCHEMA IF EXISTS social CASCADE;
 CREATE SCHEMA social;
 

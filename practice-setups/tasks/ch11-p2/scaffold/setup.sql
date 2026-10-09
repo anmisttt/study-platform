@@ -29,9 +29,7 @@ SELECT
   TIMESTAMPTZ '2024-01-01' + (g || ' minutes')::interval
 FROM generate_series(1, 20000) AS g;
 
--- Index so both sides can be scanned in user_id order (merge join friendly).
--- implement: CREATE INDEX ... ON batch.activity_events (user_id, ts);
--- (users already ordered by its PRIMARY KEY on user_id)
+-- implement: event ordering index
 
 ANALYZE batch.users;
 ANALYZE batch.activity_events;
