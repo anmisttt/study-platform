@@ -7,11 +7,6 @@ on:
       - "practice-setups/**"
       - "backend/src/data/*.json"
       - ".github/workflows/practice-images.yml"
-  pull_request:
-    paths:
-      - "practice-setups/**"
-      - "backend/src/data/*.json"
-      - ".github/workflows/practice-images.yml"
   workflow_dispatch:
     inputs:
       chapter:
