@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { authRequest, request, safeReturnTo } from "./client";
-import { useAuth } from "./context";
 
 type Mode = "login" | "register" | "verify" | "forgot" | "reset";
 const titles: Record<Mode, string> = { login: "Welcome back", register: "Create your account", verify: "Verify your email", forgot: "Reset your password", reset: "Choose a new password" };
@@ -9,7 +8,6 @@ export default function AuthPage({ mode }: { mode: Mode }) {
   const [params] = useSearchParams();
   const returnTo = safeReturnTo(params.get("returnTo"));
   const navigate = useNavigate();
-  const { refresh } = useAuth();
   const [email, setEmail] = useState(params.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
@@ -25,7 +23,7 @@ export default function AuthPage({ mode }: { mode: Mode }) {
     try {
       if (mode === "login") {
         await authRequest("/sign-in/email", { email, password });
-        setPassword(""); await refresh(); navigate(returnTo, { replace: true });
+        setPassword(""); window.location.replace(returnTo);
       } else if (mode === "register") {
         await authRequest("/sign-up/email", { email, password, callbackURL });
         setPassword(""); navigate(`/verify-email?email=${encodeURIComponent(email)}&returnTo=${encodeURIComponent(returnTo)}`);

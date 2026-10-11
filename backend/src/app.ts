@@ -73,7 +73,10 @@ export function createApplication({ roomsDb, config, sendEmail, llm = defaultLlm
   app.get("/chapters", (_req, res) => {
     res.json(chapters.map(chapter => ({ id: chapter.id, number: chapter.number, name: chapter.name, theoryCount: chapter.theory.length, practiceCount: chapter.practice.length })));
   });
-  app.get("/me", async (req, res) => { res.json(accounts.profile((await requireUser(req)).id)); });
+  app.get("/me", async (req, res) => {
+    const current = await session(req);
+    res.json(current ? accounts.profile(current.user.id) : null);
+  });
   app.put("/me/llm-key", async (req, res) => {
     const user = await requireUser(req);
     accounts.saveKey(user.id, req.body?.apiKey);

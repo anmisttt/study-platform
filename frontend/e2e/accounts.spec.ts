@@ -19,6 +19,8 @@ async function register(page: Page, email: string) {
 test("verified account manages its profile, key, rooms and shared progress", async ({ page, browser }, testInfo) => {
   const email = `owner-${Date.now()}@example.com`;
   await register(page, email);
+  const authChecks: string[] = [];
+  page.on("request", request => { if (new URL(request.url()).pathname === "/api/me") authChecks.push(request.url()); });
   await expect(page.getByRole("link", { name: "Profile" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Profile" }).locator("svg")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Personal details" })).toHaveCount(0);
@@ -27,17 +29,26 @@ test("verified account manages its profile, key, rooms and shared progress", asy
   await page.getByRole("button", { name: "Save key", exact: true }).click();
   await expect(page.getByText("Saved key ending in 3456")).toBeVisible();
   await expect(page.getByLabel("Replace API key")).toHaveValue("");
+  expect(authChecks).toHaveLength(0);
   await page.goto("/chapters/1/overview");
   await page.getByRole("button", { name: "Generate new room" }).click();
   await expect(page.getByRole("heading", { name: "Theory 1", exact: true })).toBeVisible();
   const roomUrl = page.url();
   const guest = await browser.newContext();
   const guestPage = await guest.newPage();
+  const guestAuthErrors: string[] = [];
+  guestPage.on("response", response => { if (response.status() === 401) guestAuthErrors.push(response.url()); });
+  const guestSession = guestPage.waitForResponse(response => new URL(response.url()).pathname === "/api/me");
   await guestPage.goto(roomUrl);
+  const sessionResponse = await guestSession;
+  expect(sessionResponse.status()).toBe(200);
+  expect(await sessionResponse.json()).toBeNull();
   await expect(guestPage.getByRole("link", { name: "Sign in", exact: true })).toBeVisible();
   await guestPage.getByPlaceholder("Type your answer in any language...").fill("A thoughtful answer written by a guest participant.");
   await guestPage.getByRole("button", { name: "Check", exact: true }).click();
   await expect(guestPage.getByText("4/5 · Good")).toBeVisible();
+  await expect(guestPage.getByRole("alert")).toHaveCount(0);
+  expect(guestAuthErrors).toEqual([]);
   await page.goto("/profile");
   await expect(page.locator(".room-summary")).toHaveCount(1);
   await expect(page.locator(".room-summary")).toContainText("Average 4.0/5");
@@ -47,8 +58,10 @@ test("verified account manages its profile, key, rooms and shared progress", asy
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("profile-mobile.png"), fullPage: true });
   await page.setViewportSize({ width: 1280, height: 720 });
+  const checksBeforeRemoval = authChecks.length;
   await page.getByRole("button", { name: "Remove key" }).click();
   await expect(page.getByText("No key saved")).toBeVisible();
+  expect(authChecks).toHaveLength(checksBeforeRemoval);
   await guestPage.getByRole("button", { name: "Try again" }).click();
   await expect(guestPage.getByRole("button", { name: "Check", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Delete", exact: true }).click();

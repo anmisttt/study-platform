@@ -22,7 +22,7 @@ beforeEach(() => {
   // jsdom does not implement the native dialog methods.
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
   HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
-  auth = { profile: { id: "a", email: "a@example.com", llmKey: { configured: false, lastFour: null, updatedAt: null } }, loading: false, error: "", refresh: vi.fn(async () => {}), signOut: vi.fn(async () => {}) };
+  auth = { profile: { id: "a", email: "a@example.com", llmKey: { configured: false, lastFour: null, updatedAt: null } }, loading: false, error: "", updateKeyStatus: vi.fn(), signOut: vi.fn(async () => {}) };
   vi.mocked(useAuth).mockImplementation(() => auth);
   vi.stubGlobal("fetch", vi.fn(async () => response([room("owned", true), room("joined", false)])));
 });
@@ -96,17 +96,14 @@ it("confirms deletion for everyone and removes a card already deleted elsewhere"
   expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith("/rooms/owned") && init?.method === "DELETE")).toBe(true);
 });
 
-it("ignores late room responses after changing accounts", async () => {
+it("cancels pending room requests when leaving the profile", async () => {
   let complete!: (value: Response) => void;
-  vi.mocked(fetch).mockReturnValueOnce(new Promise(resolve => { complete = resolve; })).mockResolvedValueOnce(response([room("other-account", false)]));
-  const { rerender } = showProfile();
+  vi.mocked(fetch).mockReturnValueOnce(new Promise(resolve => { complete = resolve; }));
+  const { unmount } = showProfile();
   await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
   const oldSignal = vi.mocked(fetch).mock.calls[0][1]?.signal;
-  auth.profile = { ...auth.profile!, id: "b", email: "b@example.com" };
-  rerender(<MemoryRouter><ProfilePage /></MemoryRouter>);
-  await screen.findByRole("heading", { name: "Chapter for other-account" });
+  unmount();
   expect(oldSignal?.aborted).toBe(true);
-  await act(async () => { complete(response([room("old-account", true)])); });
-  expect(screen.queryByRole("heading", { name: "Chapter for old-account" })).not.toBeInTheDocument();
-  expect(screen.getAllByRole("article")).toHaveLength(1);
+  await act(async () => { complete(response([room("owned", true)])); });
+  expect(screen.queryByRole("article")).not.toBeInTheDocument();
 });

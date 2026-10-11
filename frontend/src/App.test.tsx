@@ -153,6 +153,28 @@ describe("App routing", () => {
     expect(webSocketCount).toBe(0);
   });
 
+  it.each(["overview", "question", "join"])("lets anonymous visitors open a shared room through %s without auth errors", async entry => {
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((input, init) => String(input) === "/api/me"
+      ? Promise.resolve(jsonResponse(null)) : defaultFetch(input, init));
+    renderApp(entry === "question"
+      ? chapterQuestionPath(chapterMeta.number, "theory-1", "ABC123")
+      : chapterOverviewPath(chapterMeta.number, entry === "overview" ? "ABC123" : undefined));
+
+    await screen.findAllByRole("link", { name: "Sign in" });
+    if (entry === "join") {
+      fireEvent.change(screen.getByPlaceholderText("Room ID..."), { target: { value: "ABC123" } });
+      fireEvent.click(screen.getByRole("button", { name: "Join room" }));
+    }
+    if (entry !== "overview") {
+      expect(await screen.findByText("What is a process?")).toBeVisible();
+      expect(screen.getByPlaceholderText("Type your answer in any language...")).toBeEnabled();
+    }
+    fireEvent.focus(window);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => String(url)).sort()).toEqual(["/api/chapters", "/api/me"]);
+  });
+
   it("redirects practice routes without a roomId back to overview with an error", async () => {
     renderApp(chapterQuestionPath(chapterMeta.number, "theory-1"));
 
@@ -189,6 +211,18 @@ describe("App routing", () => {
     expect(await screen.findByText("Theory 1")).toBeTruthy();
     expect(screen.getAllByText("ABC123").length).toBeGreaterThan(0);
     expect(within(document.body).getByPlaceholderText("Type your answer in any language...")).toBeTruthy();
+  });
+
+  it("clears stale auth when the backend rejects room creation without rechecking the session", async () => {
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((input, init) => String(input) === "/api/rooms"
+      ? Promise.resolve(jsonResponse({ error: "Please sign in to continue.", code: "AUTH_REQUIRED" }, 401))
+      : defaultFetch(input, init));
+    renderApp(chapterOverviewPath(chapterMeta.number));
+    fireEvent.click(await screen.findByRole("button", { name: "Generate new room" }));
+    expect(await screen.findByText("Please sign in to continue.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Sign in to create a room" })).toBeVisible();
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url) === "/api/me")).toHaveLength(1);
   });
 
   it("redirects unknown question refs back to the chapter overview", async () => {

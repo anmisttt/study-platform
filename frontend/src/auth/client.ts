@@ -11,7 +11,7 @@ export async function request<T>(path: string, init: RequestInit = {}, auth = fa
     headers: { ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers },
   });
   const payload = response.status === 204 ? null : await response.json();
-  // An old account/route request must not expire a newer session after cancellation.
+  // Canceled requests must not update UI state or report session expiry.
   init.signal?.throwIfAborted();
   if (!response.ok) {
     if (response.status === 401 && !auth) window.dispatchEvent(new Event("session-expired"));

@@ -83,7 +83,7 @@ Browser URLs use the `/api` prefix. Backend paths below omit it, except auth rou
 
 - `GET /health`, `GET /chapters`, `GET /auth-options` — public health, chapter metadata and available sign-in methods.
 - `/api/auth/*` — Better Auth social and email/password sign-in, registration, verification, recovery, sessions and logout.
-- `GET /me` — returns the signed-in user's private, name-free profile and OpenAI key status.
+- `GET /me` — returns the signed-in user's private, name-free profile and OpenAI key status, or `200` with `null` when no valid session exists. The frontend checks once per page load, with no background or cross-tab auth refresh. Sign-in loads the destination page; protected actions validate the session on the backend, and their `401` responses clear the frontend account state.
 - `PUT /me/llm-key` with `{ "apiKey": "..." }`, `DELETE /me/llm-key` — current user's encrypted OpenAI key. Responses contain only presence, last four characters and update time.
 - `GET /me/rooms` — the signed-in user's authored and joined rooms, ordered by their last open. Summaries include `isAuthor`, `joinedAt`, `lastOpenedAt`, shared progress, average rating and continuation question.
 - `POST /rooms` with `{ "chapterId": "..." }` — requires a session and atomically creates the room and its author's participant record; returns `{ roomId }`. Room-ID collisions retry with a fresh ID, up to ten attempts; other insert failures roll back without entering that retry loop.

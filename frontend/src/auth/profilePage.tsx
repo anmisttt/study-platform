@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import type { ProfileRoomSummary, UserProfile } from "@study-platform/shared";
+import type { LlmKeyStatus, ProfileRoomSummary, UserProfile } from "@study-platform/shared";
 import { useAuth } from "./context";
 import { ApiRequestError, request, safeReturnTo, signInPath } from "./client";
 import { chapterOverviewPath, chapterQuestionPath } from "../routes/paths";
@@ -10,17 +10,16 @@ type RoomFilter = "All" | "Author" | "Participant";
 const ROOM_FILTERS: RoomFilter[] = ["All", "Author", "Participant"];
 
 export default function ProfilePage() {
-  const { profile, loading, error, refresh } = useAuth();
+  const { profile, loading, error } = useAuth();
   const [params] = useSearchParams();
   if (loading) return <p className="screen-message">Loading profile…</p>;
-  if (error) return <section className="account-page"><p role="alert">{error}</p><button onClick={() => void refresh()}>Retry</button></section>;
+  if (error) return <section className="account-page"><p role="alert">{error}</p><button onClick={() => window.location.reload()}>Reload</button></section>;
   if (!profile) return <Navigate to={signInPath(`/profile${params.size ? `?${params}` : ""}`)} replace />;
-  // Account changes discard the previous account's rooms, pending requests and key input.
-  return <ProfileContent key={profile.id} profile={profile} />;
+  return <ProfileContent profile={profile} />;
 }
 
 function ProfileContent({ profile }: { profile: UserProfile }) {
-  const { refresh, signOut } = useAuth();
+  const { updateKeyStatus, signOut } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [apiKey, setApiKey] = useState("");
@@ -87,13 +86,17 @@ function ProfileContent({ profile }: { profile: UserProfile }) {
     finally { setPending(false); }
   }
 
-  async function saveKey(event: FormEvent) {
-    event.preventDefault();
+  async function changeKey(method: "PUT" | "DELETE") {
     await action(async () => {
-      try { await request("/me/llm-key", { method: "PUT", body: JSON.stringify({ apiKey }) }); }
-      finally { setApiKey(""); }
-      await refresh();
-      setNotice("Key saved. Your rooms can now use AI features. Availability and credit are checked when you use them.");
+      try {
+        const status = await request<LlmKeyStatus>("/me/llm-key", {
+          method, body: method === "PUT" ? JSON.stringify({ apiKey }) : undefined,
+        });
+        updateKeyStatus(status);
+        setNotice(method === "PUT"
+          ? "Key saved. Your rooms can now use AI features. Availability and credit are checked when you use them."
+          : "Key removed. New AI requests are disabled in your rooms.");
+      } finally { setApiKey(""); }
     });
   }
 
@@ -127,9 +130,9 @@ function ProfileContent({ profile }: { profile: UserProfile }) {
     <div className="profile-settings">
       <section className="profile-panel"><h2>OpenAI API key</h2><p>Anyone with one of your room links can check solutions and use voice input through your OpenAI account.</p>
         <p className="key-status">{profile.llmKey.configured ? `Saved key ending in ${profile.llmKey.lastFour}` : "No key saved"}</p>
-        <form className="account-form" onSubmit={event => void saveKey(event)}><label>{profile.llmKey.configured ? "Replace API key" : "API key"}<input name="apiKey" type="password" required autoComplete="off" spellCheck={false} maxLength={1024} value={apiKey} onChange={event => setApiKey(event.target.value)} /></label>
+        <form className="account-form" onSubmit={event => { event.preventDefault(); void changeKey("PUT"); }}><label>{profile.llmKey.configured ? "Replace API key" : "API key"}<input name="apiKey" type="password" required autoComplete="off" spellCheck={false} maxLength={1024} value={apiKey} onChange={event => setApiKey(event.target.value)} /></label>
           <div className="account-actions"><button className="primary-button" disabled={pending || !apiKey.trim()}>Save key</button>
-            {profile.llmKey.configured && <button className="secondary-button" type="button" disabled={pending} onClick={() => void action(async () => { await request("/me/llm-key", { method: "DELETE" }); setApiKey(""); await refresh(); setNotice("Key removed. New AI requests are disabled in your rooms."); })}>Remove key</button>}</div>
+            {profile.llmKey.configured && <button className="secondary-button" type="button" disabled={pending} onClick={() => void changeKey("DELETE")}>Remove key</button>}</div>
         </form><p className="account-help">Stored encrypted. Saving does not make an OpenAI request. Rooms you participate in use their author's key.</p>
       </section>
     </div>

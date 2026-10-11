@@ -45,6 +45,12 @@ async function room(cookie: string) {
   expect(response.status).toBe(200);
   return (await response.json()).roomId as string;
 }
+async function expectAnonymousProfile(cookie = "") {
+  const response = await api("/me", "GET", undefined, cookie);
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(await response.json()).toBeNull();
+}
 beforeEach(async () => {
   db = new RoomsDb(":memory:"); db.initializeSchema(); emails = [];
   services = { grade: vi.fn(async () => ({ rating: 4, comment: "Good answer." })), transcribe: vi.fn(async () => ({ value: "ephemeral-token", expires_at: 100 })) };
@@ -56,6 +62,17 @@ beforeEach(async () => {
 afterEach(async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); db.close(); });
 
 describe("accounts and permissions", () => {
+  it("allows anonymous session checks but requires sign-in to create rooms or access private account data", async () => {
+    await expectAnonymousProfile();
+    await expectAnonymousProfile("better-auth.session_token=invalid");
+    const created = await api("/rooms", "POST", { chapterId: chapters[0].id });
+    expect(created.status).toBe(401);
+    expect(await created.json()).toEqual({ code: "AUTH_REQUIRED", error: "Please sign in to continue." });
+    expect(db.all("SELECT * FROM rooms")).toEqual([]);
+    expect((await api("/me/rooms")).status).toBe(401);
+    expect((await api("/me/llm-key", "PUT", { apiKey: ownerKey })).status).toBe(401);
+  });
+
   it("sets Secure, HttpOnly and SameSite=Lax on the production database-session cookie", async () => {
     await user();
     const productionAuth = createAuth(db.connection, { ...config, production: true, publicOrigin: "https://study.example" }, async () => {});
@@ -100,7 +117,8 @@ describe("accounts and permissions", () => {
     expect(signedIn.cookie).not.toContain("session_data");
     expect((await api("/me", "GET", undefined, signedIn.cookie)).status).toBe(200);
     await api("/api/auth/sign-out", "POST", {}, signedIn.cookie);
-    expect((await api("/me", "GET", undefined, signedIn.cookie)).status).toBe(401);
+    await expectAnonymousProfile(signedIn.cookie);
+    expect((await api("/rooms", "POST", { chapterId: chapters[0].id }, signedIn.cookie)).status).toBe(401);
   });
   it("sends new verification links and rejects tampered verification tokens", async () => {
     await api("/api/auth/sign-up/email", "POST", { email: "new@example.com", password: "test-password-123" });
@@ -117,7 +135,8 @@ describe("accounts and permissions", () => {
     const token = link.pathname.split("/").at(-1);
     const reset = await api("/api/auth/reset-password", "POST", { token, newPassword: "replacement-password-123" });
     expect(reset.status).toBe(200);
-    expect((await api("/me", "GET", undefined, owner.cookie)).status).toBe(401);
+    await expectAnonymousProfile(owner.cookie);
+    expect((await api("/rooms", "POST", { chapterId: chapters[0].id }, owner.cookie)).status).toBe(401);
     expect((await api("/api/auth/sign-in/email", "POST", { email: "owner@example.com", password: "replacement-password-123" })).status).toBe(200);
     expect((await api("/api/auth/reset-password", "POST", { token, newPassword: "another-password-123" })).status).toBeGreaterThanOrEqual(400);
   });
@@ -142,7 +161,7 @@ describe("accounts and permissions", () => {
     expect((await api(`/rooms/${id}`, "DELETE", undefined, other.cookie)).status).toBe(404);
     expect((await api(`/rooms/${id}`, "DELETE", undefined, owner.cookie)).status).toBe(204);
   });
-  it("returns a name-free profile and rejects expired sessions and foreign origins", async () => {
+  it("returns a name-free profile, treats expired sessions as anonymous, and rejects foreign origins", async () => {
     const owner = await user();
     const profile = await (await api("/me", "GET", undefined, owner.cookie)).json();
     expect(profile).toMatchObject({ id: owner.id, email: "owner@example.com" });
@@ -150,7 +169,8 @@ describe("accounts and permissions", () => {
     expect(profile).not.toHaveProperty("image");
     expect((await api("/me", "PATCH", { name: "Other" }, owner.cookie, "https://evil.example")).status).toBe(403);
     db.run("UPDATE session SET expiresAt = 0 WHERE userId = ?", [owner.id]);
-    expect((await api("/me", "GET", undefined, owner.cookie)).status).toBe(401);
+    await expectAnonymousProfile(owner.cookie);
+    expect((await api("/rooms", "POST", { chapterId: chapters[0].id }, owner.cookie)).status).toBe(401);
   });
 });
 

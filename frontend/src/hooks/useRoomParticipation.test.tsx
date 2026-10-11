@@ -11,10 +11,9 @@ function response(payload: unknown, status = 200) { return new Response(JSON.str
 function registrations() { return vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/participants/me")); }
 
 beforeEach(() => {
-  auth = { profile, loading: false, error: "", refresh: vi.fn(async () => {}), signOut: vi.fn(async () => {}) };
+  auth = { profile, loading: false, error: "", updateKeyStatus: vi.fn(), signOut: vi.fn(async () => {}) };
   vi.mocked(useAuth).mockImplementation(() => auth);
-  vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL) => String(url).endsWith("/me") && !String(url).includes("/participants/")
-    ? response(auth.profile) : response({ participationCreated: false })));
+  vi.stubGlobal("fetch", vi.fn(async () => response({ participationCreated: false })));
 });
 afterEach(() => { vi.unstubAllGlobals(); });
 
@@ -51,9 +50,9 @@ it("does not register while the account is loading or unavailable", async () => 
   await waitFor(() => expect(registrations()).toHaveLength(1));
 });
 
-it.each(["manual", "focus", "online"])("retries a failed registration through %s after confirming the account", async trigger => {
+it.each(["manual", "focus", "online"])("retries a failed registration through %s without a separate auth check", async trigger => {
   vi.mocked(fetch).mockResolvedValueOnce(response({ error: "Busy", code: "DATABASE_BUSY" }, 503))
-    .mockResolvedValueOnce(response(profile)).mockResolvedValueOnce(response({ participationCreated: true }));
+    .mockResolvedValueOnce(response({ participationCreated: true }));
   const { result } = renderHook(() => useRoomParticipation("room-a"));
   await waitFor(() => expect(result.current.status).toBe("error"));
   await act(async () => {
@@ -62,32 +61,37 @@ it.each(["manual", "focus", "online"])("retries a failed registration through %s
   });
   await waitFor(() => expect(result.current.status).toBe("saved"));
   expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([
-    "/api/rooms/room-a/participants/me", "/api/me", "/api/rooms/room-a/participants/me",
+    "/api/rooms/room-a/participants/me", "/api/rooms/room-a/participants/me",
   ]);
   await act(async () => { window.dispatchEvent(new Event("focus")); window.dispatchEvent(new Event("online")); });
   expect(registrations()).toHaveLength(2);
 });
 
-it("does not replay one account's failed request under a different session", async () => {
-  const nextProfile = { ...profile, id: "user-b" };
-  vi.mocked(fetch).mockRejectedValueOnce(new Error("Offline")).mockResolvedValueOnce(response(nextProfile));
+it("relies on the backend to reject an expired session when retrying participation", async () => {
+  vi.mocked(fetch).mockRejectedValueOnce(new Error("Offline"))
+    .mockResolvedValueOnce(response({ error: "Please sign in to continue.", code: "AUTH_REQUIRED" }, 401));
   const { result, rerender } = renderHook(() => useRoomParticipation("room-a"));
   await waitFor(() => expect(result.current.status).toBe("error"));
-  await act(async () => { result.current.retry(); });
-  expect(auth.refresh).toHaveBeenCalledOnce();
-  expect(registrations()).toHaveLength(1);
-  auth.profile = nextProfile;
+  const expired = vi.fn();
+  window.addEventListener("session-expired", expired);
+  try {
+    await act(async () => { result.current.retry(); });
+    expect(expired).toHaveBeenCalledOnce();
+  } finally { window.removeEventListener("session-expired", expired); }
+  expect(registrations()).toHaveLength(2);
+  auth.profile = null;
   rerender();
-  await waitFor(() => expect(registrations()).toHaveLength(2));
+  expect(result.current.status).toBe("idle");
+  await act(async () => { window.dispatchEvent(new Event("focus")); });
+  expect(fetch).toHaveBeenCalledTimes(2);
 });
 
-it("aborts stale work on room/account changes and ignores its success", async () => {
+it("aborts stale work on room changes and ignores its success", async () => {
   let complete!: (value: Response) => void;
   vi.mocked(fetch).mockReturnValueOnce(new Promise(resolve => { complete = resolve; }));
   const { result, rerender } = renderHook(({ roomId }) => useRoomParticipation(roomId), { initialProps: { roomId: "room-a" } });
   await waitFor(() => expect(registrations()).toHaveLength(1));
   const oldSignal = registrations()[0][1]?.signal;
-  auth.profile = { ...profile, id: "user-b" };
   rerender({ roomId: "room-b" });
   expect(oldSignal?.aborted).toBe(true);
   await waitFor(() => expect(result.current.status).toBe("idle"));
@@ -96,7 +100,7 @@ it("aborts stale work on room/account changes and ignores its success", async ()
   expect(registrations()[1][0]).toBe("/api/rooms/room-b/participants/me");
 });
 
-it("cancels pending work on sign-out without expiring the next session", async () => {
+it("cancels pending work on sign-out without reporting a stale auth error", async () => {
   let complete!: (value: Response) => void;
   const expired = vi.fn();
   window.addEventListener("session-expired", expired);

@@ -322,6 +322,7 @@ function Contest({
         body: JSON.stringify({ chapterId: chapterMeta.id }),
       });
       const payload = (await res.json()) as { roomId?: string; error?: string };
+      if (res.status === 401) window.dispatchEvent(new Event("session-expired"));
       if (!res.ok || !payload.roomId) {
         throw new Error(payload.error ?? "Failed to create room.");
       }

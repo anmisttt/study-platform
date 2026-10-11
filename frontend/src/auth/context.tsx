@@ -1,47 +1,49 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import type { UserProfile } from "@study-platform/shared";
-import { ApiRequestError, authRequest, request } from "./client";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import type { LlmKeyStatus, UserProfile } from "@study-platform/shared";
+import { authRequest, request } from "./client";
 
 type AuthState = {
   profile: UserProfile | null; loading: boolean; error: string;
-  refresh: () => Promise<void>; signOut: () => Promise<void>;
+  updateKeyStatus: (llmKey: LlmKeyStatus) => void;
+  signOut: () => Promise<void>;
 };
-const AuthContext = createContext<AuthState>({ profile: null, loading: false, error: "", refresh: async () => {}, signOut: async () => {} });
+const AuthContext = createContext<AuthState>({ profile: null, loading: false, error: "", updateKeyStatus: () => {}, signOut: async () => {} });
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const generation = useRef(0);
-  const refresh = useCallback(async () => {
-    const current = ++generation.current;
-    try {
-      const user = await request<UserProfile>("/me");
-      if (current === generation.current) { setProfile(user); setError(""); }
-    } catch (error) {
-      if (current === generation.current) {
-        setProfile(null);
-        setError(error instanceof ApiRequestError && error.status === 401 ? "" : "Unable to load your account. Please try again.");
-      }
-    } finally { if (current === generation.current) setLoading(false); }
-  }, []);
   useEffect(() => {
-    let mounted = true;
-    void Promise.resolve().then(() => { if (mounted) return refresh(); });
-    const expired = () => { generation.current++; setProfile(null); setLoading(false); };
-    const focus = () => { void refresh(); };
-    const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("study-account") : null;
-    if (channel) channel.onmessage = focus;
-    window.addEventListener("focus", focus);
+    const controller = new AbortController();
+    // Check once per page load; defer to avoid duplicate requests in StrictMode.
+    void Promise.resolve().then(async () => {
+      if (controller.signal.aborted) return;
+      try {
+        const user = await request<UserProfile | null>("/me", { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        setProfile(user);
+      } catch {
+        if (!controller.signal.aborted) setError("Unable to load your account. Please try again.");
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    });
+    // Protected actions report expiry through their own backend responses.
+    const expired = () => {
+      controller.abort();
+      setProfile(null); setError(""); setLoading(false);
+    };
     window.addEventListener("session-expired", expired);
-    return () => { mounted = false; channel?.close(); window.removeEventListener("focus", focus); window.removeEventListener("session-expired", expired); };
-  }, [refresh]);
+    return () => { controller.abort(); window.removeEventListener("session-expired", expired); };
+  }, []);
+  const updateKeyStatus = (llmKey: LlmKeyStatus) => {
+    setProfile(current => current ? { ...current, llmKey } : null);
+  };
   const signOut = async () => {
     await authRequest("/sign-out", {});
-    generation.current++;
-    setProfile(null);
-    if (typeof BroadcastChannel !== "undefined") { const channel = new BroadcastChannel("study-account"); channel.postMessage("logout"); channel.close(); }
+    window.dispatchEvent(new Event("session-expired"));
   };
-  return <AuthContext.Provider value={{ profile, loading, error, refresh, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ profile, loading, error, updateKeyStatus, signOut }}>{children}</AuthContext.Provider>;
 }
 // The hook and provider share their private context.
 // eslint-disable-next-line react-refresh/only-export-components
