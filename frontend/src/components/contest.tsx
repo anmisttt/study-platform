@@ -93,8 +93,7 @@ function reconcileQuestionUiState(
 
   if (
     current.resultRevision !== observation.resultRevision &&
-    observation.hasResult &&
-    isCheckPending
+    observation.hasResult
   ) {
     isCheckPending = false;
     isEditingLocally = false;

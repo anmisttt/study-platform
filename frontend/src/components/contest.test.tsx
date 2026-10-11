@@ -359,12 +359,12 @@ describe("Contest", () => {
     expect(draftApi.clearCollaborativeDraft).not.toHaveBeenCalled();
     expect(document.querySelector(".dot.rating-5")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /Show previous answer/ }));
     expectResultField(/Rating:/, "5/5");
     expectResultField(/Your answer:/, "Peer answer");
+    expect(screen.queryByRole("button", { name: /Show previous answer/ })).toBeNull();
   });
 
-  it("merges peer results received through the room connection", async () => {
+  it("merges and displays peer results received through the room connection", async () => {
     const peerRoom = roomDetailsWithAnswer({
       practiceAnswer: {
         answer: "Peer practice answer",
@@ -390,9 +390,9 @@ describe("Contest", () => {
     });
     expect(fetch).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: /Show (previous|reference) answer/ }));
     expectResultField(/Rating:/, "3/5");
     expectResultField(/Your answer:/, "Peer practice answer");
+    expect(screen.queryByRole("button", { name: /Show (previous|reference) answer/ })).toBeNull();
   });
 
   it("keeps a peer check pending until its result arrives", async () => {
