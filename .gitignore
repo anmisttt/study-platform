@@ -10,6 +10,7 @@ artifacts/
 .practice-validation/
 books/
 .codex/
+.cursor/
 .claude/
 
 !backend/.env.example
