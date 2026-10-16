@@ -72,6 +72,27 @@ npm run grade-practice -- --chapter <id> --index <n> --answer-file <path> --tria
 
 Chapter ids match `backend/src/chapters.ts` (e.g. `tenth_chapter`).
 
+## Round log
+
+Append one line per gate, solver and grader outcome, and one on promotion:
+
+```bash
+npm run log-validation-round -- --chapter <id> --index <n> --round <r> \
+  --gate styleguide|correctness|solver|grader|promote \
+  --status pass|fail|blocked|setup_failed \
+  [--violations id1,id2] [--score N] [--trials N] [--note "one line"]
+```
+
+Lines land in `.practice-validation/rounds.jsonl`, each stamped with a 12-char content hash of `task` + `question` + the matching setup assets. Editing the item starts a new series, so rounds that scored the old wording never mix into its statistics. Never read this log inside the loop: it is history for later analysis, not a cache, and every gate still reruns.
+
+Read the summary before drafting or repairing items:
+
+```bash
+npm run log-validation-round -- --report
+```
+
+Violations that recur across current versions are the signal to fix [STYLEGUIDE.md](STYLEGUIDE.md) or the drafting rules in `chapter-study-json`, instead of repairing the same defect item by item.
+
 ## Loop (max 5 rounds)
 
 For each `(chapterId, practiceIndex)`:
@@ -91,6 +112,8 @@ If `status` is `fail` (`handOff`: `practice-editor`):
 - Then **increment round** and return to step 0 with a fresh workdir (do not reuse old solver files).
 
 If `status` is `pass` (`handOff`: `practice-correctness`) → continue to step 0b.
+
+Log the outcome either way: `--gate styleguide --status pass|fail`, passing the styleguide JSON `violations` on a fail.
 
 ### 0b. Correctness review (second agent)
 
@@ -116,6 +139,8 @@ If `status` is `fail` (`handOff`: `practice-editor`):
 - Then **increment round** and return to step 0 with a fresh workdir.
 
 If `status` is `pass` (`handOff`: `practice-solver`) → continue to step 1.
+
+Log the outcome either way: `--gate correctness --status pass|fail`, passing the `error` finding ids as `--violations`.
 
 After the subagent finishes, keep a compact note in the round report: pass/fail and, on fail, a short table of error findings (`severity`, `location`, `finding`) sorted with `error` first — same spirit as a Bugbot summary. Do not fix findings yourself; the editor owns edits.
 
@@ -143,6 +168,8 @@ Delegate to **practice-solver** with:
 - Pasted `task` + `question` only (no `answer`, no chapter path, no prior repair notes)
 
 If `status` is `setup_failed` or `blocked` → skip grader; go to editor with solver JSON (still run the artifact check below).
+
+Log the solver turn: `--gate solver --status pass|blocked|setup_failed` (a solved brief logs as `pass`), with `--note` naming what the brief failed to supply.
 
 If `solved` → write the complete `proposedSolution` verbatim to `answer.md` in the workdir. A summary or pointer to a local file is not a substitute for the submitted answer; enforce the answer boundary above.
 
@@ -175,6 +202,8 @@ Pass only when the grader reports `submissionComplete: true` and CLI `pass` is t
 
 On fail → use grader `hypothesis` + `feedbackForEditor`.
 
+Log the grade: `--gate grader --status pass|fail --score <rating> --trials <n>`.
+
 ### 3b. Promote the accepted solution
 
 After a passing grade, replace only the target practice item's `answer` with the
@@ -185,6 +214,8 @@ recently accepted candidate is the stored answer.
 
 Validate that the chapter JSON still parses, then stop success. Do not change
 `task`, `question`, theory items, or any other practice item during promotion.
+
+Log the promotion last, after the write: `--gate promote --status pass --score <rating>`. Run it before the content hash can change again, so the series closes against the wording that was graded.
 
 ### 4. Editor
 
@@ -211,4 +242,5 @@ After 5 failed rounds, stop and report remaining issues for human review. Do not
 5. Task, brief, starter scaffold, and container setup use the same verified real-world tool, native workflow, and versioned interfaces rather than a toy substitute.
 6. The exact most recently accepted blind solution is stored in `answer` without a second grading pass.
 7. No leftover runtime artifacts outside the workdir (e.g. no `etcd-data/` at repo root, no leftover `etcd-dev` container).
-8. When the task has testable behavior, its compact verification test is delivered in the Docker scaffold or inline for a non-Docker task, runs through a short documented command without duplicated expectation prose, checks the essential outcomes without extra setup complexity, and comments only on non-obvious intent or timing.
+8. Every gate, solver turn, grade and promotion in this run is logged to `.practice-validation/rounds.jsonl` under the current content hash.
+9. When the task has testable behavior, its compact verification test is delivered in the Docker scaffold or inline for a non-Docker task, runs through a short documented command without duplicated expectation prose, checks the essential outcomes without extra setup complexity, and comments only on non-obvious intent or timing.
