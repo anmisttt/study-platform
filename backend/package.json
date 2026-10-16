@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "grade-practice": "tsx src/scripts/gradePractice.ts",
+    "log-validation-round": "tsx src/scripts/logValidationRound.ts",
     "cleanup-stale-rooms": "tsx src/scripts/cleanupStaleRooms.ts",
     "backup-database": "tsx src/scripts/backupDatabase.ts",
     "test:e2e-server": "NODE_ENV=test tsx test/e2e-server.ts"
