@@ -1,0 +1,14 @@
+.env
+.env.*
+backend/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+books/
+.codex/
+.cursor/
+.claude/settings.json
+.claude/agents/
+.claude/commands/
+.claude/hooks/
+.claude/skills/

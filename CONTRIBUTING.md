@@ -67,6 +67,18 @@ Set `SMTP_HOST`, `SMTP_PORT` (587 by default), `SMTP_SECURE` (`true` for implici
 
 Production must set `NODE_ENV=production` and an HTTPS `PUBLIC_APP_URL`. Session cookies are HttpOnly, SameSite=Lax, and Secure in production, with database-backed revocation and no JWT/cookie session cache. The HTTP API is served through the frontend origin. Vite and nginx preserve `/api/auth/*` for Better Auth and strip `/api` for other backend routes. Direct API deployments can set `VITE_API_URL` and `VITE_AUTH_URL` explicitly, with the corresponding trusted frontend origin.
 
+## Git hooks and worktrees
+
+Enable the repository's hooks once per clone:
+
+```bash
+git config core.hooksPath scripts/git-hooks
+```
+
+`scripts/git-hooks/post-checkout` then runs after `git checkout <branch>`, `git switch`, and `git worktree add`. It runs `npm ci` in `shared`, `backend`, and `frontend` whenever a lockfile is newer than the installed tree, then `npm run build` in each package whose `dist/` is missing or older than its sources (`shared` first, since the other two depend on it). With everything up to date it costs about 50 ms, so ordinary branch switches are unaffected. `STUDY_PLATFORM_SKIP_SETUP=1` skips it, and it skips itself when `CI` is set. npm output goes to `post-checkout-install-<package>.log` and `post-checkout-build-<package>.log` in the working tree's git directory.
+
+`.worktreeinclude` lists the git-ignored files to copy into every new worktree.
+
 ## Run with Docker Compose
 
 From project root:
