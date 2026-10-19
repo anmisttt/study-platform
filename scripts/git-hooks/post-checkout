@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# Installs npm dependencies and builds the packages whose output is missing or
+# older than its sources, so a checkout is ready to run.
+#
+# Enable it once per clone:
+#   git config core.hooksPath scripts/git-hooks
+#
+# Git runs this after `git checkout <branch>`, `git switch` and `git worktree add`,
+# with the new working tree as the current directory. Together with
+# .worktreeinclude - which copies the git-ignored local state (.env, the SQLite
+# database, books/) that this hook cannot regenerate - it makes a fresh worktree
+# usable without any manual setup.
+#
+# Set STUDY_PLATFORM_SKIP_SETUP=1 to skip it. Written for bash 3.2, the version
+# macOS ships.
+set -uo pipefail
+
+branch_checkout=${3:-0}
+[ "$branch_checkout" = "1" ] || exit 0 # a file checkout, not a branch or worktree switch
+[ -n "${STUDY_PLATFORM_SKIP_SETUP:-}" ] && exit 0
+[ -n "${CI:-}" ] && exit 0
+
+top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+cd "$top" || exit 0
+
+if ! command -v npm >/dev/null 2>&1; then
+  echo "post-checkout: npm is not on PATH, skipped dependency setup." >&2
+  exit 0
+fi
+
+log_dir=$(git rev-parse --absolute-git-dir 2>/dev/null) || log_dir=$top
+log_for() { # <install|build> <package>
+  echo "$log_dir/post-checkout-$1-$2.log"
+}
+
+# shared is listed first: backend and frontend depend on it as "file:../shared".
+packages="shared backend frontend"
+
+# The file a package's build produces. A package is rebuilt when it is missing.
+build_output_for() {
+  case $1 in
+    shared) echo dist/index.js ;;
+    backend) echo dist/server.js ;;
+    frontend) echo dist/index.html ;;
+  esac
+}
+
+# npm records the tree it installed in node_modules/.package-lock.json, so a
+# lockfile newer than that record means the install is out of date.
+install_needed() {
+  local pkg=$1
+  [ -f "$pkg/package-lock.json" ] || return 1
+  [ -d "$pkg/node_modules" ] || return 0
+  [ "$pkg/package-lock.json" -nt "$pkg/node_modules/.package-lock.json" ]
+}
+
+# True when any file in the package is newer than its build output. The whole
+# package is scanned rather than a src/ directory, because the packages differ:
+# shared keeps its sources at its root, backend uses src/, frontend adds
+# index.html, public/ and the vite config. Directories holding dependencies or
+# output of their own are pruned.
+sources_newer_than() {
+  local output=$1 pkg=$2
+  [ -n "$(find "$pkg" \
+    \( -name node_modules -o -name dist -o -name test-results -o -name playwright-report \) -prune \
+    -o -type f -newer "$output" -print -quit 2>/dev/null)" ]
+}
+
+build_needed() {
+  local pkg=$1 output
+  [ -f "$pkg/package.json" ] || return 1
+  output="$pkg/$(build_output_for "$pkg")"
+  [ -e "$output" ] || return 0
+  sources_newer_than "$output" "$pkg"
+}
+
+# Installs run in parallel: the packages are independent and npm ci is the slow step.
+pids=""
+installing=""
+for pkg in $packages; do
+  install_needed "$pkg" || continue
+  (cd "$pkg" && npm ci --no-audit --no-fund >"$(log_for install "$pkg")" 2>&1) &
+  pids="$pids $!"
+  installing="$installing $pkg"
+done
+
+failures=""
+if [ -n "$installing" ]; then
+  echo "post-checkout: installing dependencies in${installing}..." >&2
+  set -- $pids
+  for pkg in $installing; do
+    if wait "$1"; then
+      echo "post-checkout: npm ci done in $pkg." >&2
+    else
+      failures="$failures
+  npm ci in $pkg (see $(log_for install "$pkg"))"
+    fi
+    shift
+  done
+fi
+
+for pkg in $packages; do
+  build_needed "$pkg" || continue
+  [ -d "$pkg/node_modules" ] || continue # a failed install leaves nothing to build with
+  echo "post-checkout: building $pkg..." >&2
+  if (cd "$pkg" && npm run build >"$(log_for build "$pkg")" 2>&1); then
+    echo "post-checkout: built $pkg." >&2
+  else
+    failures="$failures
+  npm run build in $pkg (see $(log_for build "$pkg"))"
+  fi
+done
+
+if [ -n "$failures" ]; then
+  echo "post-checkout: setup incomplete:$failures" >&2
+fi
+
+# Git ignores this hook's exit code on checkout; never make it look like a failure.
+exit 0
