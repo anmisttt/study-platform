@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MAX_ANSWER_LENGTH } from "@study-platform/shared";
-import QuestionCard from "./questionCard";
+import QuestionCard, { type CreateRoomAction } from "./questionCard";
 import { practiceItem, theoryItem } from "../test/fixtures";
 
 function renderCard(
@@ -134,5 +134,50 @@ describe("QuestionCard", () => {
 
     expect(screen.queryByText("Practice reference.")).toBeNull();
     expect(screen.getByRole("button", { name: "Show reference answer" })).toBeTruthy();
+  });
+
+  describe("read-only", () => {
+    function createRoomAction(overrides: Partial<CreateRoomAction> = {}): CreateRoomAction {
+      return { label: "Create a room", disabled: false, busy: false, onClick: vi.fn(), ...overrides };
+    }
+
+    it("disables answering and offers to create a room", () => {
+      const createRoom = createRoomAction();
+      const { props } = renderCard({ createRoom });
+
+      const textarea = screen.getByPlaceholderText("Create a room to answer…");
+      expect(textarea).toBeDisabled();
+      const check = screen.getByRole("button", { name: "Check" });
+      expect(check).toHaveAttribute("aria-disabled", "true");
+      expect(check).toHaveAccessibleDescription("Checking needs a room · Create a room");
+      check.focus();
+      expect(check).toHaveFocus();
+      fireEvent.click(check);
+      expect(props.onCheck).not.toHaveBeenCalled();
+
+      const mic = screen.getByRole("button", { name: "Use microphone" });
+      expect(mic).toBeDisabled();
+      expect(mic).toHaveAttribute("title", "Create a room to use voice input");
+
+      const create = screen.getByRole("button", { name: "Create a room" });
+      expect(create).toBeEnabled();
+      fireEvent.click(create);
+      expect(createRoom.onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it("renders the label and disabled state it is given", () => {
+      renderCard({ createRoom: createRoomAction({ label: "Creating room…", disabled: true, busy: true }) });
+
+      const create = screen.getByRole("button", { name: "Creating room…" });
+      expect(create).toBeDisabled();
+      expect(create).toHaveAttribute("aria-busy", "true");
+    });
+
+    it("still reveals the reference answer", () => {
+      renderCard({ createRoom: createRoomAction(), answer: "Reference theory answer." });
+
+      fireEvent.click(screen.getByRole("button", { name: "Show reference answer" }));
+      expect(screen.getByText("Reference theory answer.")).toBeTruthy();
+    });
   });
 });

@@ -7,6 +7,8 @@ import { chapterOverviewPath, chapterQuestionPath, chaptersPath } from "./routes
 
 let webSocketCount = 0;
 
+const publicChapterDetails = { ...roomDetails, roomId: null, hasOwnerLlmKey: false };
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -31,6 +33,7 @@ describe("App routing", () => {
         const url = String(input);
         if (url.endsWith("/participants/me")) return Promise.resolve(jsonResponse({ participationCreated: false }));
         if (url.endsWith("/me")) return Promise.resolve(jsonResponse({ id: "owner", email: "test@example.com", llmKey: { configured: false, lastFour: null, updatedAt: null } }));
+        if (url.endsWith(`/chapters/${chapterMeta.id}`)) return Promise.resolve(jsonResponse(publicChapterDetails));
         if (url.endsWith("/chapters") || url.includes("/chapters")) {
           return Promise.resolve(jsonResponse([chapterMeta]));
         }
@@ -127,7 +130,7 @@ describe("App routing", () => {
     fireEvent.click(await screen.findByRole("button", { name: /1\. Introduction/ }));
 
     expect(await screen.findByRole("heading", { name: "Introduction" })).toBeTruthy();
-    expect(await screen.findByRole("button", { name: "Generate new room" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Create a room" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Join room" })).toBeTruthy();
   });
 
@@ -163,7 +166,7 @@ describe("App routing", () => {
 
     await screen.findAllByRole("link", { name: "Sign in" });
     if (entry === "join") {
-      fireEvent.change(screen.getByPlaceholderText("Room ID..."), { target: { value: "ABC123" } });
+      fireEvent.change(screen.getByPlaceholderText("Room ID"), { target: { value: "ABC123" } });
       fireEvent.click(screen.getByRole("button", { name: "Join room" }));
     }
     if (entry !== "overview") {
@@ -175,18 +178,59 @@ describe("App routing", () => {
     expect(vi.mocked(fetch).mock.calls.map(([url]) => String(url)).sort()).toEqual(["/api/chapters", "/api/me"]);
   });
 
-  it("redirects practice routes without a roomId back to overview with an error", async () => {
+  it("renders roomless question links read-only without redirecting", async () => {
     renderApp(chapterQuestionPath(chapterMeta.number, "theory-1"));
 
-    expect(await screen.findByText("A room ID is required to practice.")).toBeTruthy();
-    expect(await screen.findByRole("button", { name: "Generate new room" })).toBeTruthy();
+    expect(await screen.findByText("What is a process?")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Create a room" })).toBeTruthy();
+    expect(screen.getByPlaceholderText("Create a room to answer…")).toBeDisabled();
+    expect(screen.queryByText("A room ID is required to practice.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Browse questions" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+    expect(await screen.findByText("Practice 1")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create a room" })).toBeTruthy();
+    expect(webSocketCount).toBe(0);
+    expect(fetch).toHaveBeenCalledWith(`/api/chapters/${chapterMeta.id}`, expect.anything());
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/participants/me"))).toBe(false);
+  });
+
+  it("opens the first question roomless from Browse questions", async () => {
+    renderApp(chapterOverviewPath(chapterMeta.number));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Browse questions" }));
+
+    expect(await screen.findByText("Theory 1")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create a room" })).toBeTruthy();
+  });
+
+  it("redirects unknown roomless question refs back to the chapter overview", async () => {
+    renderApp(chapterQuestionPath(chapterMeta.number, "theory-99"));
+
+    expect(await screen.findByRole("button", { name: "Browse questions" })).toBeTruthy();
+    expect(screen.queryByText("Theory 1")).toBeNull();
+  });
+
+  it("creates a room from a roomless question and stays on that question", async () => {
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((input, init) => String(input) === "/api/rooms" && init?.method === "POST"
+      ? Promise.resolve(jsonResponse({ roomId: "ABC123" }))
+      : defaultFetch(input, init));
+    renderApp(chapterQuestionPath(chapterMeta.number, "practice-1"));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Create a room" }));
+
+    expect(await screen.findByText("Room ID:")).toBeTruthy();
+    expect(screen.getByText("Practice 1")).toBeTruthy();
+    expect(screen.getByText("ABC123")).toBeTruthy();
+    expect(await screen.findByPlaceholderText("Type your answer in any language...")).toBeEnabled();
   });
 
   it("reports room connection errors and returns to the overview", async () => {
     renderApp(chapterQuestionPath(chapterMeta.number, "theory-1", "MISSING"));
 
     expect(await screen.findByText("Room not found.")).toBeTruthy();
-    expect(await screen.findByRole("button", { name: "Generate new room" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Create a room" })).toBeTruthy();
   });
 
   it("preserves roomId when generating a room from overview", async () => {
@@ -206,7 +250,7 @@ describe("App routing", () => {
 
     renderApp(chapterOverviewPath(chapterMeta.number));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Generate new room" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create a room" }));
 
     expect(await screen.findByText("Theory 1")).toBeTruthy();
     expect(screen.getAllByText("ABC123").length).toBeGreaterThan(0);
@@ -219,7 +263,7 @@ describe("App routing", () => {
       ? Promise.resolve(jsonResponse({ error: "Please sign in to continue.", code: "AUTH_REQUIRED" }, 401))
       : defaultFetch(input, init));
     renderApp(chapterOverviewPath(chapterMeta.number));
-    fireEvent.click(await screen.findByRole("button", { name: "Generate new room" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create a room" }));
     expect(await screen.findByText("Please sign in to continue.")).toBeVisible();
     expect(screen.getByRole("button", { name: "Sign in to create a room" })).toBeVisible();
     expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url) === "/api/me")).toHaveLength(1);
@@ -229,7 +273,7 @@ describe("App routing", () => {
     renderApp(chapterQuestionPath(chapterMeta.number, "theory-99", "ABC123"));
 
     await waitFor(async () => {
-      expect(await screen.findByRole("button", { name: "Generate new room" })).toBeTruthy();
+      expect(await screen.findByRole("button", { name: "Create a room" })).toBeTruthy();
     });
     expect(screen.queryByText("Theory 1")).toBeNull();
   });
@@ -237,7 +281,7 @@ describe("App routing", () => {
   it("redirects zero-based question refs back to the chapter overview", async () => {
     renderApp(chapterQuestionPath(chapterMeta.number, "theory-0", "ABC123"));
 
-    expect(await screen.findByRole("button", { name: "Generate new room" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Create a room" })).toBeTruthy();
     expect(screen.queryByText("Theory 1")).toBeNull();
   });
 

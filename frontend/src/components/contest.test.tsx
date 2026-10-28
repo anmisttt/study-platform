@@ -121,7 +121,7 @@ type HarnessProps = {
   questionRef?: string;
   initialSession?: ChapterSession;
   initialError?: string;
-  onQuestionNavigate?: (questionRef: string, roomId: string) => void;
+  onQuestionNavigate?: (questionRef: string, roomId?: string) => void;
   onRoomAccessError?: (message: string) => void;
   onResetProgress?: () => void;
 };
@@ -197,7 +197,7 @@ describe("Contest", () => {
 
     const { onQuestionNavigate } = renderContest();
 
-    fireEvent.click(screen.getByRole("button", { name: "Generate new room" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create a room" }));
 
     await waitFor(() => {
       expect(onQuestionNavigate).toHaveBeenCalledWith("theory-1", "ABC123");
@@ -216,7 +216,7 @@ describe("Contest", () => {
   it("joins an existing room and navigates to the first question", async () => {
     const { onQuestionNavigate } = renderContest();
 
-    fireEvent.change(screen.getByPlaceholderText("Room ID..."), {
+    fireEvent.change(screen.getByPlaceholderText("Room ID"), {
       target: { value: "ABC123" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Join room" }));
@@ -567,5 +567,86 @@ describe("Contest", () => {
     });
 
     expect(onRoomAccessError).toHaveBeenCalledWith("Room not found.");
+  });
+
+  describe("read-only (no room)", () => {
+    const publicDetails: RoomDetails = { ...roomDetails, roomId: null, hasOwnerLlmKey: false };
+
+    it("navigates between questions without a room id", () => {
+      const { onQuestionNavigate } = renderContest({
+        questionRef: "theory-1",
+        initialSession: sessionWithRoom(publicDetails),
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+      expect(onQuestionNavigate).toHaveBeenCalledWith("practice-1", undefined);
+    });
+
+    it("opens the first question roomless from Browse questions", () => {
+      const { onQuestionNavigate } = renderContest();
+
+      fireEvent.click(screen.getByRole("button", { name: "Browse questions" }));
+      expect(onQuestionNavigate).toHaveBeenCalledWith("theory-1", undefined);
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("hides the owner-key notice", () => {
+      renderContest({ questionRef: "theory-1", initialSession: sessionWithRoom(publicDetails) });
+
+      expect(screen.getByRole("button", { name: "Create a room" })).toBeTruthy();
+      expect(screen.queryByText(/AI features need an OpenAI key/)).toBeNull();
+    });
+
+    it("shows the owner-key notice in a room without an owner key", () => {
+      renderContest({
+        roomId: "ABC123",
+        questionRef: "theory-1",
+        initialSession: sessionWithRoom({ ...roomDetails, hasOwnerLlmKey: false }),
+      });
+
+      expect(screen.getByText(/AI features need an OpenAI key/)).toBeTruthy();
+    });
+
+    it("creates a room from the hint and stays on the same question", async () => {
+      const fetchMock = vi.mocked(fetch);
+      fetchMock.mockResolvedValueOnce(jsonResponse({ roomId: "NEW123" }));
+      const { onQuestionNavigate } = renderContest({
+        questionRef: "practice-1",
+        initialSession: sessionWithRoom(publicDetails),
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Create a room" }));
+
+      await waitFor(() => {
+        expect(onQuestionNavigate).toHaveBeenCalledWith("practice-1", "NEW123");
+      });
+      expect(fetchMock).toHaveBeenCalledWith(
+        `${API_BASE}/rooms`,
+        expect.objectContaining({ method: "POST", body: JSON.stringify({ chapterId: chapterMeta.id }) }),
+      );
+    });
+
+    it("shows room creation errors on the question view", async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ error: "Room limit reached." }, 400));
+      renderContest({ questionRef: "theory-1", initialSession: sessionWithRoom(publicDetails) });
+
+      fireEvent.click(screen.getByRole("button", { name: "Create a room" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("Room limit reached.");
+    });
+  });
+
+  it("disables Start again without a room", () => {
+    renderContest({ questionRef: "theory-1", initialSession: sessionWithRoom({ ...roomDetails, roomId: null, hasOwnerLlmKey: false }) });
+
+    expect(screen.getByRole("button", { name: "Start again" })).toBeDisabled();
+  });
+
+  it("shows plain No room text in the header without a room", () => {
+    renderContest({ questionRef: "theory-1", initialSession: sessionWithRoom({ ...roomDetails, roomId: null, hasOwnerLlmKey: false }) });
+
+    const header = screen.getByText("No room").parentElement as HTMLElement;
+    expect(header.textContent).toBe("No room");
+    expect(within(header).queryByRole("button")).toBeNull();
   });
 });

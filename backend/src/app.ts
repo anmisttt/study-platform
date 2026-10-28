@@ -6,7 +6,7 @@ import { chapters, getChapterById } from "./chapters.js";
 import { createAuth, type SendEmail } from "./auth.js";
 import type { AppConfig } from "./config.js";
 import { RoomsWebSocketServer } from "./roomsWebSocketServer.js";
-import { getRoomDetails } from "./db/roomContext.js";
+import { chapterDetails, getRoomDetails } from "./db/roomContext.js";
 import { RoomsDb } from "./db/roomsDb.js";
 import { Accounts } from "./db/accounts.js";
 import { profileRoomSummary } from "./db/progress.js";
@@ -72,6 +72,12 @@ export function createApplication({ roomsDb, config, sendEmail, llm = defaultLlm
   app.get("/auth-options", (_req, res) => { res.json({ google: Boolean(config.google), github: Boolean(config.github), email: Boolean(config.smtp || sendEmail) }); });
   app.get("/chapters", (_req, res) => {
     res.json(chapters.map(chapter => ({ id: chapter.id, number: chapter.number, name: chapter.name, theoryCount: chapter.theory.length, practiceCount: chapter.practice.length })));
+  });
+  app.get("/chapters/:chapterId", (req, res) => {
+    const { chapter } = resolveChapter(readParam(req.params.chapterId));
+    // Chapter content only changes on deploy.
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.json(chapterDetails(chapter, null));
   });
   app.get("/me", async (req, res) => {
     const current = await session(req);

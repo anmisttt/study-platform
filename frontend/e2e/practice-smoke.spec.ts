@@ -39,7 +39,7 @@ async function fulfillJson(route: Route, body: unknown, status = 200): Promise<v
   });
 }
 
-async function mockBackend(page: Page): Promise<void> {
+async function mockBackend(page: Page, { signedIn = true }: { signedIn?: boolean } = {}): Promise<void> {
   await page.addInitScript((room) => {
     class MockWebSocket {
       static CONNECTING = 0;
@@ -112,11 +112,21 @@ async function mockBackend(page: Page): Promise<void> {
     const path = url.pathname.replace(/^\/api/, "") || "/";
 
     if (request.method() === "GET" && path === "/me") {
-      await fulfillJson(route, { id: "owner", email: "owner@example.com", llmKey: { configured: true, lastFour: "1234", updatedAt: null } });
+      await fulfillJson(
+        route,
+        signedIn
+          ? { id: "owner", email: "owner@example.com", llmKey: { configured: true, lastFour: "1234", updatedAt: null } }
+          : null,
+      );
       return;
     }
     if (request.method() === "GET" && path === "/chapters") {
       await fulfillJson(route, [chapterMeta]);
+      return;
+    }
+
+    if (request.method() === "GET" && path === `/chapters/${chapterMeta.id}`) {
+      await fulfillJson(route, { ...roomDetails, roomId: null, hasOwnerLlmKey: false });
       return;
     }
 
@@ -145,7 +155,7 @@ test("practice happy path: generate room, answer, check", async ({ page }) => {
   await page.getByRole("button", { name: /1\. Introduction/ }).click();
   await expect(page.getByRole("heading", { name: "Introduction" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Generate new room" }).click();
+  await page.getByRole("button", { name: "Create a room", exact: true }).click();
   await expect(page.getByText("Theory 1")).toBeVisible();
   await expect(page.getByText("ABC123").first()).toBeVisible();
 
@@ -158,4 +168,29 @@ test("practice happy path: generate room, answer, check", async ({ page }) => {
   await expect(resultCard).toContainText("4/5");
   await expect(resultCard).toContainText("A process is a running program.");
   await expect(resultCard).toContainText("Solid answer.");
+});
+
+test("signed-out visitors can read a roomless task link and are asked to sign in to check", async ({ page }) => {
+  await mockBackend(page, { signedIn: false });
+
+  await page.goto("/chapters/1/questions/theory-1");
+  await expect(page.getByText("What is a process?")).toBeVisible();
+  await expect(page.getByText("No room", { exact: true })).toBeVisible();
+  await expect(page.getByPlaceholder("Create a room to answer…")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Check", exact: true })).toHaveAttribute("aria-disabled", "true");
+
+  await page.getByRole("button", { name: "Next question" }).click();
+  await expect(page).toHaveURL(/\/chapters\/1\/questions\/practice-1$/);
+  await expect(page.getByText("Write a thread-safe counter.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Previous question" }).click();
+  await expect(page).toHaveURL(/\/chapters\/1\/questions\/theory-1$/);
+
+  await page.getByRole("button", { name: "Show reference answer" }).click();
+  await expect(page.getByText("An instance of a running program.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Sign in to create a room" }).click();
+  await expect(page).toHaveURL(
+    `/login?returnTo=${encodeURIComponent("/chapters/1/questions/theory-1")}`,
+  );
 });

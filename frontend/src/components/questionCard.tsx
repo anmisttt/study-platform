@@ -1,5 +1,5 @@
 import { MAX_ANSWER_LENGTH } from "@study-platform/shared";
-import { type KeyboardEvent, type RefObject, useState } from "react";
+import { type KeyboardEvent, type RefObject, useId, useState } from "react";
 import Answer from "./answer";
 import FormattedText from "./formattedText";
 import type { QuestionItem, ResponseEntry } from "./contest-types";
@@ -39,6 +39,15 @@ type QuestionCardProps = {
   onVoiceInput: () => void;
   onCheck: () => Promise<void>;
   onTryAgain: () => void;
+  /** Roomless task view: answers, checks and voice input need a room, which this action creates. */
+  createRoom?: CreateRoomAction;
+};
+
+export type CreateRoomAction = {
+  label: string;
+  disabled: boolean;
+  busy: boolean;
+  onClick: () => void;
 };
 
 function QuestionCard({
@@ -56,7 +65,10 @@ function QuestionCard({
   onVoiceInput,
   onCheck,
   onTryAgain,
+  createRoom,
 }: QuestionCardProps) {
+  const readOnly = Boolean(createRoom);
+  const roomHintId = useId();
   const [answerVisibility, setAnswerVisibility] = useState({
     questionId: currentItem.id,
     visible: false,
@@ -131,12 +143,13 @@ function QuestionCard({
                 value={answerInput}
                 onChange={(event) => onAnswerInputChange(event.target.value)}
                 onKeyDown={handleTextareaKeyDown}
-                placeholder="Type your answer in any language..."
+                placeholder={readOnly ? "Create a room to answer…" : "Type your answer in any language..."}
                 rows={currentItem.type === "practice" ? 6 : 5}
+                disabled={readOnly}
               />
               <div className="answer-meta">
                 <span className="answer-shortcut-hint">
-                  {answerInput.length === 0 ? "⌘ Enter to check" : ""}
+                  {!readOnly && answerInput.length === 0 ? "⌘ Enter to check" : ""}
                 </span>
                 <div className="answer-char-meter">
                   <div className="answer-char-bar" aria-hidden="true">
@@ -155,30 +168,47 @@ function QuestionCard({
               </div>
             </div>
             <div className="answer-actions">
-              <span className="check-button-wrap" title={checkButtonTooltip}>
+              {readOnly ? (
                 <button
                   type="button"
-                  className="primary-button"
-                  onClick={() => {
-                    void onCheck();
-                  }}
-                  disabled={isCheckDisabled}
+                  className="primary-button check-locked-button"
+                  aria-disabled="true"
+                  aria-describedby={roomHintId}
                 >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="5" y="11" width="14" height="10" rx="2" />
+                    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                  </svg>
                   Check
                 </button>
-              </span>
+              ) : (
+                <span className="check-button-wrap" title={checkButtonTooltip}>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => {
+                      void onCheck();
+                    }}
+                    disabled={isCheckDisabled}
+                  >
+                    Check
+                  </button>
+                </span>
+              )}
               <button
                 type="button"
                 className={`voice-button ${isListening ? "recording" : ""}`}
                 onClick={onVoiceInput}
-                disabled={(!llmEnabled || isTranscribing) && !isListening}
+                disabled={readOnly || ((!llmEnabled || isTranscribing) && !isListening)}
                 aria-label={isListening ? "Stop microphone" : "Use microphone"}
                 title={
-                  isListening
-                    ? "Stop microphone"
-                    : isTranscribing
-                      ? "Transcribing..."
-                      : "Use microphone"
+                  readOnly
+                    ? "Create a room to use voice input"
+                    : isListening
+                      ? "Stop microphone"
+                      : isTranscribing
+                        ? "Transcribing..."
+                        : "Use microphone"
                 }
               >
                 <svg viewBox="0 0 24 24" className="mic-icon" aria-hidden="true">
@@ -232,6 +262,20 @@ function QuestionCard({
                 </span>
               </button>
             </div>
+            {createRoom && (
+              <p className="room-required-hint" id={roomHintId}>
+                Checking needs a room ·{" "}
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={createRoom.onClick}
+                  disabled={createRoom.disabled}
+                  aria-busy={createRoom.busy}
+                >
+                  {createRoom.label}
+                </button>
+              </p>
+            )}
           </div>
         )}
 

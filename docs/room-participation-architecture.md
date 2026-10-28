@@ -2,6 +2,8 @@
 
 Architecture and implementation plan, updated September 24, 2026. The database, API, and profile changes are implemented in the workspace. The backend initializes the current schema on startup; development verification uses isolated test databases.
 
+Tasks themselves are public and readable without a room; see [public tasks architecture](public-tasks-architecture.md).
+
 **Recommended behavior**
 
 A signed-in user's profile lists every room they created and every valid room they opened while signed in. Opening a shared link saves the room automatically; there is no Join or Save step. Only the room's author can delete it. Opening a room while signed in registers the current account as a participant automatically and never changes the room's author. Authors are participants too.

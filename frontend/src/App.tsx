@@ -23,6 +23,7 @@ import {
 } from "./routes/paths";
 import { clearRoomDraftUpdates } from "./utils/draftStorage";
 import { useRoomParticipation } from "./hooks/useRoomParticipation";
+import { useFetchChapterDetails } from "./hooks/useFetchChapterDetails";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 const GITHUB_REPO_URL = "https://github.com/anmisttt/study-platform";
@@ -166,7 +167,10 @@ function ChapterQuestionPage({ chapters, roomSessions, roomId, onSessionChange, 
   const navigate = useNavigate();
   const location = useLocation();
   const { chapterMeta, legacyRedirectTo } = useResolvedChapter(chapters);
-  const chapterSession = roomId ? (roomSessions[roomId] ?? createInitialChapterSession()) : createInitialChapterSession();
+  const publicChapter = useFetchChapterDetails(API_BASE, chapterMeta?.id ?? "", !roomId && !legacyRedirectTo);
+  const chapterSession = roomId
+    ? (roomSessions[roomId] ?? createInitialChapterSession())
+    : (publicChapter.session ?? createInitialChapterSession());
   const items = useMemo(() => (chapterSession.details ? flattenItems(chapterSession.details) : []), [chapterSession.details]);
 
   useEffect(() => {
@@ -174,21 +178,13 @@ function ChapterQuestionPage({ chapters, roomSessions, roomId, onSessionChange, 
       return;
     }
 
-    if (!roomId) {
-      navigate(chapterOverviewPath(chapterMeta.number), {
-        replace: true,
-        state: { roomError: "A room ID is required to practice." },
-      });
-      return;
-    }
-
     if (!questionRef || !parseQuestionRef(questionRef)) {
-      navigate(chapterOverviewPath(chapterMeta.number, roomId), { replace: true });
+      navigate(chapterOverviewPath(chapterMeta.number, roomId ?? undefined), { replace: true });
       return;
     }
 
     if (items.length > 0 && !items.some((item) => item.id === questionRef)) {
-      navigate(chapterOverviewPath(chapterMeta.number, roomId), { replace: true });
+      navigate(chapterOverviewPath(chapterMeta.number, roomId ?? undefined), { replace: true });
     }
   }, [chapterMeta, legacyRedirectTo, roomId, questionRef, items, navigate]);
 
@@ -200,13 +196,22 @@ function ChapterQuestionPage({ chapters, roomSessions, roomId, onSessionChange, 
     return <Navigate to={chaptersPath()} replace />;
   }
 
-  if (!roomId || !questionRef || !parseQuestionRef(questionRef)) {
+  if (!questionRef || !parseQuestionRef(questionRef)) {
     return null;
+  }
+
+  if (!roomId && publicChapter.error) {
+    return (
+      <div className="screen-message error" role="alert">
+        <span>{publicChapter.error}</span>{" "}
+        <button type="button" className="secondary-button" onClick={publicChapter.retry}>Retry</button>
+      </div>
+    );
   }
 
   return (
     <Contest
-      key={roomId}
+      key={roomId ?? "public"}
       chapterMeta={chapterMeta}
       chapterSession={chapterSession}
       apiBase={API_BASE}
@@ -219,9 +224,15 @@ function ChapterQuestionPage({ chapters, roomSessions, roomId, onSessionChange, 
         navigate(chapterOverviewPath(chapterMeta.number), { replace: true, state: { roomError: message } });
       }}
       onSessionChange={(updater) => {
+        if (!roomId) {
+          return;
+        }
         onSessionChange(roomId, updater);
       }}
       onResetProgress={() => {
+        if (!roomId) {
+          return;
+        }
         onResetProgress(roomId);
         navigate(chapterOverviewPath(chapterMeta.number, roomId));
       }}
