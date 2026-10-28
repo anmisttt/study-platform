@@ -20,6 +20,10 @@ export function roomQuestionCheckApiPath(roomId: string, questionRef: string): s
   return `/rooms/${roomId}/questions/${questionRef}/check`;
 }
 
+export function chapterDetailsApiPath(chapterId: string): string {
+  return `/chapters/${encodeURIComponent(chapterId)}`;
+}
+
 export function createRoomApiPath(): string {
   return "/rooms";
 }

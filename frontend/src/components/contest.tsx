@@ -22,7 +22,7 @@ type ContestProps = {
   roomId: string | null;
   questionRef?: string;
   initialError?: string;
-  onQuestionNavigate: (questionRef: string, roomId: string) => void;
+  onQuestionNavigate: (questionRef: string, roomId?: string) => void;
   onRoomAccessError: (message: string) => void;
   onSessionChange: (updater: (session: ChapterSession) => ChapterSession) => void;
   onResetProgress: () => void;
@@ -166,6 +166,8 @@ function Contest({
   const [isRoomActionPending, setIsRoomActionPending] = useState<boolean>(false);
   const [startError, setStartError] = useState<string>(initialError);
   const [timerEpoch, setTimerEpoch] = useState(0);
+  const isReadOnly = !roomId;
+  const createRoomLabel = profile ? "Create a room" : "Sign in to create a room";
   const roomInput = roomInputState.roomId === roomId ? roomInputState.value : (roomId ?? "");
 
   const items = useMemo(
@@ -273,37 +275,48 @@ function Contest({
   const isCheckInProgress = isChecking || collaborativeDraft.isAnswerChecking || isCheckPending;
 
   function openQuestion(index: number): void {
-    if (items.length === 0 || !roomId) {
+    if (items.length === 0) {
       return;
     }
     const nextIndex = Math.max(0, Math.min(index, items.length - 1));
     const nextItem = items[nextIndex];
     if (nextItem) {
-      onQuestionNavigate(nextItem.id, roomId);
+      onQuestionNavigate(nextItem.id, roomId ?? undefined);
     }
   }
 
-  function beginPracticeWithRoom(activeRoomId: string): void {
+  function firstQuestionRef(): string | null {
+    if (!chapterMeta) {
+      return null;
+    }
+
+    return chapterMeta.theoryCount > 0
+      ? formatQuestionRef("theory", 0)
+      : chapterMeta.practiceCount > 0
+        ? formatQuestionRef("practice", 0)
+        : null;
+  }
+
+  function openPractice(activeRoomId?: string, targetQuestionRef?: string): void {
     if (!chapterMeta) {
       return;
     }
 
-    const firstQuestionRef =
-      chapterMeta.theoryCount > 0
-        ? formatQuestionRef("theory", 0)
-        : chapterMeta.practiceCount > 0
-          ? formatQuestionRef("practice", 0)
-          : null;
-    if (!firstQuestionRef) {
+    const nextQuestionRef = targetQuestionRef ?? firstQuestionRef();
+    if (!nextQuestionRef) {
       setStartError("This chapter has no questions.");
       return;
     }
 
     setStartError("");
-    onQuestionNavigate(firstQuestionRef, activeRoomId);
+    onQuestionNavigate(nextQuestionRef, activeRoomId);
   }
 
-  async function generateNewRoom(): Promise<void> {
+  function createRoomFromQuestion(): void {
+    void generateNewRoom(currentItem?.id);
+  }
+
+  async function generateNewRoom(targetQuestionRef?: string): Promise<void> {
     if (!chapterMeta) {
       return;
     }
@@ -327,7 +340,7 @@ function Contest({
         throw new Error(payload.error ?? "Failed to create room.");
       }
 
-      beginPracticeWithRoom(payload.roomId);
+      openPractice(payload.roomId, targetQuestionRef);
     } catch (error: unknown) {
       setStartError(errorMessage(error, "Failed to create room."));
     } finally {
@@ -342,7 +355,7 @@ function Contest({
       return;
     }
 
-    beginPracticeWithRoom(trimmedRoomId);
+    openPractice(trimmedRoomId);
   }
 
   async function handleCheck(): Promise<void> {
@@ -445,7 +458,22 @@ function Contest({
         </p>
         {startError && <p className="error-inline">{startError}</p>}
 
-        <div className="start-card-room-panel">
+        <button
+          type="button"
+          className="primary-button start-card-button start-card-browse"
+          onClick={() => openPractice()}
+          disabled={isRoomActionPending}
+        >
+          Browse questions
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="5" y1="12" x2="19" y2="12" />
+            <polyline points="12 5 19 12 12 19" />
+          </svg>
+        </button>
+
+        <section className="start-card-room-section">
+          <h2>Answer with a room</h2>
+          <p>Join a room to answer questions, get AI feedback and share progress.</p>
           <form
             className="start-card-room-join-form"
             onSubmit={(event) => {
@@ -453,14 +481,16 @@ function Contest({
               joinExistingRoom();
             }}
           >
+            <label htmlFor="room-id-input" className="visually-hidden">Room ID</label>
             <input
+              id="room-id-input"
               type="text"
               className="room-id-input"
               value={roomInput}
               onChange={(event) => {
                 setRoomInputState({ roomId, value: event.target.value });
               }}
-              placeholder="Room ID..."
+              placeholder="Room ID"
               maxLength={6}
               disabled={isRoomActionPending}
               spellCheck={false}
@@ -468,32 +498,32 @@ function Contest({
             />
             <button
               type="submit"
-              className="primary-button start-card-button start-card-join"
+              className="secondary-button start-card-button"
               disabled={isRoomActionPending}
             >
               Join room
             </button>
           </form>
-          <span className="start-card-room-or" aria-hidden="true">
-            or
-          </span>
-          <button
-            type="button"
-            className="secondary-button start-card-button start-card-generate"
-            onClick={() => {
-              void generateNewRoom();
-            }}
-            disabled={isRoomActionPending || accountLoading}
-          >
-            {profile ? "Generate new room" : "Sign in to create a room"}
-          </button>
-        </div>
+          <p className="start-card-create">
+            No room yet?{" "}
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                void generateNewRoom();
+              }}
+              disabled={isRoomActionPending || accountLoading}
+            >
+              {createRoomLabel}
+            </button>
+          </p>
+        </section>
       </div>
     );
   }
 
   if (!chapterSession.details) {
-    return <div className="screen-message">Loading room questions...</div>;
+    return <div className="screen-message">{isReadOnly ? "Loading questions..." : "Loading room questions..."}</div>;
   }
 
   if (!currentItem) {
@@ -522,13 +552,18 @@ function Contest({
         <div className="practice-header-center">
           <p className="practice-chapter-number">Chapter {chapterMeta.number}</p>
           <h1 className="practice-chapter-title">{chapterMeta.name}</h1>
-          {roomId && (
-            <div className="room-id-inline">
-              <span>Room ID:</span>
-              <code>{roomId}</code>
-            </div>
-          )}
-          <button type="button" className="reset-progress-button" onClick={handleResetProgress}>
+          <div className="room-id-inline">
+            {roomId ? (
+              <>
+                <span>Room ID:</span>
+                <code>{roomId}</code>
+              </>
+            ) : (
+              <span>No room</span>
+            )}
+          </div>
+          {startError && <p className="error-inline" role="alert">{startError}</p>}
+          <button type="button" className="reset-progress-button" onClick={handleResetProgress} disabled={isReadOnly}>
             <svg
               className="reset-progress-icon"
               viewBox="0 0 24 24"
@@ -574,7 +609,7 @@ function Contest({
           </div>
         </div>
 
-        {!chapterSession.hasOwnerLlmKey && (
+        {!isReadOnly && !chapterSession.hasOwnerLlmKey && (
           <p className="room-key-notice">
             AI features need an OpenAI key from this room’s owner.{" "}
             <a href={`/profile?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`}>
@@ -597,6 +632,12 @@ function Contest({
           onVoiceInput={() => { if (chapterSession.hasOwnerLlmKey) toggleVoiceRecording(); }}
           onCheck={handleCheck}
           onTryAgain={handleTryAgain}
+          createRoom={isReadOnly ? {
+            label: isRoomActionPending ? "Creating room…" : createRoomLabel,
+            disabled: isRoomActionPending || accountLoading,
+            busy: isRoomActionPending,
+            onClick: createRoomFromQuestion,
+          } : undefined}
         />
 
         {allAnswered && (

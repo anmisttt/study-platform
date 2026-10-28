@@ -135,7 +135,7 @@ export class RoomsWebSocketServer {
   ) {}
 
   broadcastRoomSnapshot(room: RoomDetails): void {
-    const subscribers = this.roomSubscribers.get(room.roomId);
+    const subscribers = room.roomId ? this.roomSubscribers.get(room.roomId) : undefined;
     if (!subscribers) {
       return;
     }

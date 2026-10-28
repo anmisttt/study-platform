@@ -8,7 +8,7 @@ import { createApplication, type LlmServices } from "./app.js";
 import { RoomsDb } from "./db/roomsDb.js";
 import { createAuth, type AuthEmail } from "./auth.js";
 import { chapters } from "./chapters.js";
-import { getRoomDetails } from "./db/roomContext.js";
+import { chapterDetails, getRoomDetails } from "./db/roomContext.js";
 
 const origin = "http://localhost:5173";
 const ownerKey = "sk-owner-private-key-123456";
@@ -171,6 +171,33 @@ describe("accounts and permissions", () => {
     db.run("UPDATE session SET expiresAt = 0 WHERE userId = ?", [owner.id]);
     await expectAnonymousProfile(owner.cookie);
     expect((await api("/rooms", "POST", { chapterId: chapters[0].id }, owner.cookie)).status).toBe(401);
+  });
+});
+
+describe("chapter details API", () => {
+  it("returns chapter tasks with reference answers to anonymous users without a room", async () => {
+    const response = await api(`/chapters/${encodeURIComponent(chapters[0].id)}`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("public, max-age=300");
+    const body = await response.json();
+    expect(body).toEqual(JSON.parse(JSON.stringify(chapterDetails(chapters[0], null))));
+    expect(body).toMatchObject({ roomId: null, hasOwnerLlmKey: false, chapterId: chapters[0].id });
+    expect(body.theory).toHaveLength(chapters[0].theory.length);
+    expect(body.practice).toHaveLength(chapters[0].practice.length);
+    for (const item of [...body.theory, ...body.practice]) {
+      expect(item.answer).toEqual(expect.any(String));
+      expect(item).not.toHaveProperty("user_answer");
+      expect(item).not.toHaveProperty("rating");
+    }
+    expect(db.all("SELECT * FROM rooms")).toEqual([]);
+    const missing = await api("/chapters/missing-chapter");
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get("cache-control")).toBe("no-store");
+  });
+  it("builds empty, room-less details", () => {
+    const details = chapterDetails(chapters[0], null);
+    expect(details).toMatchObject({ roomId: null, hasOwnerLlmKey: false });
+    expect(details.theory[0]).toMatchObject({ ...chapters[0].theory[0], user_answer: undefined, rating: undefined, revision: 0 });
   });
 });
 

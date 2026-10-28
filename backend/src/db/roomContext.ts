@@ -1,4 +1,4 @@
-import type { RoomDetails } from "@study-platform/shared";
+import type { Chapter, RoomDetails } from "@study-platform/shared";
 import { getChapterById } from "../chapters.js";
 import { NotFoundError, UserError } from "../errors.js";
 import { mergePracticeWithAnswers, mergeTheoryWithAnswers } from "./helpers.js";
@@ -12,6 +12,22 @@ function parseRoomAnswers(room: { theory_answers: string; practice_answers: stri
   return {
     theoryAnswers: JSON.parse(room.theory_answers) as AnswerFieldsJson[],
     practiceAnswers: JSON.parse(room.practice_answers) as AnswerFieldsJson[],
+  };
+}
+
+export function chapterDetails(
+  chapter: Chapter,
+  room: { roomId: string; hasOwnerLlmKey: boolean; theory_answers: string; practice_answers: string } | null,
+): RoomDetails {
+  const { theoryAnswers, practiceAnswers } = room ? parseRoomAnswers(room) : { theoryAnswers: [], practiceAnswers: [] };
+  return {
+    roomId: room?.roomId ?? null,
+    hasOwnerLlmKey: room?.hasOwnerLlmKey ?? false,
+    chapterId: chapter.id,
+    number: chapter.number,
+    name: chapter.name,
+    theory: mergeTheoryWithAnswers(chapter.theory, theoryAnswers),
+    practice: mergePracticeWithAnswers(chapter.practice, practiceAnswers),
   };
 }
 
@@ -30,14 +46,5 @@ export function getRoomDetails(roomId: string | null, roomsDb: RoomsDb): RoomDet
     throw new NotFoundError("Chapter not found for room.");
   }
 
-  const { theoryAnswers, practiceAnswers } = parseRoomAnswers(room);
-  return {
-    roomId,
-    hasOwnerLlmKey: roomsDb.hasOwnerLlmKey(roomId),
-    chapterId: chapter.id,
-    number: chapter.number,
-    name: chapter.name,
-    theory: mergeTheoryWithAnswers(chapter.theory, theoryAnswers),
-    practice: mergePracticeWithAnswers(chapter.practice, practiceAnswers),
-  };
+  return chapterDetails(chapter, { ...room, roomId, hasOwnerLlmKey: roomsDb.hasOwnerLlmKey(roomId) });
 }

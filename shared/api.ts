@@ -24,7 +24,7 @@ export type QuestionCheckRequest = {
 };
 
 export type RoomDetails = {
-  roomId: string;
+  roomId: string | null;
   hasOwnerLlmKey: boolean;
   chapterId: string;
   number: number;

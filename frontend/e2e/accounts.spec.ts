@@ -31,7 +31,7 @@ test("verified account manages its profile, key, rooms and shared progress", asy
   await expect(page.getByLabel("Replace API key")).toHaveValue("");
   expect(authChecks).toHaveLength(0);
   await page.goto("/chapters/1/overview");
-  await page.getByRole("button", { name: "Generate new room" }).click();
+  await page.getByRole("button", { name: "Create a room", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Theory 1", exact: true })).toBeVisible();
   const roomUrl = page.url();
   const guest = await browser.newContext();
@@ -98,7 +98,7 @@ test("sign-in returns to the current question and preserves its draft", async ({
   const ownerEmail = `draft-owner-${Date.now()}@example.com`;
   await register(page, ownerEmail);
   await page.goto("/chapters/1/overview");
-  await page.getByRole("button", { name: "Generate new room" }).click();
+  await page.getByRole("button", { name: "Create a room", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Theory 1", exact: true })).toBeVisible();
   const roomUrl = page.url();
   const participant = await browser.newContext(); const participantPage = await participant.newPage();
@@ -124,7 +124,7 @@ test("sign-in returns to the current question and preserves its draft", async ({
 test("signed-in participants keep overview and question links in their profile with role filters", async ({ page, browser }, testInfo) => {
   await register(page, `participation-owner-${Date.now()}@example.com`);
   await page.goto("/chapters/1/overview");
-  await page.getByRole("button", { name: "Generate new room" }).click();
+  await page.getByRole("button", { name: "Create a room", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Theory 1", exact: true })).toBeVisible();
   const roomUrl = page.url();
   const roomId = new URL(roomUrl).searchParams.get("roomId")!;
@@ -151,7 +151,7 @@ test("signed-in participants keep overview and question links in their profile w
 
     // This account can author another room while remaining a participant in the shared one.
     await participantPage.goto("/chapters/1/overview");
-    await participantPage.getByRole("button", { name: "Generate new room" }).click();
+    await participantPage.getByRole("button", { name: "Create a room", exact: true }).click();
     await expect(participantPage.getByRole("heading", { name: "Theory 1", exact: true })).toBeVisible();
     await participantPage.getByRole("link", { name: "Profile", exact: true }).click();
     await expect(participantPage.locator(".room-summary")).toHaveCount(2);
