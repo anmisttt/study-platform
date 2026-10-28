@@ -75,7 +75,7 @@ Enable the repository's hooks once per clone:
 git config core.hooksPath scripts/git-hooks
 ```
 
-`scripts/git-hooks/post-checkout` then runs after `git checkout <branch>`, `git switch`, and `git worktree add`. It runs `npm ci` in `shared`, `backend`, and `frontend` whenever a lockfile is newer than the installed tree, then `npm run build` in each package whose `dist/` is missing or older than its sources (`shared` first, since the other two depend on it). With everything up to date it costs about 50 ms, so ordinary branch switches are unaffected. `STUDY_PLATFORM_SKIP_SETUP=1` skips it, and it skips itself when `CI` is set. npm output goes to `post-checkout-install-<package>.log` and `post-checkout-build-<package>.log` in the working tree's git directory.
+`scripts/git-hooks/post-checkout` then runs after `git checkout <branch>`, `git switch`, and `git worktree add`. It installs dependencies in `shared`, `backend`, and `frontend` whenever a lockfile is newer than the installed tree: a missing `node_modules` (as in a new worktree) is cloned from the main checkout with APFS copy-on-write when the lockfiles match, and `npm ci` runs otherwise, then `npm run build` in each package whose `dist/` is missing or older than its sources (`shared` first, since the other two depend on it). With everything up to date it costs about 50 ms, so ordinary branch switches are unaffected. `STUDY_PLATFORM_SKIP_SETUP=1` skips it, and it skips itself when `CI` is set. npm output goes to `post-checkout-install-<package>.log` and `post-checkout-build-<package>.log` in the working tree's git directory.
 
 `.worktreeinclude` lists the git-ignored files to copy into every new worktree.
 
