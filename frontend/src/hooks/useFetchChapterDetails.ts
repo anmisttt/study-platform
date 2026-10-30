@@ -1,20 +1,17 @@
 import { useEffect, useState } from "react";
-import type { RoomDetails } from "@study-platform/shared";
+import type { Chapter } from "@study-platform/shared";
 import { chapterDetailsApiPath } from "@study-platform/shared";
-import type { ChapterSession } from "../components/contest-types";
-import { createInitialChapterSession } from "../components/contest-types";
-import { mergeRoomDetailsIntoSession } from "../utils/room";
 
 const LOAD_ERROR = "Failed to load chapter.";
 
 type ChapterDetailsState = {
   chapterId: string;
-  session: ChapterSession | null;
+  chapter: Chapter | null;
   error: string;
 };
 
 export type ChapterDetailsResult = {
-  session: ChapterSession | null;
+  chapter: Chapter | null;
   error: string;
   retry: () => void;
 };
@@ -29,8 +26,8 @@ async function readErrorMessage(res: Response): Promise<string> {
 }
 
 /**
- * Loads a chapter's public (roomless, read-only) details. The session lives
- * only in this hook's state: it is never written to room sessions or IndexedDB.
+ * Loads a chapter's questions and reference answers, inside or outside a room. The chapter
+ * lives only in this hook's state, never in browser storage, so a reload shows current content.
  */
 export function useFetchChapterDetails(apiBase: string, chapterId: string, enabled: boolean): ChapterDetailsResult {
   const [state, setState] = useState<ChapterDetailsState | null>(null);
@@ -52,15 +49,11 @@ export function useFetchChapterDetails(apiBase: string, chapterId: string, enabl
         if (!res.ok) {
           throw new Error(await readErrorMessage(res));
         }
-        const payload = (await res.json()) as RoomDetails;
+        const chapter = (await res.json()) as Chapter;
         if (controller.signal.aborted) {
           return;
         }
-        setState({
-          chapterId,
-          session: mergeRoomDetailsIntoSession(createInitialChapterSession(), payload),
-          error: "",
-        });
+        setState({ chapterId, chapter, error: "" });
       } catch (error: unknown) {
         if (controller.signal.aborted) {
           return;
@@ -69,7 +62,7 @@ export function useFetchChapterDetails(apiBase: string, chapterId: string, enabl
         const message = error instanceof Error && !(error instanceof TypeError) && !(error instanceof SyntaxError)
           ? error.message
           : LOAD_ERROR;
-        setState({ chapterId, session: null, error: message });
+        setState({ chapterId, chapter: null, error: message });
       }
     }
 
@@ -87,8 +80,8 @@ export function useFetchChapterDetails(apiBase: string, chapterId: string, enabl
 
   // Ignore a response that belongs to a previous chapter.
   if (!isActive || state?.chapterId !== chapterId) {
-    return { session: null, error: "", retry };
+    return { chapter: null, error: "", retry };
   }
 
-  return { session: state.session, error: state.error, retry };
+  return { chapter: state.chapter, error: state.error, retry };
 }

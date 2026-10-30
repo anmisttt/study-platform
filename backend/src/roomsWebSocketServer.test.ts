@@ -1,24 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as Y from "yjs";
-import type { RoomDetails } from "@study-platform/shared";
+import type { RoomChapterAnswers, RoomSummary } from "@study-platform/shared";
 import {
   buildInsertUpdate,
   decodeAnswerText,
   startRoomsWebSocketServer,
+  TEST_CHAPTER,
   TestClient,
 } from "./wsHelpers/testClient.js";
 
 const ROOM = "room1";
 const Q = "practice-1";
-const roomDetails: RoomDetails = {
-  hasOwnerLlmKey: false,
-  roomId: ROOM,
-  chapterId: "chapter-1",
-  number: 1,
-  name: "Chapter 1",
-  theory: [],
-  practice: [],
-};
+const summaryFor = (roomId: string): RoomSummary => ({ roomId, hasOwnerLlmKey: false, chapters: [] });
+const answersFor = (roomId: string, chapterId: string): RoomChapterAnswers => ({ roomId, chapterId, theory: [], practice: [] });
+const hasQuestion = (_chapterId: string, questionId: string): boolean => questionId === Q;
 
 let server: Awaited<ReturnType<typeof startRoomsWebSocketServer>>;
 let clients: TestClient[] = [];
@@ -73,7 +68,7 @@ describe("RoomsWebSocketServer", () => {
     const client = await connect();
     client.watchQuestion(Q);
     await client.waitForType("snapshot");
-    server.webSocketServer.setChecking(ROOM, Q, true);
+    server.webSocketServer.setChecking(ROOM, TEST_CHAPTER, Q, true);
     client.sendUpdate(Q, buildInsertUpdate("late update").update);
     server.webSocketServer.removeRoom(ROOM);
     expect(await client.waitForType("error")).toMatchObject({ message: "This room has been deleted." });
@@ -84,30 +79,90 @@ describe("RoomsWebSocketServer", () => {
     expect(await next.waitForType("checking")).toMatchObject({ checking: false });
   });
 
-  it("sends room state on connection and broadcasts later room changes to every question", async () => {
+  it("sends the room summary on connection and the watched chapter's answers on request", async () => {
     await server.close();
-    server = await startRoomsWebSocketServer((roomId) => ({ ...roomDetails, roomId }));
+    server = await startRoomsWebSocketServer({ loadSummary: summaryFor, loadChapterAnswers: answersFor, hasQuestion });
+
+    const client = await connect();
+    expect(await client.waitForType("room_summary")).toEqual({ type: "room_summary", summary: summaryFor(ROOM) });
+    client.watchChapter("chapter-2");
+    expect(await client.waitForType("room_snapshot")).toEqual({ type: "room_snapshot", answers: answersFor(ROOM, "chapter-2") });
+  });
+
+  it("broadcasts chapter answers only to sockets watching that chapter and summaries to the whole room", async () => {
+    await server.close();
+    server = await startRoomsWebSocketServer({ loadSummary: summaryFor, loadChapterAnswers: answersFor, hasQuestion });
 
     const a = await connect();
     const b = await connect();
     const otherRoom = await connect("room2");
-    a.watchQuestion(Q);
-    b.watchQuestion("practice-2");
-    otherRoom.watchQuestion(Q);
+    for (const client of [a, b, otherRoom]) await client.waitForType("room_summary");
+    a.watchChapter("chapter-1");
+    b.watchChapter("chapter-2");
+    otherRoom.watchChapter("chapter-1");
+    for (const client of [a, b, otherRoom]) await client.waitForType("room_snapshot");
 
-    expect(await a.waitForType("room_snapshot")).toMatchObject({ room: roomDetails });
-    expect(await b.waitForType("room_snapshot")).toMatchObject({ room: roomDetails });
-    await otherRoom.waitForType("room_snapshot");
-
-    const updatedRoom = {
-      ...roomDetails,
-      practice: [{ task: "task", question: "question", answer: "answer", revision: 1 }],
-    };
-    server.webSocketServer.broadcastRoomSnapshot(updatedRoom);
-
-    expect(await a.waitForType("room_snapshot")).toMatchObject({ room: updatedRoom });
-    expect(await b.waitForType("room_snapshot")).toMatchObject({ room: updatedRoom });
+    const updated = { ...answersFor(ROOM, "chapter-1"), theory: [{ user_answer: "A", rating: 4, revision: 1 }] };
+    server.webSocketServer.broadcastChapterAnswers(updated);
+    expect(await a.waitForType("room_snapshot")).toEqual({ type: "room_snapshot", answers: updated });
+    await b.expectNoMessage((message) => message.type === "room_snapshot");
     await otherRoom.expectNoMessage((message) => message.type === "room_snapshot");
+
+    const summary = { ...summaryFor(ROOM), hasOwnerLlmKey: true };
+    server.webSocketServer.broadcastRoomSummary(summary);
+    expect(await a.waitForType("room_summary")).toEqual({ type: "room_summary", summary });
+    expect(await b.waitForType("room_summary")).toEqual({ type: "room_summary", summary });
+    await otherRoom.expectNoMessage((message) => message.type === "room_summary");
+  });
+
+  it("rejects drafts outside a watched chapter or for unknown questions", async () => {
+    await server.close();
+    server = await startRoomsWebSocketServer({
+      loadSummary: summaryFor,
+      loadChapterAnswers: (roomId, chapterId) => {
+        if (chapterId === "missing") throw new Error("Chapter not found.");
+        return answersFor(roomId, chapterId);
+      },
+      hasQuestion,
+    });
+    const client = await connect();
+    client.watchChapter("missing");
+    expect(await client.waitForType("error")).toEqual({ type: "error", message: "Chapter not found." });
+    client.watchQuestion(Q, "missing");
+    expect(await client.waitForType("error")).toEqual({ type: "error", message: "Watch the chapter before its questions." });
+    client.watchChapter(TEST_CHAPTER);
+    await client.waitForType("room_snapshot");
+    client.watchQuestion("theory-999999");
+    expect(await client.waitForType("error")).toEqual({ type: "error", message: "Question not found." });
+    client.watchQuestion(Q, "chapter-2");
+    expect(await client.waitForType("error")).toEqual({ type: "error", message: "Watch the chapter before its questions." });
+
+    client.watchChapter(TEST_CHAPTER);
+    await client.waitForType("room_snapshot");
+    client.watchQuestion(Q);
+    expect(await client.waitForType("snapshot")).toMatchObject({ chapterId: TEST_CHAPTER, questionId: Q });
+  });
+
+  it("keeps drafts for the same question in different chapters apart", async () => {
+    const a = await connect();
+    const b = await connect();
+    a.watchQuestion(Q, "chapter-1");
+    b.watchQuestion(Q, "chapter-2");
+    await a.waitForType("checking");
+    await b.waitForType("checking");
+    const { update } = buildInsertUpdate("chapter one draft");
+    a.sendUpdate(Q, update, "chapter-1");
+    await b.expectNoMessage((message) => message.type === "update");
+
+    const late = await connect();
+    late.watchQuestion(Q, "chapter-2");
+    expect(decodeAnswerText((await late.waitForType("snapshot")).update as string)).toBe("");
+    late.watchQuestion(Q, "chapter-1");
+    expect(decodeAnswerText((await late.waitForType("snapshot")).update as string)).toBe("chapter one draft");
+
+    server.webSocketServer.setChecking(ROOM, "chapter-2", Q, true);
+    expect(await b.waitForType("checking")).toMatchObject({ chapterId: "chapter-2", checking: true });
+    await a.expectNoMessage((message) => message.type === "checking");
   });
 
   it("responds to a question watch with a snapshot then checking:false", async () => {
@@ -125,8 +180,10 @@ describe("RoomsWebSocketServer", () => {
 
   it("reports a room lookup failure during connection setup", async () => {
     await server.close();
-    server = await startRoomsWebSocketServer(() => {
-      throw new Error("Room not found.");
+    server = await startRoomsWebSocketServer({
+      loadSummary: () => { throw new Error("Room not found."); },
+      loadChapterAnswers: answersFor,
+      hasQuestion,
     });
 
     const client = await connect("missing");
@@ -164,7 +221,7 @@ describe("RoomsWebSocketServer", () => {
     a.sendUpdate(Q, update);
 
     const received = await b.waitForType("update");
-    expect(received).toEqual({ type: "update", questionId: Q, update });
+    expect(received).toEqual({ type: "update", chapterId: TEST_CHAPTER, questionId: Q, update });
     await a.expectNoMessage((message) => message.type === "update");
   });
 
@@ -267,11 +324,11 @@ describe("RoomsWebSocketServer", () => {
       await a.waitForType("checking");
       await b.waitForType("checking");
 
-      server.webSocketServer.setChecking(ROOM, Q, true);
+      server.webSocketServer.setChecking(ROOM, TEST_CHAPTER, Q, true);
       const on = await b.waitForType("checking");
       expect(on).toMatchObject({ checking: true });
 
-      server.webSocketServer.setChecking(ROOM, Q, false);
+      server.webSocketServer.setChecking(ROOM, TEST_CHAPTER, Q, false);
       const off = await b.waitForType("checking");
       expect(off).toMatchObject({ checking: false });
     });
@@ -281,7 +338,7 @@ describe("RoomsWebSocketServer", () => {
       a.watchQuestion(Q);
       await a.waitForType("snapshot");
       await a.waitForType("checking");
-      server.webSocketServer.setChecking(ROOM, Q, true);
+      server.webSocketServer.setChecking(ROOM, TEST_CHAPTER, Q, true);
 
       await new Promise((resolve) => setTimeout(resolve, 50));
 

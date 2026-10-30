@@ -4,7 +4,8 @@ import {
   DRAFT_YTEXT_NAME,
   type DraftServerMessage,
   type DraftSnapshotMessage,
-  type RoomDetails,
+  type RoomChapterAnswers,
+  type RoomSummary,
 } from "@study-platform/shared";
 import {
   clearDraftUpdate,
@@ -34,6 +35,24 @@ function closeRoomWebSocket(ws: WebSocket): void {
   }
 }
 
+function questionKeyOf(chapterId: string, questionId: string): string {
+  return `${chapterId}:${questionId}`;
+}
+
+function splitQuestionKey(questionKey: string): [chapterId: string, questionId: string] {
+  const separator = questionKey.lastIndexOf(":");
+  return [questionKey.slice(0, separator), questionKey.slice(separator + 1)];
+}
+
+function questionTarget(questionKey: string): { chapterId: string; questionId: string } {
+  const [chapterId, questionId] = splitQuestionKey(questionKey);
+  return { chapterId, questionId };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function encodeUpdateBase64(update: Uint8Array): string {
   let binary = "";
   for (let index = 0; index < update.length; index += 1) {
@@ -51,6 +70,10 @@ function decodeUpdateBase64(updateBase64: string): Uint8Array {
   return bytes;
 }
 
+function watchChapter(ws: WebSocket, chapterId: string): void {
+  ws.send(JSON.stringify({ type: "watch_chapter", chapterId }));
+}
+
 export function parseServerMessage(raw: string): DraftServerMessage | null {
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -60,15 +83,13 @@ export function parseServerMessage(raw: string): DraftServerMessage | null {
 
     const message = parsed as Record<string, unknown>;
     if (message.type === "room_snapshot") {
-      const room = message.room;
+      const answers = message.answers;
       if (
-        !room ||
-        typeof room !== "object" ||
-        Array.isArray(room) ||
-        typeof (room as Record<string, unknown>).roomId !== "string" ||
-        typeof (room as Record<string, unknown>).chapterId !== "string" ||
-        !Array.isArray((room as Record<string, unknown>).theory) ||
-        !Array.isArray((room as Record<string, unknown>).practice)
+        !isRecord(answers) ||
+        typeof answers.roomId !== "string" ||
+        typeof answers.chapterId !== "string" ||
+        !Array.isArray(answers.theory) ||
+        !Array.isArray(answers.practice)
       ) {
         return null;
       }
@@ -76,23 +97,33 @@ export function parseServerMessage(raw: string): DraftServerMessage | null {
       return message as DraftServerMessage;
     }
 
-    if (
-      (message.type === "snapshot" || message.type === "update") &&
-      typeof message.questionId === "string" &&
-      typeof message.update === "string"
-    ) {
+    if (message.type === "room_summary") {
+      const summary = message.summary;
+      if (
+        !isRecord(summary) ||
+        typeof summary.roomId !== "string" ||
+        typeof summary.hasOwnerLlmKey !== "boolean" ||
+        !Array.isArray(summary.chapters)
+      ) {
+        return null;
+      }
+
       return message as DraftServerMessage;
     }
 
-    if (
-      message.type === "checking" &&
-      typeof message.questionId === "string" &&
-      typeof message.checking === "boolean"
-    ) {
+    if (message.type === "error") {
+      return typeof message.message === "string" ? (message as DraftServerMessage) : null;
+    }
+
+    if (typeof message.chapterId !== "string" || typeof message.questionId !== "string") {
+      return null;
+    }
+
+    if ((message.type === "snapshot" || message.type === "update") && typeof message.update === "string") {
       return message as DraftServerMessage;
     }
 
-    if (message.type === "error" && typeof message.message === "string") {
+    if (message.type === "checking" && typeof message.checking === "boolean") {
       return message as DraftServerMessage;
     }
 
@@ -106,9 +137,11 @@ export function parseServerMessage(raw: string): DraftServerMessage | null {
 type UseCollaborativeDraftOptions = {
   apiBase: string;
   roomId: string | null;
+  chapterId: string | null;
   questionId: string | null;
   enabled: boolean;
-  onRoomSnapshot?: (room: RoomDetails) => void;
+  onRoomSnapshot?: (answers: RoomChapterAnswers) => void;
+  onRoomSummary?: (summary: RoomSummary) => void;
   onRoomError?: (message: string) => void;
 };
 
@@ -125,11 +158,15 @@ type UseCollaborativeDraftResult = {
 export function useCollaborativeDraft({
   apiBase,
   roomId,
-  questionId,
+  chapterId,
+  questionId: questionRef,
   enabled,
   onRoomSnapshot,
+  onRoomSummary,
   onRoomError,
 }: UseCollaborativeDraftOptions): UseCollaborativeDraftResult {
+  // Below, "questionId" is the chapter-qualified key; the wire and storage get both parts.
+  const questionId = chapterId && questionRef ? questionKeyOf(chapterId, questionRef) : null;
   const requestedDraftKey = enabled && roomId && questionId
     ? `${roomId}\0${questionId}`
     : null;
@@ -160,16 +197,20 @@ export function useCollaborativeDraft({
   const docPersistCleanupRef = useRef<(() => void) | null>(null);
   const snapshotGenerationRef = useRef(0);
   const roomIdRef = useRef(roomId);
+  const chapterIdRef = useRef(chapterId);
   const questionIdRef = useRef(questionId);
   const onRoomSnapshotRef = useRef(onRoomSnapshot);
+  const onRoomSummaryRef = useRef(onRoomSummary);
   const onRoomErrorRef = useRef(onRoomError);
 
   useEffect(() => {
     roomIdRef.current = roomId;
+    chapterIdRef.current = chapterId;
     questionIdRef.current = questionId;
     onRoomSnapshotRef.current = onRoomSnapshot;
+    onRoomSummaryRef.current = onRoomSummary;
     onRoomErrorRef.current = onRoomError;
-  }, [onRoomError, onRoomSnapshot, questionId, roomId]);
+  }, [chapterId, onRoomError, onRoomSnapshot, onRoomSummary, questionId, roomId]);
 
   const clearDebounceTimer = useCallback(() => {
     if (debounceTimerRef.current !== null) {
@@ -191,7 +232,7 @@ export function useCollaborativeDraft({
         return;
       }
 
-      void saveDraftUpdate(activeRoomId, activeQuestionId, Y.encodeStateAsUpdate(doc));
+      void saveDraftUpdate(activeRoomId, ...splitQuestionKey(activeQuestionId), Y.encodeStateAsUpdate(doc));
     };
 
     doc.on("update", onUpdate);
@@ -229,7 +270,7 @@ export function useCollaborativeDraft({
     ws.send(
       JSON.stringify({
         type: "update",
-        questionId: activeQuestionId,
+        ...questionTarget(activeQuestionId),
         update: encodeUpdateBase64(update),
       }),
     );
@@ -316,7 +357,7 @@ export function useCollaborativeDraft({
         return;
       }
 
-      if (message.questionId !== activeQuestionId) {
+      if (questionKeyOf(message.chapterId, message.questionId) !== activeQuestionId) {
         return;
       }
 
@@ -324,7 +365,7 @@ export function useCollaborativeDraft({
       snapshotGenerationRef.current = generation;
 
       const serverUpdate = decodeUpdateBase64(message.update);
-      const localUpdate = await loadDraftUpdate(activeRoomId, activeQuestionId);
+      const localUpdate = await loadDraftUpdate(activeRoomId, ...splitQuestionKey(activeQuestionId));
 
       if (
         snapshotGenerationRef.current !== generation ||
@@ -379,7 +420,7 @@ export function useCollaborativeDraft({
 
       const mergedUpdate = Y.encodeStateAsUpdate(mergedDoc);
       if (mergedUpdate.length > 0 || serverUpdate.length > 0) {
-        await saveDraftUpdate(activeRoomId, activeQuestionId, mergedUpdate);
+        await saveDraftUpdate(activeRoomId, ...splitQuestionKey(activeQuestionId), mergedUpdate);
       }
 
       if (
@@ -406,7 +447,7 @@ export function useCollaborativeDraft({
         snapshotReceivedRef.current = false;
         resetQuestionDoc();
 
-        void loadDraftUpdate(activeRoomId, activeQuestionId).then((update) => {
+        void loadDraftUpdate(activeRoomId, ...splitQuestionKey(activeQuestionId)).then((update) => {
           if (
             activeQuestionRef.current !== activeQuestionId ||
             roomIdRef.current !== activeRoomId ||
@@ -429,7 +470,7 @@ export function useCollaborativeDraft({
       ws.send(
         JSON.stringify({
           type: "watch_question",
-          questionId: activeQuestionId,
+          ...questionTarget(activeQuestionId),
         }),
       );
     },
@@ -441,13 +482,20 @@ export function useCollaborativeDraft({
       const activeRoomId = roomIdRef.current;
 
       if (message.type === "error") {
-        onRoomErrorRef.current?.(message.message);
+        console.error("Room server error:", message.message);
         return;
       }
 
       if (message.type === "room_snapshot") {
-        if (message.room.roomId === activeRoomId) {
-          onRoomSnapshotRef.current?.(message.room);
+        if (message.answers.roomId === activeRoomId && message.answers.chapterId === chapterIdRef.current) {
+          onRoomSnapshotRef.current?.(message.answers);
+        }
+        return;
+      }
+
+      if (message.type === "room_summary") {
+        if (message.summary.roomId === activeRoomId) {
+          onRoomSummaryRef.current?.(message.summary);
         }
         return;
       }
@@ -460,7 +508,7 @@ export function useCollaborativeDraft({
         return;
       }
 
-      if (message.questionId !== activeQuestionId) {
+      if (questionKeyOf(message.chapterId, message.questionId) !== activeQuestionId) {
         return;
       }
 
@@ -513,6 +561,7 @@ export function useCollaborativeDraft({
       const ws = new WebSocket(roomsWebSocketUrl(apiBase, roomId));
       activeWs = ws;
       wsRef.current = ws;
+      let lastError = "";
 
       ws.onopen = () => {
         if (disposed) {
@@ -520,6 +569,9 @@ export function useCollaborativeDraft({
           return;
         }
 
+        if (chapterIdRef.current) {
+          watchChapter(ws, chapterIdRef.current);
+        }
         if (questionIdRef.current) {
           watchQuestion(roomId, questionIdRef.current);
         }
@@ -535,6 +587,7 @@ export function useCollaborativeDraft({
           return;
         }
 
+        if (message.type === "error") lastError = message.message;
         handleServerMessage(message);
       };
 
@@ -548,7 +601,12 @@ export function useCollaborativeDraft({
         snapshotReceivedRef.current = false;
 
         setIsAnswerChecking(false);
-        if (disposed || event.code === 1008) {
+        if (disposed) {
+          return;
+        }
+        // The server closes with 1008 only when the room itself is unavailable.
+        if (event.code === 1008) {
+          onRoomErrorRef.current?.(lastError || event.reason);
           return;
         }
 
@@ -587,6 +645,15 @@ export function useCollaborativeDraft({
     roomId,
     watchQuestion,
   ]);
+
+  useEffect(() => {
+    const ws = wsRef.current;
+    if (!enabled || !roomId || !chapterId || !ws || ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    watchChapter(ws, chapterId);
+  }, [chapterId, enabled, roomId]);
 
   useEffect(() => {
     if (!enabled || !roomId || !questionId) {
@@ -691,7 +758,7 @@ export function useCollaborativeDraft({
     }
 
     if (activeRoomId && activeQuestionId) {
-      void clearDraftUpdate(activeRoomId, activeQuestionId);
+      void clearDraftUpdate(activeRoomId, ...splitQuestionKey(activeQuestionId));
     }
 
     setAnswerInput("");

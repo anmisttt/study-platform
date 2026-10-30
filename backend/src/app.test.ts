@@ -8,10 +8,12 @@ import { createApplication, type LlmServices } from "./app.js";
 import { RoomsDb } from "./db/roomsDb.js";
 import { createAuth, type AuthEmail } from "./auth.js";
 import { chapters } from "./chapters.js";
-import { chapterDetails, getRoomDetails } from "./db/roomContext.js";
+import { getRoomSummary } from "./db/roomContext.js";
 
 const origin = "http://localhost:5173";
 const ownerKey = "sk-owner-private-key-123456";
+const checkPath = (roomId: string, questionRef: string, chapterId = chapters[0].id) =>
+  `/rooms/${roomId}/chapters/${chapterId}/questions/${questionRef}/check`;
 let db: RoomsDb;
 let server: Server;
 let base: string;
@@ -41,7 +43,7 @@ async function user(email = "owner@example.com") {
   return { id: body.user.id as string, cookie };
 }
 async function room(cookie: string) {
-  const response = await api("/rooms", "POST", { chapterId: chapters[0].id }, cookie);
+  const response = await api("/rooms", "POST", undefined, cookie);
   expect(response.status).toBe(200);
   return (await response.json()).roomId as string;
 }
@@ -65,7 +67,7 @@ describe("accounts and permissions", () => {
   it("allows anonymous session checks but requires sign-in to create rooms or access private account data", async () => {
     await expectAnonymousProfile();
     await expectAnonymousProfile("better-auth.session_token=invalid");
-    const created = await api("/rooms", "POST", { chapterId: chapters[0].id });
+    const created = await api("/rooms", "POST");
     expect(created.status).toBe(401);
     expect(await created.json()).toEqual({ code: "AUTH_REQUIRED", error: "Please sign in to continue." });
     expect(db.all("SELECT * FROM rooms")).toEqual([]);
@@ -118,7 +120,7 @@ describe("accounts and permissions", () => {
     expect((await api("/me", "GET", undefined, signedIn.cookie)).status).toBe(200);
     await api("/api/auth/sign-out", "POST", {}, signedIn.cookie);
     await expectAnonymousProfile(signedIn.cookie);
-    expect((await api("/rooms", "POST", { chapterId: chapters[0].id }, signedIn.cookie)).status).toBe(401);
+    expect((await api("/rooms", "POST", undefined, signedIn.cookie)).status).toBe(401);
   });
   it("sends new verification links and rejects tampered verification tokens", async () => {
     await api("/api/auth/sign-up/email", "POST", { email: "new@example.com", password: "test-password-123" });
@@ -136,7 +138,7 @@ describe("accounts and permissions", () => {
     const reset = await api("/api/auth/reset-password", "POST", { token, newPassword: "replacement-password-123" });
     expect(reset.status).toBe(200);
     await expectAnonymousProfile(owner.cookie);
-    expect((await api("/rooms", "POST", { chapterId: chapters[0].id }, owner.cookie)).status).toBe(401);
+    expect((await api("/rooms", "POST", undefined, owner.cookie)).status).toBe(401);
     expect((await api("/api/auth/sign-in/email", "POST", { email: "owner@example.com", password: "replacement-password-123" })).status).toBe(200);
     expect((await api("/api/auth/reset-password", "POST", { token, newPassword: "another-password-123" })).status).toBeGreaterThanOrEqual(400);
   });
@@ -152,9 +154,9 @@ describe("accounts and permissions", () => {
     }
   });
   it("isolates room lists, ignores forged ownership, and restricts deletion", async () => {
-    expect((await api("/rooms", "POST", { chapterId: chapters[0].id })).status).toBe(401);
+    expect((await api("/rooms", "POST")).status).toBe(401);
     const owner = await user(); const other = await user("other@example.com");
-    const created = await api("/rooms", "POST", { chapterId: chapters[0].id, ownerUserId: other.id }, owner.cookie);
+    const created = await api("/rooms", "POST", { ownerUserId: other.id }, owner.cookie);
     const id = (await created.json()).roomId;
     expect(db.getRoom(id)?.owner_user_id).toBe(owner.id);
     expect(await (await api("/me/rooms", "GET", undefined, other.cookie)).json()).toEqual([]);
@@ -170,7 +172,7 @@ describe("accounts and permissions", () => {
     expect((await api("/me", "PATCH", { name: "Other" }, owner.cookie, "https://evil.example")).status).toBe(403);
     db.run("UPDATE session SET expiresAt = 0 WHERE userId = ?", [owner.id]);
     await expectAnonymousProfile(owner.cookie);
-    expect((await api("/rooms", "POST", { chapterId: chapters[0].id }, owner.cookie)).status).toBe(401);
+    expect((await api("/rooms", "POST", undefined, owner.cookie)).status).toBe(401);
   });
 });
 
@@ -178,10 +180,10 @@ describe("chapter details API", () => {
   it("returns chapter tasks with reference answers to anonymous users without a room", async () => {
     const response = await api(`/chapters/${encodeURIComponent(chapters[0].id)}`);
     expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(response.headers.get("cache-control")).toBe("no-cache");
+    expect(response.headers.get("etag")).toBeTruthy();
     const body = await response.json();
-    expect(body).toEqual(JSON.parse(JSON.stringify(chapterDetails(chapters[0], null))));
-    expect(body).toMatchObject({ roomId: null, hasOwnerLlmKey: false, chapterId: chapters[0].id });
+    expect(body).toEqual(JSON.parse(JSON.stringify(chapters[0])));
     expect(body.theory).toHaveLength(chapters[0].theory.length);
     expect(body.practice).toHaveLength(chapters[0].practice.length);
     for (const item of [...body.theory, ...body.practice]) {
@@ -193,11 +195,6 @@ describe("chapter details API", () => {
     const missing = await api("/chapters/missing-chapter");
     expect(missing.status).toBe(404);
     expect(missing.headers.get("cache-control")).toBe("no-store");
-  });
-  it("builds empty, room-less details", () => {
-    const details = chapterDetails(chapters[0], null);
-    expect(details).toMatchObject({ roomId: null, hasOwnerLlmKey: false });
-    expect(details.theory[0]).toMatchObject({ ...chapters[0].theory[0], user_answer: undefined, rating: undefined, revision: 0 });
   });
 });
 
@@ -218,7 +215,7 @@ describe("room participation API", () => {
     expect(registrations.sort()).toEqual([false, true]);
     const joined = await (await api("/me/rooms", "GET", undefined, participant.cookie)).json();
     expect(joined).toHaveLength(1);
-    expect(joined[0]).toMatchObject({ roomId: id, isAuthor: false, progress: owned[0].progress });
+    expect(joined[0]).toMatchObject({ roomId: id, isAuthor: false, chapters: [], activeChapterId: null, roomProgress: owned[0].roomProgress });
     expect(joined[0]).not.toHaveProperty("owner_user_id");
     expect(db.getRoom(id)).toEqual(before);
     expect((await api(`/rooms/${id}`, "DELETE", undefined, participant.cookie)).status).toBe(404);
@@ -231,13 +228,13 @@ describe("room participation API", () => {
 
   it("uses only the session and room ID, even when chapter content is unavailable", async () => {
     const owner = await user(); const participant = await user("participant@example.com");
-    db.addRoom({ roomId: "unknown-chapter", chapterId: "not-in-catalog", ownerUserId: owner.id });
+    db.addRoom({ roomId: "unknown-chapter", ownerUserId: owner.id });
     expect((await api("/rooms/unknown-chapter/participants/me", "POST", {
       userId: owner.id, ownerUserId: participant.id, isAuthor: true, chapterId: "wrong", joinedAt: "forged",
     }, participant.cookie)).status).toBe(200);
     expect(db.listParticipatedRooms(participant.id)[0]).toMatchObject({ id: "unknown-chapter", owner_user_id: owner.id });
     expect(db.listParticipatedRooms(participant.id)[0].joined_at).not.toBe("forged");
-    db.addRoom({ roomId: "legacy-room", chapterId: chapters[0].id });
+    db.addRoom({ roomId: "legacy-room" });
     expect((await api("/rooms/legacy-room/participants/me", "POST", undefined, participant.cookie)).status).toBe(200);
     const rooms = await (await api("/me/rooms", "GET", undefined, participant.cookie)).json();
     expect(rooms.find((row: { roomId: string }) => row.roomId === "legacy-room")).toMatchObject({ isAuthor: false });
@@ -264,7 +261,7 @@ describe("room participation API", () => {
     expect(db.listParticipatedRooms(second.id).map(row => row.id)).toEqual([ids[1]]);
     const create = vi.spyOn(db, "createRoom").mockImplementation(() => { throw new Database.SqliteError("database is locked", "SQLITE_BUSY"); });
     try {
-      const response = await api("/rooms", "POST", { chapterId: chapters[0].id }, first.cookie);
+      const response = await api("/rooms", "POST", undefined, first.cookie);
       expect(response.status).toBe(503);
       expect(await response.json()).toMatchObject({ code: "DATABASE_BUSY" });
     } finally { create.mockRestore(); generate.mockRestore(); }
@@ -278,9 +275,15 @@ describe("room owner credentials and progress", () => {
     await api("/me/llm-key", "PUT", { apiKey: ownerKey }, owner.cookie);
     await api("/me/llm-key", "PUT", { apiKey: "sk-participant-private-654321" }, guestAccount.cookie);
     await api("/api/auth/sign-out", "POST", {}, owner.cookie);
-    const check = `/rooms/${id}/questions/theory-1/check`;
+    const check = checkPath(id, "theory-1");
+    const broadcast = vi.spyOn(application.realtime, "broadcastChapterAnswers");
     expect((await api(check, "POST", { answer: "First answer", baseRevision: 0 })).status).toBe(200);
     expect((await api(check, "POST", { answer: "Better answer", baseRevision: 1 }, guestAccount.cookie)).status).toBe(200);
+    expect(db.all("SELECT chapter_id, question_type, question_index, user_answer, revision FROM answers WHERE room_id = ?", [id])).toEqual([
+      { chapter_id: chapters[0].id, question_type: "theory", question_index: 0, user_answer: "Better answer", revision: 2 },
+    ]);
+    expect(broadcast.mock.lastCall?.[0]).toMatchObject({ roomId: id, chapterId: chapters[0].id });
+    expect(broadcast.mock.lastCall?.[0].theory[0]).toMatchObject({ user_answer: "Better answer", revision: 2 });
     expect(vi.mocked(services.grade).mock.calls.map(call => call[0])).toEqual([ownerKey, ownerKey]);
     expect(vi.mocked(services.grade).mock.calls[0][3]).toMatchObject({
       userId: owner.id,
@@ -303,21 +306,22 @@ describe("room owner credentials and progress", () => {
     const renewed = await api("/api/auth/sign-in/email", "POST", { email: "owner@example.com", password: "test-password-123" });
     const cookie = renewed.headers.getSetCookie().map(v => v.split(";")[0]).join("; ");
     const summaries = await (await api("/me/rooms", "GET", undefined, cookie)).json();
-    expect(summaries[0].progress).toMatchObject({ checked: 1, averageScore: 4, theory: { checked: 1 }, practice: { checked: 0 } });
-    expect(summaries[0].continueQuestionRef).toBe("theory-2");
+    expect(summaries[0].activeChapterId).toBe(chapters[0].id);
+    expect(summaries[0].chapters[0].progress).toMatchObject({ checked: 1, averageScore: 4, theory: { checked: 1 }, practice: { checked: 0 } });
+    expect(summaries[0].continue).toEqual({ chapterNumber: chapters[0].number, questionRef: "theory-2" });
   });
   it("does not fall back for missing, removed or legacy keys, and broadcasts availability", async () => {
     const owner = await user(); const id = await room(owner.cookie);
-    const broadcast = vi.spyOn(application.realtime, "broadcastRoomSnapshot");
-    const check = () => api(`/rooms/${id}/questions/theory-1/check`, "POST", { answer: "Answer", baseRevision: 0 });
+    const broadcast = vi.spyOn(application.realtime, "broadcastRoomSummary");
+    const check = () => api(checkPath(id, "theory-1"), "POST", { answer: "Answer", baseRevision: 0 });
     expect((await check()).status).toBe(403);
     await api("/me/llm-key", "PUT", { apiKey: ownerKey }, owner.cookie);
     expect(broadcast).toHaveBeenLastCalledWith(expect.objectContaining({ hasOwnerLlmKey: true }));
     await api("/me/llm-key", "DELETE", undefined, owner.cookie);
     expect(broadcast).toHaveBeenLastCalledWith(expect.objectContaining({ hasOwnerLlmKey: false }));
     expect((await check()).status).toBe(403);
-    db.addRoom({ roomId: "legacy", chapterId: chapters[0].id });
-    expect(getRoomDetails("legacy", db).hasOwnerLlmKey).toBe(false);
+    db.addRoom({ roomId: "legacy" });
+    expect(getRoomSummary("legacy", db).hasOwnerLlmKey).toBe(false);
     expect((await api("/realtime/transcription-token", "POST", { roomId: "legacy" })).status).toBe(403);
     expect((await api("/realtime/transcription-token", "POST", {})).status).toBe(400);
     expect(services.grade).not.toHaveBeenCalled();
@@ -346,31 +350,90 @@ describe("room owner credentials and progress", () => {
     let started!: () => void; const startedPromise = new Promise<void>(resolve => { started = resolve; });
     vi.mocked(services.grade).mockImplementationOnce(() => { started(); return new Promise(resolve => { finish = resolve; }); });
     const status = vi.spyOn(application.realtime, "setChecking");
-    const path = `/rooms/${id}/questions/theory-1/check`;
+    const path = checkPath(id, "theory-1");
     const first = api(path, "POST", { answer: "Answer", baseRevision: 0 }); await startedPromise;
-    expect(status).toHaveBeenCalledWith(id, "theory-1", true);
+    expect(status).toHaveBeenCalledWith(id, chapters[0].id, "theory-1", true);
     const duplicate = await api(path, "POST", { answer: "Answer", baseRevision: 0 });
     expect((await duplicate.json()).code).toBe("ALREADY_CHECKING");
-    expect((await api(`/rooms/${id}/questions/theory-0/check`, "POST", { answer: "Zero", baseRevision: 0 })).status).toBe(404);
-    const alias = await api(`/rooms/${id}/questions/theory-01/check`, "POST", { answer: "Alias", baseRevision: 0 });
+    expect((await api(checkPath(id, "theory-0"), "POST", { answer: "Zero", baseRevision: 0 })).status).toBe(404);
+    const alias = await api(checkPath(id, "theory-01"), "POST", { answer: "Alias", baseRevision: 0 });
     expect(alias.status).toBe(404);
-    expect((await api(`/rooms/${id}/questions/theory-2/check`, "POST", { answer: "Independent question", baseRevision: 0 })).status).toBe(200);
+    expect((await api(checkPath(id, "theory-2"), "POST", { answer: "Independent question", baseRevision: 0 })).status).toBe(200);
     await api(`/rooms/${id}`, "DELETE", undefined, owner.cookie);
     finish({ rating: 4, comment: "Good" });
     expect((await first).status).toBe(404);
     expect(db.getRoom(id)).toBeUndefined();
-    expect(status).toHaveBeenLastCalledWith(id, "theory-1", false);
+    expect(status).toHaveBeenLastCalledWith(id, chapters[0].id, "theory-1", false);
     expect(services.grade).toHaveBeenCalledTimes(2);
   });
   it.each([[401, "invalid_api_key", "OWNER_KEY_INVALID"], [429, "insufficient_quota", "LLM_QUOTA_EXCEEDED"], [404, "model_not_found", "LLM_MODEL_UNAVAILABLE"], [500, "server_error", "LLM_UNAVAILABLE"]])("maps provider failure %s without exposing credentials", async (status, code, expectedCode) => {
     const owner = await user(); const id = await room(owner.cookie); application.accounts.saveKey(owner.id, ownerKey);
     vi.mocked(services.grade).mockRejectedValueOnce(new APIError(Number(status), { code: String(code), message: ownerKey }, ownerKey, new Headers()));
-    const response = await api(`/rooms/${id}/questions/theory-1/check`, "POST", { answer: "Answer", baseRevision: 0 });
+    const response = await api(checkPath(id, "theory-1"), "POST", { answer: "Answer", baseRevision: 0 });
     const payload = await response.json();
     expect(payload.code).toBe(expectedCode); expect(JSON.stringify(payload)).not.toContain(ownerKey);
-    expect(db.getRoom(id)?.theory_answers).toBe("[]");
-    expect((await api(`/rooms/${id}/questions/theory-1/check`, "POST", { answer: "Answer", baseRevision: 0 })).status).toBe(200);
-    expect((await api(`/rooms/${id}/questions/theory-1/check`, "POST", { answer: "Stale answer", baseRevision: 0 })).status).toBe(409);
+    expect(db.getChapterAnswers(id, chapters[0].id).theory).toEqual([]);
+    expect((await api(checkPath(id, "theory-1"), "POST", { answer: "Answer", baseRevision: 0 })).status).toBe(200);
+    expect((await api(checkPath(id, "theory-1"), "POST", { answer: "Stale answer", baseRevision: 0 })).status).toBe(409);
     expect(services.grade).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("multi-chapter rooms", () => {
+  it("creates an empty room without a chapter", async () => {
+    const owner = await user();
+    const id = await room(owner.cookie);
+    expect(db.getRoom(id)).not.toHaveProperty("chapter_id");
+    expect(db.all("SELECT * FROM answers")).toEqual([]);
+    const [summary] = await (await api("/me/rooms", "GET", undefined, owner.cookie)).json();
+    expect(summary).toMatchObject({
+      roomId: id, isAuthor: true, chapters: [], activeChapterId: null,
+      roomProgress: { checked: 0, total: 0, averageScore: null },
+      continue: { chapterNumber: chapters[0].number, questionRef: "theory-1" },
+    });
+  });
+
+  it("stores answers per chapter and scopes conflicts and broadcasts to the chapter", async () => {
+    const owner = await user(); const id = await room(owner.cookie); application.accounts.saveKey(owner.id, ownerKey);
+    const [first, second] = [chapters[0], chapters[1]];
+    const answersBroadcast = vi.spyOn(application.realtime, "broadcastChapterAnswers");
+    const summaryBroadcast = vi.spyOn(application.realtime, "broadcastRoomSummary");
+    expect((await api(checkPath(id, "theory-1", second.id), "POST", { answer: "Second", baseRevision: 0 })).status).toBe(200);
+    expect((await api(checkPath(id, "theory-1", first.id), "POST", { answer: "First", baseRevision: 0 })).status).toBe(200);
+    expect(db.getChapterAnswers(id, first.id).theory[0]).toMatchObject({ user_answer: "First", revision: 1 });
+    expect(db.getChapterAnswers(id, second.id).theory[0]).toMatchObject({ user_answer: "Second", revision: 1 });
+    expect(answersBroadcast.mock.lastCall?.[0]).toMatchObject({ roomId: id, chapterId: first.id });
+    expect(summaryBroadcast.mock.lastCall?.[0].chapters.map((chapter: { chapterId: string }) => chapter.chapterId)).toEqual([first.id, second.id]);
+
+    const conflict = await api(checkPath(id, "theory-1", second.id), "POST", { answer: "Stale", baseRevision: 0 });
+    expect(conflict.status).toBe(409);
+    const payload = await conflict.json();
+    expect(payload.answers).toMatchObject({ roomId: id, chapterId: second.id });
+    expect(payload.answers.theory[0]).toMatchObject({ user_answer: "Second", revision: 1 });
+
+    expect((await api(checkPath(id, "theory-1", "missing-chapter"), "POST", { answer: "A", baseRevision: 0 })).status).toBe(404);
+    expect((await api(checkPath("missing", "theory-1"), "POST", { answer: "A", baseRevision: 0 })).status).toBe(404);
+  });
+
+  it("summarizes rooms with ascending chapters, starting at the first chapter with unsolved tasks", async () => {
+    const owner = await user(); const id = await room(owner.cookie); application.accounts.saveKey(owner.id, ownerKey);
+    const [first, second] = [chapters[0], chapters[1]];
+    vi.mocked(services.grade).mockResolvedValueOnce({ rating: 5, comment: "" }).mockResolvedValueOnce({ rating: 3, comment: "" });
+    await api(checkPath(id, "theory-1", first.id), "POST", { answer: "A", baseRevision: 0 });
+    await api(checkPath(id, "practice-1", second.id), "POST", { answer: "B", baseRevision: 0 });
+    const [summary] = await (await api("/me/rooms", "GET", undefined, owner.cookie)).json();
+    expect(summary.chapters).toMatchObject([
+      { chapterId: first.id, number: first.number, name: first.name, checked: 1, total: first.theory.length + first.practice.length,
+        progress: { checked: 1, theory: { checked: 1 }, averageScore: 5 }, nextQuestionRef: "theory-2" },
+      { chapterId: second.id, number: second.number, name: second.name, checked: 1, total: second.theory.length + second.practice.length,
+        progress: { checked: 1, practice: { checked: 1 }, averageScore: 3 }, nextQuestionRef: "theory-1" },
+    ]);
+    expect(summary.activeChapterId).toBe(first.id);
+    expect(summary.roomProgress).toEqual({
+      checked: 2,
+      total: first.theory.length + first.practice.length + second.theory.length + second.practice.length,
+      averageScore: 4,
+    });
+    expect(summary.continue).toEqual({ chapterNumber: first.number, questionRef: "theory-2" });
   });
 });

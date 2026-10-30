@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ChapterMeta } from "@study-platform/shared";
 import {
   canonicalChapterPath,
+  chapterEntryPath,
   chapterKeyFromPath,
   chapterOverviewPath,
   chapterQuestionPath,
@@ -67,5 +68,22 @@ describe("routes/paths", () => {
     expect(roomIdFromSearch("roomId=ABC123")).toBe("ABC123");
     expect(roomIdFromSearch("?roomId=ABC123&x=1")).toBe("ABC123");
     expect(roomIdFromSearch("foo=1&roomId=XYZ")).toBe("XYZ");
+  });
+});
+
+describe("chapterEntryPath", () => {
+  const chapter: ChapterMeta = { id: "c", number: 4, name: "Storage", theoryCount: 3, practiceCount: 2 };
+
+  it("opens the overview without a room", () => {
+    expect(chapterEntryPath(chapter)).toBe("/chapters/4/overview");
+  });
+
+  it("skips the overview inside a room and opens the first task", () => {
+    expect(chapterEntryPath(chapter, "ABC123")).toBe("/chapters/4/questions/theory-1?roomId=ABC123");
+    expect(chapterEntryPath({ ...chapter, theoryCount: 0 }, "ABC123")).toBe("/chapters/4/questions/practice-1?roomId=ABC123");
+  });
+
+  it("opens the overview of a chapter without tasks", () => {
+    expect(chapterEntryPath({ ...chapter, theoryCount: 0, practiceCount: 0 }, "ABC123")).toBe("/chapters/4/overview?roomId=ABC123");
   });
 });

@@ -1,15 +1,14 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Contest from "./contest";
-import type { RoomDetails } from "@study-platform/shared";
+import type { RoomChapterAnswers, RoomSummary } from "@study-platform/shared";
 import type { ChapterSession } from "./contest-types";
 import { createInitialChapterSession } from "./contest-types";
 import {
   API_BASE,
   chapterMeta,
-  roomDetails,
-  roomDetailsWithAnswer,
+  roomAnswersWith,
   sessionWithRoom,
 } from "../test/fixtures";
 
@@ -32,10 +31,14 @@ const draftApi = vi.hoisted(() => ({
   clearLocalAnswerChecking: vi.fn(() => {
     draftApi.isAnswerChecking = false;
   }),
-  onRoomSnapshot: undefined as ((room: RoomDetails) => void) | undefined,
+  onRoomSnapshot: undefined as ((answers: RoomChapterAnswers) => void) | undefined,
+  onRoomSummary: undefined as ((summary: RoomSummary) => void) | undefined,
   onRoomError: undefined as ((message: string) => void) | undefined,
-  emitRoomSnapshot(room: RoomDetails) {
-    draftApi.onRoomSnapshot?.(room);
+  emitRoomSnapshot(answers: RoomChapterAnswers) {
+    draftApi.onRoomSnapshot?.(answers);
+  },
+  emitRoomSummary(summary: RoomSummary) {
+    draftApi.onRoomSummary?.(summary);
   },
   emitRoomError(message: string) {
     draftApi.onRoomError?.(message);
@@ -50,6 +53,7 @@ const draftApi = vi.hoisted(() => ({
     draftApi.setAnswerChecking.mockClear();
     draftApi.clearLocalAnswerChecking.mockClear();
     draftApi.onRoomSnapshot = undefined;
+    draftApi.onRoomSummary = undefined;
     draftApi.onRoomError = undefined;
   },
 }));
@@ -65,10 +69,12 @@ const voiceApi = vi.hoisted(() => ({
 
 vi.mock("../hooks/useCollaborativeDraft", () => ({
   useCollaborativeDraft: (options: {
-    onRoomSnapshot?: (room: RoomDetails) => void;
+    onRoomSnapshot?: (answers: RoomChapterAnswers) => void;
+    onRoomSummary?: (summary: RoomSummary) => void;
     onRoomError?: (message: string) => void;
   }) => {
     draftApi.onRoomSnapshot = options.onRoomSnapshot;
+    draftApi.onRoomSummary = options.onRoomSummary;
     draftApi.onRoomError = options.onRoomError;
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     return {
@@ -121,6 +127,7 @@ type HarnessProps = {
   questionRef?: string;
   initialSession?: ChapterSession;
   initialError?: string;
+  hasOwnerLlmKey?: boolean;
   onQuestionNavigate?: (questionRef: string, roomId?: string) => void;
   onRoomAccessError?: (message: string) => void;
   onResetProgress?: () => void;
@@ -134,7 +141,7 @@ function ContestHarness({
   onQuestionNavigate = vi.fn(),
   onRoomAccessError = vi.fn(),
   onResetProgress = vi.fn(),
-}: HarnessProps) {
+}: Omit<HarnessProps, "hasOwnerLlmKey">) {
   const [session, setSession] = useState(initialSession);
 
   return (
@@ -159,14 +166,20 @@ function renderContest(props: HarnessProps = {}) {
   const onQuestionNavigate = props.onQuestionNavigate ?? vi.fn();
   const onRoomAccessError = props.onRoomAccessError ?? vi.fn();
   const onResetProgress = props.onResetProgress ?? vi.fn();
+  const { hasOwnerLlmKey = true, ...harnessProps } = props;
   const view = render(
     <ContestHarness
-      {...props}
+      {...harnessProps}
       onQuestionNavigate={onQuestionNavigate}
       onRoomAccessError={onRoomAccessError}
       onResetProgress={onResetProgress}
     />,
   );
+  if (props.roomId) {
+    act(() => {
+      draftApi.emitRoomSummary({ roomId: props.roomId!, hasOwnerLlmKey, chapters: [] });
+    });
+  }
   return { ...view, onQuestionNavigate, onRoomAccessError, onResetProgress };
 }
 
@@ -205,10 +218,7 @@ describe("Contest", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE}/rooms`,
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ chapterId: chapterMeta.id }),
-      }),
+      expect.objectContaining({ method: "POST" }),
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -259,7 +269,7 @@ describe("Contest", () => {
     expect(draftApi.setAnswerChecking).not.toHaveBeenCalled();
     expect(voiceApi.stop).toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
-      `${API_BASE}/rooms/ABC123/questions/theory-1/check`,
+      `${API_BASE}/rooms/ABC123/chapters/first_chapter/questions/theory-1/check`,
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -289,7 +299,7 @@ describe("Contest", () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        `${API_BASE}/rooms/ABC123/questions/practice-1/check`,
+        `${API_BASE}/rooms/ABC123/chapters/first_chapter/questions/practice-1/check`,
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({
@@ -325,13 +335,13 @@ describe("Contest", () => {
     );
     expect(checkCalls).toHaveLength(1);
     expect(String(checkCalls[0][0])).toBe(
-      `${API_BASE}/rooms/ABC123/questions/practice-1/check`,
+      `${API_BASE}/rooms/ABC123/chapters/first_chapter/questions/practice-1/check`,
     );
     expect(String(checkCalls[0][0])).not.toContain("theory");
   });
 
   it("applies a 409 conflict room payload and alerts", async () => {
-    const conflictRoom = roomDetailsWithAnswer({
+    const conflictRoom = roomAnswersWith({
       theoryAnswer: {
         answer: "Peer answer",
         rating: 5,
@@ -341,7 +351,7 @@ describe("Contest", () => {
     });
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: "Question was updated by someone else.", room: conflictRoom }, 409),
+      jsonResponse({ error: "Question was updated by someone else.", answers: conflictRoom }, 409),
     );
 
     draftApi.answerInput = "Stale local answer";
@@ -365,7 +375,7 @@ describe("Contest", () => {
   });
 
   it("merges and displays peer results received through the room connection", async () => {
-    const peerRoom = roomDetailsWithAnswer({
+    const peerRoom = roomAnswersWith({
       practiceAnswer: {
         answer: "Peer practice answer",
         rating: 3,
@@ -420,7 +430,7 @@ describe("Contest", () => {
 
     act(() => {
       draftApi.emitRoomSnapshot(
-        roomDetailsWithAnswer({
+        roomAnswersWith({
           practiceAnswer: {
             answer: "Peer draft",
             rating: 4,
@@ -439,7 +449,7 @@ describe("Contest", () => {
 
   it("returns to the editor when Try again is clicked", async () => {
     const answered = sessionWithRoom(
-      roomDetailsWithAnswer({
+      roomAnswersWith({
         theoryAnswer: {
           answer: "Prior answer",
           rating: 2,
@@ -469,7 +479,7 @@ describe("Contest", () => {
 
   it("resets the local editor preference when switching questions", async () => {
     const answered = sessionWithRoom(
-      roomDetailsWithAnswer({
+      roomAnswersWith({
         theoryAnswer: {
           answer: "Prior answer",
           rating: 2,
@@ -537,22 +547,23 @@ describe("Contest", () => {
     expect(onQuestionNavigate).toHaveBeenCalledWith("theory-1", "ABC123");
   });
 
-  it("loads room details from the room connection without a cached session", async () => {
-    renderContest({
-      roomId: "ABC123",
-      questionRef: "theory-1",
-      initialSession: createInitialChapterSession(),
-    });
-
-    expect(screen.getByText("Loading room questions...")).toBeTruthy();
+  it("takes owner-key availability from the room summary", () => {
+    renderContest({ roomId: "ABC123", questionRef: "theory-1", initialSession: sessionWithRoom(), hasOwnerLlmKey: false });
+    expect(screen.getByText(/AI features need an OpenAI key/)).toBeTruthy();
 
     act(() => {
-      draftApi.emitRoomSnapshot(roomDetails);
+      draftApi.emitRoomSummary({ roomId: "ABC123", hasOwnerLlmKey: true, chapters: [] });
     });
 
-    expect(screen.getByText("Theory 1")).toBeTruthy();
-    expect(screen.getByText("What is a process?")).toBeTruthy();
-    expect(within(screen.getByText(/Room ID:/).parentElement as HTMLElement).getByText("ABC123")).toBeTruthy();
+    expect(screen.queryByText(/AI features need an OpenAI key/)).toBeNull();
+  });
+
+  it("hides the owner-key notice and keeps Check disabled until the room summary arrives", () => {
+    draftApi.answerInput = "An answer";
+    render(<ContestHarness roomId="ABC123" questionRef="theory-1" initialSession={sessionWithRoom()} />);
+
+    expect(screen.queryByText(/AI features need an OpenAI key/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Check" })).toBeDisabled();
   });
 
   it("reports room access errors to the parent", async () => {
@@ -570,12 +581,11 @@ describe("Contest", () => {
   });
 
   describe("read-only (no room)", () => {
-    const publicDetails: RoomDetails = { ...roomDetails, roomId: null, hasOwnerLlmKey: false };
 
     it("navigates between questions without a room id", () => {
       const { onQuestionNavigate } = renderContest({
         questionRef: "theory-1",
-        initialSession: sessionWithRoom(publicDetails),
+        initialSession: sessionWithRoom(),
       });
 
       fireEvent.click(screen.getByRole("button", { name: "Next question" }));
@@ -591,7 +601,7 @@ describe("Contest", () => {
     });
 
     it("hides the owner-key notice", () => {
-      renderContest({ questionRef: "theory-1", initialSession: sessionWithRoom(publicDetails) });
+      renderContest({ questionRef: "theory-1", initialSession: sessionWithRoom() });
 
       expect(screen.getByRole("button", { name: "Create a room" })).toBeTruthy();
       expect(screen.queryByText(/AI features need an OpenAI key/)).toBeNull();
@@ -601,7 +611,8 @@ describe("Contest", () => {
       renderContest({
         roomId: "ABC123",
         questionRef: "theory-1",
-        initialSession: sessionWithRoom({ ...roomDetails, hasOwnerLlmKey: false }),
+        initialSession: sessionWithRoom(),
+        hasOwnerLlmKey: false,
       });
 
       expect(screen.getByText(/AI features need an OpenAI key/)).toBeTruthy();
@@ -612,7 +623,7 @@ describe("Contest", () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ roomId: "NEW123" }));
       const { onQuestionNavigate } = renderContest({
         questionRef: "practice-1",
-        initialSession: sessionWithRoom(publicDetails),
+        initialSession: sessionWithRoom(),
       });
 
       fireEvent.click(screen.getByRole("button", { name: "Create a room" }));
@@ -622,13 +633,13 @@ describe("Contest", () => {
       });
       expect(fetchMock).toHaveBeenCalledWith(
         `${API_BASE}/rooms`,
-        expect.objectContaining({ method: "POST", body: JSON.stringify({ chapterId: chapterMeta.id }) }),
+        expect.objectContaining({ method: "POST" }),
       );
     });
 
     it("shows room creation errors on the question view", async () => {
       vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ error: "Room limit reached." }, 400));
-      renderContest({ questionRef: "theory-1", initialSession: sessionWithRoom(publicDetails) });
+      renderContest({ questionRef: "theory-1", initialSession: sessionWithRoom() });
 
       fireEvent.click(screen.getByRole("button", { name: "Create a room" }));
 
@@ -637,16 +648,9 @@ describe("Contest", () => {
   });
 
   it("disables Start again without a room", () => {
-    renderContest({ questionRef: "theory-1", initialSession: sessionWithRoom({ ...roomDetails, roomId: null, hasOwnerLlmKey: false }) });
+    renderContest({ questionRef: "theory-1", initialSession: sessionWithRoom() });
 
     expect(screen.getByRole("button", { name: "Start again" })).toBeDisabled();
   });
 
-  it("shows plain No room text in the header without a room", () => {
-    renderContest({ questionRef: "theory-1", initialSession: sessionWithRoom({ ...roomDetails, roomId: null, hasOwnerLlmKey: false }) });
-
-    const header = screen.getByText("No room").parentElement as HTMLElement;
-    expect(header.textContent).toBe("No room");
-    expect(within(header).queryByRole("button")).toBeNull();
-  });
 });

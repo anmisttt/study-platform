@@ -1,6 +1,6 @@
 import { act, render } from "@testing-library/react";
 import * as Y from "yjs";
-import type { RoomDetails } from "@study-platform/shared";
+import type { RoomChapterAnswers, RoomSummary } from "@study-platform/shared";
 import {
   useCollaborativeDraft,
 } from "../hooks/useCollaborativeDraft";
@@ -11,13 +11,16 @@ export type DraftApi = ReturnType<typeof useCollaborativeDraft>;
 type HarnessProps = {
   apiBase: string;
   roomId: string | null;
+  chapterId: string | null;
   questionId: string | null;
   enabled: boolean;
-  onRoomSnapshot?: (room: RoomDetails) => void;
+  onRoomSnapshot?: (answers: RoomChapterAnswers) => void;
+  onRoomSummary?: (summary: RoomSummary) => void;
   onRoomError?: (message: string) => void;
 };
 
 export const API_BASE = "http://localhost/api";
+export const CHAPTER_ID = "first_chapter";
 
 /** base64-encode a Yjs update, mirroring the frontend wire format. */
 export function encodeUpdate(update: Uint8Array): string {
@@ -88,6 +91,7 @@ export function renderDraft(initial: Partial<HarnessProps> = {}): Harness {
   let props: HarnessProps = {
     apiBase: API_BASE,
     roomId: "room1",
+    chapterId: CHAPTER_ID,
     questionId: "practice-1",
     enabled: true,
     ...initial,
@@ -142,7 +146,7 @@ export async function connectAndSnapshot(
 
   await act(async () => {
     harness.ws().simulateMessage(
-      JSON.stringify({ type: "snapshot", questionId, update: snapshot }),
+      JSON.stringify({ type: "snapshot", chapterId: "first_chapter", questionId, update: snapshot }),
     );
     await Promise.resolve();
   });
@@ -160,7 +164,7 @@ export async function deliverSnapshot(
   const snapshot = options.snapshot ?? "";
   await act(async () => {
     harness.ws().simulateMessage(
-      JSON.stringify({ type: "snapshot", questionId, update: snapshot }),
+      JSON.stringify({ type: "snapshot", chapterId: "first_chapter", questionId, update: snapshot }),
     );
     await Promise.resolve();
   });
@@ -175,7 +179,7 @@ export async function deliverUpdate(
 ): Promise<void> {
   const questionId = options.questionId ?? "practice-1";
   await act(async () => {
-    harness.ws().simulateMessage(JSON.stringify({ type: "update", questionId, update }));
+    harness.ws().simulateMessage(JSON.stringify({ type: "update", chapterId: "first_chapter", questionId, update }));
     await Promise.resolve();
   });
 }

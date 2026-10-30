@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
 import { loadDraftUpdate, saveDraftUpdate } from "../utils/draftStorage";
 import { MockWebSocket } from "../test/mockWebSocket";
-import { roomDetails } from "../test/fixtures";
+import { roomAnswers } from "../test/fixtures";
 import {
   buildAnswerUpdate,
   connectAndSnapshot,
@@ -60,6 +60,7 @@ describe("useCollaborativeDraft", () => {
     expect(harness.ws().url).toBe("ws://localhost/api/ws/rooms/room1");
     expect(harness.ws().sentMessagesOfType("watch_question").at(-1)).toEqual({
       type: "watch_question",
+      chapterId: "first_chapter",
       questionId: "practice-1",
     });
   });
@@ -115,7 +116,7 @@ describe("useCollaborativeDraft", () => {
   });
 
   it("merges a locally-persisted draft with an empty server snapshot without duplication", async () => {
-    await saveDraftUpdate("room1", "practice-1", bytesFor("local draft"));
+    await saveDraftUpdate("room1", "first_chapter", "practice-1", bytesFor("local draft"));
 
     const harness = renderDraft();
     await connectAndSnapshot(harness);
@@ -137,6 +138,7 @@ describe("useCollaborativeDraft", () => {
     harness.rerender({ questionId: "practice-2" });
     expect(harness.ws().sentMessagesOfType("watch_question").at(-1)).toEqual({
       type: "watch_question",
+      chapterId: "first_chapter",
       questionId: "practice-2",
     });
     await deliverSnapshot(harness, { questionId: "practice-2" });
@@ -174,38 +176,56 @@ describe("useCollaborativeDraft", () => {
       harness.ws().simulateOpen();
     });
     expect(harness.ws().sentMessagesOfType("watch_question")).toEqual([
-      { type: "watch_question", questionId: "practice-1" },
+      { type: "watch_question", chapterId: "first_chapter", questionId: "practice-1" },
     ]);
 
     await deliverSnapshot(harness);
     expect(harness.api().answerInput).toBe("");
   });
 
-  it("delivers room snapshots without replacing the room connection", async () => {
+  it("watches the chapter on connect and on chapter change, delivering only its snapshots", async () => {
     const onRoomSnapshot = vi.fn();
-    const harness = renderDraft({ roomId: roomDetails.roomId, onRoomSnapshot });
+    const onRoomSummary = vi.fn();
+    const harness = renderDraft({ roomId: roomAnswers.roomId, onRoomSnapshot, onRoomSummary });
     await connectAndSnapshot(harness);
+    expect(harness.ws().sentMessagesOfType("watch_chapter")).toEqual([{ type: "watch_chapter", chapterId: "first_chapter" }]);
 
+    const summary = { roomId: roomAnswers.roomId, hasOwnerLlmKey: true, chapters: [] };
     await act(async () => {
-      harness.ws().simulateMessage(JSON.stringify({ type: "room_snapshot", room: roomDetails }));
+      harness.ws().simulateMessage(JSON.stringify({ type: "room_summary", summary }));
+      harness.ws().simulateMessage(JSON.stringify({ type: "room_snapshot", answers: roomAnswers }));
+      harness.ws().simulateMessage(JSON.stringify({ type: "room_snapshot", answers: { ...roomAnswers, chapterId: "other" } }));
       await Promise.resolve();
     });
+    expect(onRoomSummary).toHaveBeenCalledWith(summary);
+    expect(onRoomSnapshot).toHaveBeenCalledTimes(1);
+    expect(onRoomSnapshot).toHaveBeenCalledWith(roomAnswers);
 
-    expect(onRoomSnapshot).toHaveBeenCalledWith(roomDetails);
-    harness.rerender({ questionId: "practice-2" });
+    harness.rerender({ chapterId: "second_chapter" });
+    expect(harness.ws().sentMessagesOfType("watch_chapter").at(-1)).toEqual({ type: "watch_chapter", chapterId: "second_chapter" });
+    expect(harness.ws().sentMessagesOfType("watch_question").at(-1)).toEqual({
+      type: "watch_question", chapterId: "second_chapter", questionId: "practice-1",
+    });
     expect(MockWebSocket.instances).toHaveLength(1);
   });
 
-  it("reports room connection errors", async () => {
+  it("reports only errors that close the room connection", async () => {
     const onRoomError = vi.fn();
     const harness = renderDraft({ onRoomError });
     await connectAndSnapshot(harness);
 
     act(() => {
+      harness.ws().simulateMessage(JSON.stringify({ type: "error", message: "Chapter not found." }));
+    });
+    expect(onRoomError).not.toHaveBeenCalled();
+
+    act(() => {
       harness.ws().simulateMessage(JSON.stringify({ type: "error", message: "Room not found." }));
+      harness.ws().simulateServerClose(1008);
     });
 
     expect(onRoomError).toHaveBeenCalledWith("Room not found.");
+    expect(MockWebSocket.instances).toHaveLength(1);
   });
 
   it("clears the draft: empties text and clears storage", async () => {
@@ -223,7 +243,7 @@ describe("useCollaborativeDraft", () => {
     await settle();
 
     expect(harness.api().answerInput).toBe("");
-    expect(await loadDraftUpdate("room1", "practice-1")).toBeNull();
+    expect(await loadDraftUpdate("room1", "first_chapter", "practice-1")).toBeNull();
   });
 
   it("appends text with a separating space", async () => {
@@ -260,6 +280,7 @@ describe("useCollaborativeDraft", () => {
     expect(harness.ws().url).toBe("ws://localhost/api/ws/rooms/room1");
     expect(harness.ws().sentMessagesOfType("watch_question").at(-1)).toEqual({
       type: "watch_question",
+      chapterId: "first_chapter",
       questionId: "practice-1",
     });
   });
@@ -270,14 +291,14 @@ describe("useCollaborativeDraft", () => {
 
     await act(async () => {
       harness.ws().simulateMessage(
-        JSON.stringify({ type: "checking", questionId: "practice-1", checking: true }),
+        JSON.stringify({ type: "checking", chapterId: "first_chapter", questionId: "practice-1", checking: true }),
       );
       await Promise.resolve();
     });
     expect(harness.api().isAnswerChecking).toBe(true);
 
     act(() => {
-      harness.ws().simulateMessage(JSON.stringify({ type: "checking", questionId: "practice-1", checking: false }));
+      harness.ws().simulateMessage(JSON.stringify({ type: "checking", chapterId: "first_chapter", questionId: "practice-1", checking: false }));
     });
     expect(harness.ws().sentMessagesOfType("checking")).toEqual([]);
     expect(harness.api().isAnswerChecking).toBe(false);

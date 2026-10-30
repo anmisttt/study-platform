@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/context";
+import { useCurrentRoom } from "../hooks/useCurrentRoom";
 import { signInPath } from "../auth/client";
 import QuestionCard from "./questionCard";
 import Timer from "./timer";
-import type { ChapterMeta, RoomDetails } from "@study-platform/shared";
+import type { ChapterMeta, RoomChapterAnswers } from "@study-platform/shared";
 import {
   createRoomApiPath,
   formatQuestionRef,
@@ -11,7 +12,7 @@ import {
 } from "@study-platform/shared";
 import type { ChapterSession, CheckResult, QuestionItem, ResponseEntry } from "./contest-types";
 import { flattenItems } from "../utils/questions";
-import { mergeRoomDetailsIntoSession } from "../utils/room";
+import { mergeRoomAnswersIntoSession } from "../utils/room";
 import { useCollaborativeDraft } from "../hooks/useCollaborativeDraft";
 import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
 
@@ -31,7 +32,7 @@ type ContestProps = {
 type CheckResponsePayload = CheckResult & {
   revision?: number;
   error?: string;
-  room?: RoomDetails;
+  answers?: RoomChapterAnswers;
 };
 
 type QuestionUiObservation = {
@@ -159,6 +160,7 @@ function Contest({
 }: ContestProps) {
   const [isChecking, setIsChecking] = useState<boolean>(false);
   const { profile, loading: accountLoading } = useAuth();
+  const { linkRoomId } = useCurrentRoom();
   const [roomInputState, setRoomInputState] = useState({
     roomId,
     value: roomId ?? "",
@@ -166,6 +168,8 @@ function Contest({
   const [isRoomActionPending, setIsRoomActionPending] = useState<boolean>(false);
   const [startError, setStartError] = useState<string>(initialError);
   const [timerEpoch, setTimerEpoch] = useState(0);
+  // Room-level, null until room_summary arrives; it isn't resent on chapter switches.
+  const [hasOwnerLlmKey, setHasOwnerLlmKey] = useState<boolean | null>(null);
   const isReadOnly = !roomId;
   const createRoomLabel = profile ? "Create a room" : "Sign in to create a room";
   const roomInput = roomInputState.roomId === roomId ? roomInputState.value : (roomId ?? "");
@@ -182,18 +186,14 @@ function Contest({
   const collaborativeDraft = useCollaborativeDraft({
     apiBase,
     roomId,
+    chapterId: chapterMeta?.id ?? null,
     questionId: questionRef ?? null,
     enabled: isPracticeMode && Boolean(roomId),
-    onRoomSnapshot: (room) => {
-      if (room.roomId !== roomId) {
-        return;
-      }
-      if (room.chapterId !== chapterMeta?.id) {
-        onRoomAccessError("Room is not for this chapter.");
-        return;
-      }
-
-      onSessionChange((session) => mergeRoomDetailsIntoSession(session, room));
+    onRoomSnapshot: (answers) => {
+      onSessionChange((session) => mergeRoomAnswersIntoSession(session, answers));
+    },
+    onRoomSummary: (summary) => {
+      setHasOwnerLlmKey(summary.hasOwnerLlmKey);
     },
     onRoomError: onRoomAccessError,
   });
@@ -219,7 +219,8 @@ function Contest({
     },
   });
   const answerInput = collaborativeDraft.answerInput;
-  const questionId = currentItem?.id ?? null;
+  // Question refs repeat across chapters, so per-question state is keyed by chapter too.
+  const questionId = currentItem && chapterMeta ? `${chapterMeta.id}:${currentItem.id}` : null;
   const questionUiObservation: QuestionUiObservation = {
     questionId,
     isDraftHydrated: collaborativeDraft.isDraftHydrated,
@@ -331,8 +332,6 @@ function Contest({
       const res = await fetch(`${apiBase}${createRoomApiPath()}`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chapterId: chapterMeta.id }),
       });
       const payload = (await res.json()) as { roomId?: string; error?: string };
       if (res.status === 401) window.dispatchEvent(new Event("session-expired"));
@@ -359,7 +358,7 @@ function Contest({
   }
 
   async function handleCheck(): Promise<void> {
-    if (!roomId || !currentItem || !answerInput.trim() || !chapterSession.hasOwnerLlmKey || isCheckInProgress) {
+    if (!roomId || !chapterMeta || !currentItem || !answerInput.trim() || !hasOwnerLlmKey || isCheckInProgress) {
       return;
     }
 
@@ -369,7 +368,7 @@ function Contest({
     const baseRevision = chapterSession.revisions[currentItem.id] ?? 0;
 
     try {
-      const endpoint = `${apiBase}${roomQuestionCheckApiPath(roomId, currentItem.id)}`;
+      const endpoint = `${apiBase}${roomQuestionCheckApiPath(roomId, chapterMeta.id, currentItem.id)}`;
       const res = await fetch(endpoint, {
         method: "POST",
         credentials: "include",
@@ -379,8 +378,8 @@ function Contest({
 
       const payload = (await res.json()) as CheckResponsePayload;
       if (res.status === 409) {
-        if (payload.room) {
-          onSessionChange((session) => mergeRoomDetailsIntoSession(session, payload.room!));
+        if (payload.answers?.chapterId === chapterMeta.id) {
+          onSessionChange((session) => mergeRoomAnswersIntoSession(session, payload.answers!));
         }
         throw new Error(payload.error ?? "Question was updated by someone else.");
       }
@@ -443,7 +442,7 @@ function Contest({
   // transcript cannot leak into a different question's draft.
   useEffect(() => {
     stopVoiceRecording();
-  }, [currentItem?.id, stopVoiceRecording]);
+  }, [questionId, stopVoiceRecording]);
 
   if (!chapterMeta) {
     return null;
@@ -461,7 +460,7 @@ function Contest({
         <button
           type="button"
           className="primary-button start-card-button start-card-browse"
-          onClick={() => openPractice()}
+          onClick={() => openPractice(linkRoomId)}
           disabled={isRoomActionPending}
         >
           Browse questions
@@ -552,16 +551,6 @@ function Contest({
         <div className="practice-header-center">
           <p className="practice-chapter-number">Chapter {chapterMeta.number}</p>
           <h1 className="practice-chapter-title">{chapterMeta.name}</h1>
-          <div className="room-id-inline">
-            {roomId ? (
-              <>
-                <span>Room ID:</span>
-                <code>{roomId}</code>
-              </>
-            ) : (
-              <span>No room</span>
-            )}
-          </div>
           {startError && <p className="error-inline" role="alert">{startError}</p>}
           <button type="button" className="reset-progress-button" onClick={handleResetProgress} disabled={isReadOnly}>
             <svg
@@ -602,14 +591,14 @@ function Contest({
           </div>
           <div className="timer-top-right">
             <Timer
-              key={`${currentItem.id}:${timerEpoch}`}
+              key={`${questionId}:${timerEpoch}`}
               initialSeconds={currentItem.type === "theory" ? 3 * 60 : 10 * 60}
               paused={!isEditingLocally || isCheckInProgress}
             />
           </div>
         </div>
 
-        {!isReadOnly && !chapterSession.hasOwnerLlmKey && (
+        {!isReadOnly && hasOwnerLlmKey === false && (
           <p className="room-key-notice">
             AI features need an OpenAI key from this room’s owner.{" "}
             <a href={`/profile?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`}>
@@ -618,7 +607,7 @@ function Contest({
           </p>
         )}
         <QuestionCard
-          llmEnabled={chapterSession.hasOwnerLlmKey}
+          llmEnabled={hasOwnerLlmKey === true}
           currentItem={currentItem}
           response={currentResponse}
           isEditingLocally={isEditingLocally}
@@ -629,7 +618,7 @@ function Contest({
           answer={questionAnswer}
           answerTextareaRef={roomId ? collaborativeDraft.textareaRef : undefined}
           onAnswerInputChange={collaborativeDraft.onAnswerInputChange}
-          onVoiceInput={() => { if (chapterSession.hasOwnerLlmKey) toggleVoiceRecording(); }}
+          onVoiceInput={() => { if (hasOwnerLlmKey) toggleVoiceRecording(); }}
           onCheck={handleCheck}
           onTryAgain={handleTryAgain}
           createRoom={isReadOnly ? {

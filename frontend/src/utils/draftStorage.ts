@@ -7,8 +7,9 @@ type DraftRecord = {
   update: Uint8Array;
 };
 
-function draftKey(roomId: string, questionId: string): string {
-  return `${roomId}:${questionId}`;
+// The same question ref exists in every chapter, so drafts are keyed by chapter too.
+function draftKey(roomId: string, chapterId: string, questionId: string): string {
+  return `${roomId}:${chapterId}:${questionId}`;
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -50,8 +51,8 @@ function readRecord(db: IDBDatabase, key: string): Promise<Uint8Array | null> {
   });
 }
 
-export async function loadDraftUpdate(roomId: string, questionId: string): Promise<Uint8Array | null> {
-  const key = draftKey(roomId, questionId);
+export async function loadDraftUpdate(roomId: string, chapterId: string, questionId: string): Promise<Uint8Array | null> {
+  const key = draftKey(roomId, chapterId, questionId);
   const db = await openDb();
 
   try {
@@ -66,8 +67,8 @@ export async function loadDraftUpdate(roomId: string, questionId: string): Promi
   return null;
 }
 
-export async function saveDraftUpdate(roomId: string, questionId: string, update: Uint8Array): Promise<void> {
-  const key = draftKey(roomId, questionId);
+export async function saveDraftUpdate(roomId: string, chapterId: string, questionId: string, update: Uint8Array): Promise<void> {
+  const key = draftKey(roomId, chapterId, questionId);
   const db = await openDb();
 
   try {
@@ -86,8 +87,8 @@ export async function saveDraftUpdate(roomId: string, questionId: string, update
   }
 }
 
-export async function clearDraftUpdate(roomId: string, questionId: string): Promise<void> {
-  await saveDraftUpdate(roomId, questionId, new Uint8Array());
+export async function clearDraftUpdate(roomId: string, chapterId: string, questionId: string): Promise<void> {
+  await saveDraftUpdate(roomId, chapterId, questionId, new Uint8Array());
 }
 
 export async function clearRoomDraftUpdates(roomId: string): Promise<void> {

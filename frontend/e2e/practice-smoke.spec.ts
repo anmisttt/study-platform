@@ -8,17 +8,14 @@ const chapterMeta = {
   practiceCount: 1,
 };
 
-const roomDetails = {
-  roomId: "ABC123",
-  hasOwnerLlmKey: true,
-  chapterId: chapterMeta.id,
+const chapter = {
+  id: chapterMeta.id,
   number: chapterMeta.number,
   name: chapterMeta.name,
   theory: [
     {
       question: "What is a process?",
       answer: "An instance of a running program.",
-      revision: 0,
     },
   ],
   practice: [
@@ -26,7 +23,6 @@ const roomDetails = {
       task: "Implement a counter",
       question: "Write a thread-safe counter.",
       answer: "Use an atomic integer.",
-      revision: 0,
     },
   ],
 };
@@ -40,7 +36,7 @@ async function fulfillJson(route: Route, body: unknown, status = 200): Promise<v
 }
 
 async function mockBackend(page: Page, { signedIn = true }: { signedIn?: boolean } = {}): Promise<void> {
-  await page.addInitScript((room) => {
+  await page.addInitScript(() => {
     class MockWebSocket {
       static CONNECTING = 0;
       static OPEN = 1;
@@ -64,8 +60,8 @@ async function mockBackend(page: Page, { signedIn = true }: { signedIn?: boolean
             this.onmessage?.(
               new MessageEvent("message", {
                 data: JSON.stringify({
-                  type: "room_snapshot",
-                  room: { ...room, roomId: this.roomId },
+                  type: "room_summary",
+                  summary: { roomId: this.roomId, hasOwnerLlmKey: true, chapters: [] },
                 }),
               }),
             );
@@ -76,14 +72,26 @@ async function mockBackend(page: Page, { signedIn = true }: { signedIn?: boolean
       send(data: string) {
         const message = JSON.parse(data) as {
           type?: string;
+          chapterId?: string;
           questionId?: string;
         };
+        if (message.type === "watch_chapter" && this.roomId) {
+          queueMicrotask(() => {
+            this.onmessage?.(new MessageEvent("message", {
+              data: JSON.stringify({
+                type: "room_snapshot",
+                answers: { roomId: this.roomId, chapterId: message.chapterId, theory: [], practice: [] },
+              }),
+            }));
+          });
+        }
         if (message.type === "watch_question" && this.roomId && message.questionId) {
           queueMicrotask(() => {
             this.onmessage?.(
               new MessageEvent("message", {
                 data: JSON.stringify({
                   type: "snapshot",
+                  chapterId: message.chapterId,
                   questionId: message.questionId,
                   update: "",
                 }),
@@ -104,7 +112,7 @@ async function mockBackend(page: Page, { signedIn = true }: { signedIn?: boolean
       writable: true,
       value: MockWebSocket,
     });
-  }, roomDetails);
+  });
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -126,7 +134,7 @@ async function mockBackend(page: Page, { signedIn = true }: { signedIn?: boolean
     }
 
     if (request.method() === "GET" && path === `/chapters/${chapterMeta.id}`) {
-      await fulfillJson(route, { ...roomDetails, roomId: null, hasOwnerLlmKey: false });
+      await fulfillJson(route, chapter);
       return;
     }
 
@@ -135,7 +143,7 @@ async function mockBackend(page: Page, { signedIn = true }: { signedIn?: boolean
       return;
     }
 
-    if (request.method() === "POST" && path === "/rooms/ABC123/questions/theory-1/check") {
+    if (request.method() === "POST" && path === `/rooms/ABC123/chapters/${chapterMeta.id}/questions/theory-1/check`) {
       await fulfillJson(route, {
         rating: 4,
         comment: "Solid answer.",
@@ -157,7 +165,7 @@ test("practice happy path: generate room, answer, check", async ({ page }) => {
 
   await page.getByRole("button", { name: "Create a room", exact: true }).click();
   await expect(page.getByText("Theory 1")).toBeVisible();
-  await expect(page.getByText("ABC123").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Room ABC123" })).toBeVisible();
 
   const answer = page.getByPlaceholder("Type your answer in any language...");
   await answer.fill("A process is a running program.");
@@ -175,7 +183,7 @@ test("signed-out visitors can read a roomless task link and are asked to sign in
 
   await page.goto("/chapters/1/questions/theory-1");
   await expect(page.getByText("What is a process?")).toBeVisible();
-  await expect(page.getByText("No room", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Room / })).toHaveCount(0);
   await expect(page.getByPlaceholder("Create a room to answer…")).toBeDisabled();
   await expect(page.getByRole("button", { name: "Check", exact: true })).toHaveAttribute("aria-disabled", "true");
 

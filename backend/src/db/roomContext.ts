@@ -1,50 +1,35 @@
-import type { Chapter, RoomDetails } from "@study-platform/shared";
+import type { RoomChapterAnswers, RoomSummary } from "@study-platform/shared";
 import { getChapterById } from "../chapters.js";
 import { NotFoundError, UserError } from "../errors.js";
-import { mergePracticeWithAnswers, mergeTheoryWithAnswers } from "./helpers.js";
+import { roomChapterSummaries } from "./progress.js";
 import type { RoomsDb } from "./roomsDb.js";
-import type { AnswerFieldsJson } from "./typings.js";
 
-function parseRoomAnswers(room: { theory_answers: string; practice_answers: string }): {
-  theoryAnswers: AnswerFieldsJson[];
-  practiceAnswers: AnswerFieldsJson[];
-} {
-  return {
-    theoryAnswers: JSON.parse(room.theory_answers) as AnswerFieldsJson[],
-    practiceAnswers: JSON.parse(room.practice_answers) as AnswerFieldsJson[],
-  };
-}
-
-export function chapterDetails(
-  chapter: Chapter,
-  room: { roomId: string; hasOwnerLlmKey: boolean; theory_answers: string; practice_answers: string } | null,
-): RoomDetails {
-  const { theoryAnswers, practiceAnswers } = room ? parseRoomAnswers(room) : { theoryAnswers: [], practiceAnswers: [] };
-  return {
-    roomId: room?.roomId ?? null,
-    hasOwnerLlmKey: room?.hasOwnerLlmKey ?? false,
-    chapterId: chapter.id,
-    number: chapter.number,
-    name: chapter.name,
-    theory: mergeTheoryWithAnswers(chapter.theory, theoryAnswers),
-    practice: mergePracticeWithAnswers(chapter.practice, practiceAnswers),
-  };
-}
-
-export function getRoomDetails(roomId: string | null, roomsDb: RoomsDb): RoomDetails {
+function requireRoom(roomId: string | null, roomsDb: RoomsDb): string {
   if (!roomId) {
     throw new UserError("Invalid room id.");
   }
 
-  const room = roomsDb.getRoom(roomId);
-  if (!room) {
+  if (!roomsDb.getRoom(roomId)) {
     throw new NotFoundError("Room not found.");
   }
 
-  const chapter = getChapterById(room.chapter_id);
-  if (!chapter) {
-    throw new NotFoundError("Chapter not found for room.");
+  return roomId;
+}
+
+export function getRoomSummary(roomId: string | null, roomsDb: RoomsDb): RoomSummary {
+  const id = requireRoom(roomId, roomsDb);
+  return {
+    roomId: id,
+    hasOwnerLlmKey: roomsDb.hasOwnerLlmKey(id),
+    chapters: roomChapterSummaries(roomsDb.listCheckedAnswers(id)),
+  };
+}
+
+export function getRoomChapterAnswers(roomId: string | null, chapterId: string, roomsDb: RoomsDb): RoomChapterAnswers {
+  const id = requireRoom(roomId, roomsDb);
+  if (!getChapterById(chapterId)) {
+    throw new NotFoundError("Chapter not found.");
   }
 
-  return chapterDetails(chapter, { ...room, roomId, hasOwnerLlmKey: roomsDb.hasOwnerLlmKey(roomId) });
+  return { roomId: id, chapterId, ...roomsDb.getChapterAnswers(id, chapterId) };
 }

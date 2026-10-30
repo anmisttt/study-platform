@@ -1,17 +1,17 @@
 import type { Response } from "express";
 import Database from "better-sqlite3";
-import type { RoomDetails } from "@study-platform/shared";
+import type { RoomChapterAnswers } from "@study-platform/shared";
 import { APIError, APIConnectionError, APIConnectionTimeoutError } from "openai";
 import { ConflictError, HttpError, isHttpError } from "../errors.js";
 
-export function respondWithError(res: Response, error: unknown, fallbackMessage = "Internal server error.", options?: { room?: RoomDetails }): void {
+export function respondWithError(res: Response, error: unknown, fallbackMessage = "Internal server error.", options?: { answers?: RoomChapterAnswers }): void {
   res.setHeader("Cache-Control", "no-store");
   if (error instanceof HttpError) {
     res.status(error.statusCode).json({ error: error.message, code: error.code });
   } else if (error instanceof Database.SqliteError && error.code.startsWith("SQLITE_BUSY")) {
     res.status(503).json({ error: "The database is busy. Please try again.", code: "DATABASE_BUSY" });
   } else if (error instanceof ConflictError) {
-    res.status(409).json({ error: error.message, code: "REVISION_CONFLICT", ...(options?.room ? { room: options.room } : {}) });
+    res.status(409).json({ error: error.message, code: "REVISION_CONFLICT", ...(options?.answers ? { answers: options.answers } : {}) });
   } else if (isHttpError(error)) {
     res.status(error.statusCode).json({ error: error.message, code: error.statusCode === 404 ? "NOT_FOUND" : "INVALID_REQUEST" });
   } else if (error instanceof APIConnectionTimeoutError || error instanceof APIConnectionError) {

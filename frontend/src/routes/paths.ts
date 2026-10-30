@@ -1,7 +1,7 @@
-import type { ChapterMeta } from "@study-platform/shared";
+import { formatQuestionRef, parseQuestionRef, type ChapterMeta } from "@study-platform/shared";
 
-export function chaptersPath(): string {
-  return "/chapters";
+export function chaptersPath(roomId?: string): string {
+  return roomId ? `/chapters?roomId=${encodeURIComponent(roomId)}` : "/chapters";
 }
 
 export function chapterOverviewPath(chapterNumber: number, roomId?: string): string {
@@ -12,6 +12,14 @@ export function chapterOverviewPath(chapterNumber: number, roomId?: string): str
 export function chapterQuestionPath(chapterNumber: number, questionRef: string, roomId?: string): string {
   const base = `/chapters/${chapterNumber}/questions/${questionRef}`;
   return roomId ? `${base}?roomId=${encodeURIComponent(roomId)}` : base;
+}
+
+/** Inside a room, clicking a chapter skips its overview and opens the first task. */
+export function chapterEntryPath(chapter: ChapterMeta, roomId?: string): string {
+  if (!roomId || chapter.theoryCount + chapter.practiceCount === 0) {
+    return chapterOverviewPath(chapter.number, roomId);
+  }
+  return chapterQuestionPath(chapter.number, formatQuestionRef(chapter.theoryCount > 0 ? "theory" : "practice", 0), roomId);
 }
 
 /** Path segment after `/chapters/` — chapter number (canonical) or legacy chapter id. */
@@ -59,4 +67,12 @@ export function canonicalChapterPath(pathname: string, chapter: ChapterMeta): st
 export function roomIdFromSearch(search: string): string | null {
   const value = new URLSearchParams(search).get("roomId");
   return value?.trim() ? value.trim() : null;
+}
+
+export function roomDestinationLabel(lastPath: string): string {
+  const match = /^\/chapters\/(\d+)\/(?:questions\/([^/?]+)|overview)/.exec(lastPath);
+  if (!match) return "Chapter list";
+  const question = match[2] ? parseQuestionRef(match[2]) : null;
+  if (!question) return `Chapter ${match[1]}`;
+  return `Chapter ${match[1]} · ${question.type === "practice" ? "Practice" : "Theory"} ${question.index + 1}`;
 }
