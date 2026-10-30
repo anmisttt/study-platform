@@ -1,6 +1,6 @@
 # Room participation architecture
 
-Architecture and implementation plan, updated September 24, 2026. The database, API, and profile changes are implemented in the workspace. The backend initializes the current schema on startup; development verification uses isolated test databases.
+Architecture and implementation plan, updated October 29, 2026. The database, API, and profile changes are implemented in the workspace. The backend initializes the current schema on startup; development verification uses isolated test databases.
 
 Tasks themselves are public and readable without a room; see [public tasks architecture](public-tasks-architecture.md).
 
@@ -16,7 +16,7 @@ Use one room list in the existing profile, with a role on each room and filters 
 
 - Title: **Your rooms**. Supporting text: “Rooms you create or open while signed in are saved here.”
 - Filters: **All**, **Author**, **Participant**, with counts. All is selected initially and shows every room connected to the user. Author shows rooms with `isAuthor === true`; Participant shows rooms with `isAuthor === false`, including legacy rooms with no recorded author. Opening a valid link while signed in registers participation automatically; no additional action is required. Authors have participant records in the database, but their rooms appear under Author rather than Participant in these role filters.
-- Each card shows chapter number/title, room ID, **Author** or **Participant**, shared progress, theory/practice counts, average score, and **Last opened**. Retain a separate **Progress updated** timestamp so another person's work is not mistaken for your own visit.
+- Each card shows the room ID, **Author** or **Participant**, the active chapter (the one with the room's most recently answered question) with its shared progress, theory/practice counts and average score, a room-wide total when the room spans several chapters, one chip per answered chapter in ascending order, and **Last opened**. An empty room shows “Empty room” and a hint. Retain a separate **Progress updated** timestamp so another person's work is not mistaken for your own visit.
 - Actions: **Continue** and **Copy link** for both roles; **Delete** only for authors. Continue uses the existing next-unchecked-question calculation. It is not a personal reading-position bookmark.
 - Sort by the current user's `last_opened_at`, newest first, then room ID as a stable tie-breaker. Creating a room initializes its author's entry with the room's creation time. Changes by other participants do not reorder your list.
 - An author reopening their own room updates recency without adding a duplicate card or putting the room in the Participant filter.
@@ -41,7 +41,7 @@ For this first version, participants have no removal action. A future “Remove 
 
 Use `room_participants` as the complete source of rooms listed in a user's profile. Each row represents one user's participation in one room, with the time they joined and the time they last opened it. Creating a room inserts its author's participant row immediately; opening someone else's room inserts that participant's row.
 
-The relationships are: one user can author many rooms; many users can be connected to many rooms through `room_participants`. Every owned room must have an author row. This makes the list query a single join between `room_participants` and `rooms`; there is no separate ownership branch or `UNION`. The join is still needed for chapter information and shared answers/progress stored on the room.
+The relationships are: one user can author many rooms; many users can be connected to many rooms through `room_participants`. Every owned room must have an author row. This makes the list query a single join between `room_participants` and `rooms`; there is no separate ownership branch or `UNION`. Rooms are not bound to a chapter: answers live in `answers`, one row per `(room_id, chapter_id, question_type, question_index)`, and a room's chapters are the distinct `chapter_id` values among its answers. Profile progress comes from one extra query over `answers` for the user's rooms.
 
 Keep `rooms.owner_user_id` as the single source of authorship for profile labels, deletion, and owner-funded AI features. The joined room already supplies this value, so the API derives `isAuthor` with `room.owner_user_id === session.user.id`. There is no stored author flag to synchronize. Inserting the author's participant row at creation makes the simpler list query possible.
 
@@ -106,8 +106,8 @@ Full room-creation SQL:
 ```sql
 BEGIN;
 
-INSERT INTO rooms (id, chapter_id, owner_user_id)
-VALUES (:room_id, :chapter_id, :user_id);
+INSERT INTO rooms (id, owner_user_id)
+VALUES (:room_id, :user_id);
 
 INSERT INTO room_participants (user_id, room_id, joined_at, last_opened_at)
 SELECT owner_user_id, id, created_at, created_at
@@ -117,7 +117,7 @@ WHERE id = :room_id;
 COMMIT;
 ```
 
-Bind `:room_id` to a server-generated ID, `:chapter_id` to the selected chapter, and `:user_id` to the authenticated session user. The room's other fields use their existing defaults. On any failure, stop executing the statements and roll back the transaction; return `{ roomId }` only after a successful commit. SQLite's default constraint handling aborts the failed statement but can leave the transaction active, so the backend must ensure rollback, for example through its transaction helper. See [SQLite conflict handling](https://www.sqlite.org/lang_conflict.html).
+Bind `:room_id` to a server-generated ID and `:user_id` to the authenticated session user. The room's other fields use their existing defaults. On any failure, stop executing the statements and roll back the transaction; return `{ roomId }` only after a successful commit. SQLite's default constraint handling aborts the failed statement but can leave the transaction active, so the backend must ensure rollback, for example through its transaction helper. See [SQLite conflict handling](https://www.sqlite.org/lang_conflict.html).
 
 Concurrent creation and room-ID collisions:
 
@@ -127,7 +127,7 @@ Concurrent creation and room-ID collisions:
 - Handle `SQLITE_BUSY` separately as transient write contention, returning HTTP 503 with `DATABASE_BUSY` after the connection's existing busy timeout; it does not establish an ID collision. Other constraint failures must not trigger the room-ID retry loop.
 - If retries are exhausted, return an error without leaving a newly created room or participant record from a failed attempt. The winning transaction's existing room and author remain intact.
 
-Participation registration links `userId` and `roomId`. Use the database directly to record that relationship. The endpoint performs no chapter lookup or chapter validation and does not call `getRoomDetails()`. The room-existence condition in the upsert and the foreign keys protect the relationship.
+Participation registration links `userId` and `roomId`. Use the database directly to record that relationship. The endpoint performs no chapter lookup or chapter validation and does not load room answers. The room-existence condition in the upsert and the foreign keys protect the relationship.
 
 In a short synchronous DB transaction, inspect whether a participant row exists and then upsert it; return `participationCreated` accurately even when two tabs open together. An author already has an entry from creation, so opening that room returns `participationCreated: false`. If the room has been deleted, return 404 without recreating anything. Use an immediate write transaction for this read-then-write operation so separate connections cannot race on the existence check; keep the transaction synchronous and short.
 

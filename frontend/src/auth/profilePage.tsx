@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import type { LlmKeyStatus, ProfileRoomSummary, UserProfile } from "@study-platform/shared";
+import { parseQuestionRef, type LlmKeyStatus, type ProfileRoomSummary, type UserProfile } from "@study-platform/shared";
 import { useAuth } from "./context";
 import { ApiRequestError, request, safeReturnTo, signInPath } from "./client";
-import { chapterOverviewPath, chapterQuestionPath } from "../routes/paths";
+import { chapterQuestionPath, chaptersPath } from "../routes/paths";
 import { clearRoomDraftUpdates } from "../utils/draftStorage";
 
 type RoomFilter = "All" | "Author" | "Participant";
@@ -28,6 +28,7 @@ function ProfileContent({ profile }: { profile: UserProfile }) {
   const [roomsLoaded, setRoomsLoaded] = useState(false);
   const [roomsError, setRoomsError] = useState("");
   const [filter, setFilter] = useState<RoomFilter>("All");
+  const [selectedChapters, setSelectedChapters] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState(false);
@@ -157,16 +158,37 @@ function ProfileContent({ profile }: { profile: UserProfile }) {
         </div> : <>
           <p className="room-list-order">Most recently opened first</p>
           <div className="profile-rooms">{visibleRooms.map(room => {
-            const path = room.continueQuestionRef ? chapterQuestionPath(room.chapterNumber, room.continueQuestionRef, room.roomId) : chapterOverviewPath(room.chapterNumber, room.roomId);
             const created = room.isAuthor && room.lastOpenedAt === room.createdAt;
+            const selectedId = selectedChapters[room.roomId] ?? room.activeChapterId;
+            const active = room.chapters.find(chapter => chapter.chapterId === selectedId)
+              ?? room.chapters.find(chapter => chapter.chapterId === room.activeChapterId);
+            const target = active ? { chapterNumber: active.number, questionRef: active.nextQuestionRef } : room.continue;
+            const path = target ? chapterQuestionPath(target.chapterNumber, target.questionRef, room.roomId) : chaptersPath(room.roomId);
             return <article className="profile-panel room-summary" key={room.roomId} aria-labelledby={`room-${room.roomId}-title`}>
               <div className="profile-heading">
-                <div><p className="account-eyebrow">Chapter {room.chapterNumber} · {room.roomId}</p><h3 id={`room-${room.roomId}-title`}>{room.chapterName}</h3></div>
+                <div><p className="account-eyebrow">Room · {room.roomId}</p><h3 id={`room-${room.roomId}-title`}>{active ? `Chapter ${active.number} · ${active.name}` : "Empty room"}</h3></div>
                 <span className={`room-role${room.isAuthor ? " room-role-author" : ""}`}>{room.isAuthor ? "Author" : "Participant"}</span>
               </div>
-              <div className="room-progress-label"><span>Shared progress</span><strong>{room.progress.checked}/{room.progress.total}</strong></div>
-              <progress value={room.progress.checked} max={room.progress.total || 1} aria-label={`Shared progress in room ${room.roomId}`} />
-              <p>Theory {room.progress.theory.checked}/{room.progress.theory.total} · Practice {room.progress.practice.checked}/{room.progress.practice.total} · Average {room.progress.averageScore === null ? "—" : `${room.progress.averageScore.toFixed(1)}/5`}</p>
+              {!active ? <p className="room-empty-hint">No answers yet. Chapters appear here as soon as someone in the room answers a question from any chapter.</p> : <>
+                <div className="room-progress-label"><span>Shared progress</span><strong>{active.progress.checked}/{active.progress.total}</strong></div>
+                <progress value={active.progress.checked} max={active.progress.total || 1} aria-label={`Shared progress in chapter ${active.number} of room ${room.roomId}`} />
+                <p>Theory {active.progress.theory.checked}/{active.progress.theory.total} · Practice {active.progress.practice.checked}/{active.progress.practice.total} · Average {formatAverage(active.progress.averageScore)}</p>
+                {room.chapters.length > 1 && <p className="room-total">All {room.chapters.length} chapters · {room.roomProgress.checked}/{room.roomProgress.total} · Average {formatAverage(room.roomProgress.averageScore)}</p>}
+                <ul className="room-chapters" aria-label={`Chapters in room ${room.roomId}`}>{room.chapters.map(chapter =>
+                  <li key={chapter.chapterId}>
+                    <button type="button" title={chapter.name}
+                      className={`room-chapter-chip${chapter.chapterId === active.chapterId ? " room-chapter-chip-active" : ""}`}
+                      aria-pressed={chapter.chapterId === active.chapterId}
+                      aria-label={`Chapter ${chapter.number}, ${chapter.name}: ${chapter.checked} of ${chapter.total}`}
+                      onClick={() => setSelectedChapters(selected => ({ ...selected, [room.roomId]: chapter.chapterId }))}>
+                      <span>Ch. {chapter.number}</span>
+                      <span className="room-chapter-count">{chapter.checked}/{chapter.total}</span>
+                      <span className="room-chapter-bar" aria-hidden="true"><span style={{ width: `${chapter.total ? (chapter.checked / chapter.total) * 100 : 0}%` }} /></span>
+                    </button>
+                  </li>)}
+                </ul>
+                {target && <p className="account-help">Continue picks up at {continueLabel(target)}</p>}
+              </>}
               <p className="account-help">{created ? "Created" : "Last opened"} <time dateTime={room.lastOpenedAt}>{new Date(room.lastOpenedAt).toLocaleString()}</time>
                 {" · "}Progress updated <time dateTime={room.updatedAt}>{new Date(room.updatedAt).toLocaleString()}</time></p>
               <div className="account-actions">
@@ -189,4 +211,14 @@ function ProfileContent({ profile }: { profile: UserProfile }) {
       </div>
     </dialog>
   </section>;
+}
+
+function formatAverage(score: number | null): string {
+  return score === null ? "—" : `${score.toFixed(1)}/5`;
+}
+
+function continueLabel({ chapterNumber, questionRef }: NonNullable<ProfileRoomSummary["continue"]>): string {
+  const question = parseQuestionRef(questionRef);
+  const kind = question?.type === "practice" ? "Practice" : "Theory";
+  return `Chapter ${chapterNumber} ${kind} ${(question?.index ?? 0) + 1}`;
 }

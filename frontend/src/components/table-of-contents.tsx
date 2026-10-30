@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { ChapterMeta } from "@study-platform/shared";
 import AccountNav from "../auth/accountNav";
-import { chapterOverviewPath, chaptersPath } from "../routes/paths";
+import { chapterEntryPath, chaptersPath } from "../routes/paths";
+import { useCurrentRoom } from "../hooks/useCurrentRoom";
+import { SIDEBAR_HEADER_QUERY, useMediaQuery } from "../hooks/useMediaQuery";
 
 type TableOfContentsProps = {
   chapters: ChapterMeta[];
@@ -10,6 +12,8 @@ type TableOfContentsProps = {
 };
 
 function TableOfContents({ chapters, activeChapterId }: TableOfContentsProps) {
+  const { linkRoomId } = useCurrentRoom();
+  const inSidebarHeader = useMediaQuery(SIDEBAR_HEADER_QUERY);
   const navigate = useNavigate();
   const location = useLocation();
   const isHome = location.pathname === chaptersPath();
@@ -26,7 +30,7 @@ function TableOfContents({ chapters, activeChapterId }: TableOfContentsProps) {
             className="sidebar-home-link sidebar-header-home"
             onClick={() => {
               setIsOpen(false);
-              navigate(chaptersPath());
+              navigate(chaptersPath(linkRoomId));
             }}
           >
             <svg
@@ -44,7 +48,7 @@ function TableOfContents({ chapters, activeChapterId }: TableOfContentsProps) {
             Home
           </button>
         )}
-        <AccountNav />
+        <AccountNav showRoom={inSidebarHeader} />
         <button
           type="button"
           className="sidebar-toggle"
@@ -79,7 +83,7 @@ function TableOfContents({ chapters, activeChapterId }: TableOfContentsProps) {
               type="button"
               className="sidebar-home-link sidebar-body-home"
               onClick={() => {
-                navigate(chaptersPath());
+                navigate(chaptersPath(linkRoomId));
               }}
             >
               <svg
@@ -106,7 +110,7 @@ function TableOfContents({ chapters, activeChapterId }: TableOfContentsProps) {
                 className={`chapter-button ${chapter.id === activeChapterId ? "active" : ""}`}
                 onClick={() => {
                   setIsOpen(false);
-                  navigate(chapterOverviewPath(chapter.number));
+                  navigate(chapterEntryPath(chapter, linkRoomId));
                 }}
               >
                 {chapter.number}. {chapter.name}

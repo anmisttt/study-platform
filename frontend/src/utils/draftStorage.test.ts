@@ -31,12 +31,19 @@ describe("draftStorage schema upgrades", () => {
     const collidingKey = "room1:practice-1";
     await seedVersionOneDraft(collidingKey, new Uint8Array([1, 2, 3]));
 
-    expect(await loadDraftUpdate("room1", "practice-1")).toBeNull();
+    expect(await loadDraftUpdate("room1", "chapter", "practice-1")).toBeNull();
 
     const newDraft = new Uint8Array([4, 5, 6]);
-    await saveDraftUpdate("room1", "practice-1", newDraft);
-    expect(Array.from((await loadDraftUpdate("room1", "practice-1")) ?? [])).toEqual(
+    await saveDraftUpdate("room1", "chapter", "practice-1", newDraft);
+    expect(Array.from((await loadDraftUpdate("room1", "chapter", "practice-1")) ?? [])).toEqual(
       Array.from(newDraft),
     );
+  });
+
+  it("keeps the same question in different chapters apart", async () => {
+    await saveDraftUpdate("room1", "chapter-a", "theory-1", new Uint8Array([1]));
+    await saveDraftUpdate("room1", "chapter-b", "theory-1", new Uint8Array([2]));
+    expect(Array.from((await loadDraftUpdate("room1", "chapter-a", "theory-1")) ?? [])).toEqual([1]);
+    expect(Array.from((await loadDraftUpdate("room1", "chapter-b", "theory-1")) ?? [])).toEqual([2]);
   });
 });

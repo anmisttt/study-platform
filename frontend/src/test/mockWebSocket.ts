@@ -50,9 +50,9 @@ export class MockWebSocket {
     this.onmessage?.({ data });
   }
 
-  simulateServerClose(): void {
+  simulateServerClose(code?: number): void {
     this.readyState = MockWebSocket.CLOSED;
-    this.onclose?.({ type: "close" });
+    this.onclose?.({ type: "close", code });
   }
 
   /** Parsed messages the hook sent to the server. */

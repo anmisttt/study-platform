@@ -2,12 +2,11 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { chapterMeta, roomDetails } from "./test/fixtures";
+import { chapter, chapterMeta, roomAnswers } from "./test/fixtures";
 import { chapterOverviewPath, chapterQuestionPath, chaptersPath } from "./routes/paths";
 
 let webSocketCount = 0;
 
-const publicChapterDetails = { ...roomDetails, roomId: null, hasOwnerLlmKey: false };
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -26,6 +25,7 @@ function renderApp(initialEntry: string) {
 
 describe("App routing", () => {
   beforeEach(() => {
+    localStorage.clear();
     webSocketCount = 0;
     vi.stubGlobal(
       "fetch",
@@ -33,7 +33,7 @@ describe("App routing", () => {
         const url = String(input);
         if (url.endsWith("/participants/me")) return Promise.resolve(jsonResponse({ participationCreated: false }));
         if (url.endsWith("/me")) return Promise.resolve(jsonResponse({ id: "owner", email: "test@example.com", llmKey: { configured: false, lastFour: null, updatedAt: null } }));
-        if (url.endsWith(`/chapters/${chapterMeta.id}`)) return Promise.resolve(jsonResponse(publicChapterDetails));
+        if (url.endsWith(`/chapters/${chapterMeta.id}`)) return Promise.resolve(jsonResponse(chapter));
         if (url.endsWith("/chapters") || url.includes("/chapters")) {
           return Promise.resolve(jsonResponse([chapterMeta]));
         }
@@ -67,6 +67,8 @@ describe("App routing", () => {
                 data: JSON.stringify({ type: "error", message: "Room not found." }),
               }),
             );
+            this.readyState = MockWebSocket.CLOSED;
+            this.onclose?.(new CloseEvent("close", { code: 1008 }));
             return;
           }
 
@@ -74,8 +76,8 @@ describe("App routing", () => {
             this.onmessage?.(
               new MessageEvent("message", {
                 data: JSON.stringify({
-                  type: "room_snapshot",
-                  room: { ...roomDetails, roomId: this.roomId },
+                  type: "room_summary",
+                  summary: { roomId: this.roomId, hasOwnerLlmKey: true, chapters: [] },
                 }),
               }),
             );
@@ -83,7 +85,14 @@ describe("App routing", () => {
         });
       }
       send(data: string) {
-        const message = JSON.parse(data) as { type?: string; questionId?: string };
+        const message = JSON.parse(data) as { type?: string; chapterId?: string; questionId?: string };
+        if (message.type === "watch_chapter" && this.roomId && this.roomId !== "MISSING") {
+          queueMicrotask(() => {
+            this.onmessage?.(new MessageEvent("message", {
+              data: JSON.stringify({ type: "room_snapshot", answers: { ...roomAnswers, roomId: this.roomId, chapterId: message.chapterId } }),
+            }));
+          });
+        }
         if (
           message.type === "watch_question" &&
           this.roomId &&
@@ -95,6 +104,7 @@ describe("App routing", () => {
               new MessageEvent("message", {
                 data: JSON.stringify({
                   type: "snapshot",
+                  chapterId: message.chapterId,
                   questionId: message.questionId,
                   update: "",
                 }),
@@ -134,14 +144,47 @@ describe("App routing", () => {
     expect(screen.getByRole("button", { name: "Join room" })).toBeTruthy();
   });
 
+  it("keeps the remembered room in links from the home chapter list and the / redirect", async () => {
+    localStorage.setItem("study-platform.currentRoom", JSON.stringify({ roomId: "OLD111", lastPath: "/chapters/1/overview?roomId=OLD111" }));
+    renderApp("/");
+
+    fireEvent.click(await screen.findByRole("button", { name: /1\. Introduction/ }));
+
+    expect(await screen.findByText("What is a process?")).toBeVisible();
+    expect(screen.getAllByRole("button", { name: "Room OLD111" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Join room" })).toBeNull();
+  });
+
+  it("puts the remembered room in sidebar links from a roomless chapter page", async () => {
+    localStorage.setItem("study-platform.currentRoom", JSON.stringify({ roomId: "OLD111", lastPath: "/chapters/1/overview?roomId=OLD111" }));
+    renderApp(chapterQuestionPath(chapterMeta.number, "theory-1"));
+    expect(await screen.findByText("What is a process?")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Create a room" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "1. Introduction" }));
+
+    expect(await screen.findByPlaceholderText("Type your answer in any language...")).toBeEnabled();
+    expect(screen.getAllByRole("button", { name: "Room OLD111" }).length).toBeGreaterThan(0);
+  });
+
+  it("prefers the room in the URL over the remembered room in built links", async () => {
+    localStorage.setItem("study-platform.currentRoom", JSON.stringify({ roomId: "OLD111", lastPath: "/chapters/1/overview?roomId=OLD111" }));
+    renderApp(chaptersPath("NEW222"));
+
+    fireEvent.click(await screen.findByRole("button", { name: /1\. Introduction/ }));
+
+    expect(await screen.findByPlaceholderText("Type your answer in any language...")).toBeEnabled();
+    expect(screen.getAllByRole("button", { name: "Room NEW222" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Room OLD111" })).toBeNull();
+  });
+
   it("keeps roomId on question deep links and renders the practice shell", async () => {
     renderApp(chapterQuestionPath(chapterMeta.number, "theory-1", "ABC123"));
 
     expect(await screen.findByText("Theory 1")).toBeTruthy();
     expect(screen.getByText("What is a process?")).toBeTruthy();
 
-    expect(screen.getByText("Room ID:")).toBeTruthy();
-    expect(screen.getByText("ABC123")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Room ABC123" })).toHaveLength(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Next question" }));
     expect(await screen.findByText("Practice 1")).toBeTruthy();
@@ -175,7 +218,9 @@ describe("App routing", () => {
     }
     fireEvent.focus(window);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(vi.mocked(fetch).mock.calls.map(([url]) => String(url)).sort()).toEqual(["/api/chapters", "/api/me"]);
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => String(url)).sort()).toEqual(
+      entry === "overview" ? ["/api/chapters", "/api/me"] : ["/api/chapters", `/api/chapters/${chapterMeta.id}`, "/api/me"],
+    );
   });
 
   it("renders roomless question links read-only without redirecting", async () => {
@@ -193,6 +238,38 @@ describe("App routing", () => {
     expect(webSocketCount).toBe(0);
     expect(fetch).toHaveBeenCalledWith(`/api/chapters/${chapterMeta.id}`, expect.anything());
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/participants/me"))).toBe(false);
+  });
+
+  it("switches chapters inside a room over the same room connection", async () => {
+    const second = { id: "second_chapter", number: 2, name: "Storage", theoryCount: 1, practiceCount: 0 };
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((input, init) => {
+      const url = String(input);
+      if (url.endsWith("/chapters")) return Promise.resolve(jsonResponse([chapterMeta, second]));
+      if (url.endsWith(`/chapters/${second.id}`)) {
+        return Promise.resolve(jsonResponse({ ...second, theory: [{ question: "What is a B-tree?", answer: "A balanced tree." }], practice: [] }));
+      }
+      return defaultFetch(input, init);
+    });
+    renderApp(chapterQuestionPath(chapterMeta.number, "theory-1", "ABC123"));
+    expect(await screen.findByText("What is a process?")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "2. Storage" }));
+
+    expect(await screen.findByText("What is a B-tree?")).toBeVisible();
+    expect(screen.getByPlaceholderText("Type your answer in any language...")).toBeEnabled();
+    expect(screen.queryByText(/AI features need an OpenAI key/)).toBeNull();
+    expect(webSocketCount).toBe(1);
+  });
+
+  it("keeps the remembered room when browsing from a roomless overview", async () => {
+    localStorage.setItem("study-platform.currentRoom", JSON.stringify({ roomId: "OLD111", lastPath: "/chapters/1/overview?roomId=OLD111" }));
+    renderApp(chapterOverviewPath(chapterMeta.number));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Browse questions" }));
+
+    expect(await screen.findByPlaceholderText("Type your answer in any language...")).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Create a room" })).toBeNull();
   });
 
   it("opens the first question roomless from Browse questions", async () => {
@@ -220,9 +297,8 @@ describe("App routing", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Create a room" }));
 
-    expect(await screen.findByText("Room ID:")).toBeTruthy();
+    expect((await screen.findAllByRole("button", { name: "Room ABC123" })).length).toBeGreaterThan(0);
     expect(screen.getByText("Practice 1")).toBeTruthy();
-    expect(screen.getByText("ABC123")).toBeTruthy();
     expect(await screen.findByPlaceholderText("Type your answer in any language...")).toBeEnabled();
   });
 
@@ -239,6 +315,7 @@ describe("App routing", () => {
       const url = String(input);
       if (url.endsWith("/participants/me")) return Promise.resolve(jsonResponse({ participationCreated: false }));
         if (url.endsWith("/me")) return Promise.resolve(jsonResponse({ id: "owner", email: "test@example.com", llmKey: { configured: false, lastFour: null, updatedAt: null } }));
+      if (url.endsWith(`/chapters/${chapterMeta.id}`)) return Promise.resolve(jsonResponse(chapter));
       if (url.includes("/chapters") && !url.includes("/rooms")) {
         return Promise.resolve(jsonResponse([chapterMeta]));
       }

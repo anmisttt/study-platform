@@ -5,15 +5,16 @@ import * as Y from "yjs";
 import {
   roomWebSocketPath,
   roomsWebSocketBasePath,
-  type RoomDetails,
 } from "@study-platform/shared";
 import { RoomsWebSocketServer } from "../roomsWebSocketServer.js";
 import { encodeUpdateBase64 } from "./wireCodec.js";
 
 export type ParsedMessage = Record<string, unknown>;
 
+export const TEST_CHAPTER = "chapter-1";
+
 export async function startRoomsWebSocketServer(
-  loadRoom?: (roomId: string) => RoomDetails,
+  loaders?: ConstructorParameters<typeof RoomsWebSocketServer>[0],
   allowedOrigins?: string[],
 ): Promise<{
   server: Server;
@@ -21,7 +22,7 @@ export async function startRoomsWebSocketServer(
   port: number;
   close: () => Promise<void>;
 }> {
-  const webSocketServer = new RoomsWebSocketServer(loadRoom, allowedOrigins);
+  const webSocketServer = new RoomsWebSocketServer(loaders, allowedOrigins);
   const server = createServer();
   webSocketServer.attach(server, roomsWebSocketBasePath());
 
@@ -85,16 +86,20 @@ export class TestClient {
     this.ws.send(JSON.stringify(message));
   }
 
-  watchQuestion(questionId: string): void {
-    this.send({ type: "watch_question", questionId });
+  watchChapter(chapterId = TEST_CHAPTER): void {
+    this.send({ type: "watch_chapter", chapterId });
   }
 
-  sendUpdate(questionId: string, update: string): void {
-    this.send({ type: "update", questionId, update });
+  watchQuestion(questionId: string, chapterId = TEST_CHAPTER): void {
+    this.send({ type: "watch_question", chapterId, questionId });
+  }
+
+  sendUpdate(questionId: string, update: string, chapterId = TEST_CHAPTER): void {
+    this.send({ type: "update", chapterId, questionId, update });
   }
 
   sendChecking(questionId: string, checking: boolean): void {
-    this.send({ type: "checking", questionId, checking });
+    this.send({ type: "checking", chapterId: TEST_CHAPTER, questionId, checking });
   }
 
   async waitFor(

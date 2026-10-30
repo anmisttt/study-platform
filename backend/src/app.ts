@@ -6,8 +6,9 @@ import { chapters, getChapterById } from "./chapters.js";
 import { createAuth, type SendEmail } from "./auth.js";
 import type { AppConfig } from "./config.js";
 import { RoomsWebSocketServer } from "./roomsWebSocketServer.js";
-import { chapterDetails, getRoomDetails } from "./db/roomContext.js";
+import { getRoomChapterAnswers, getRoomSummary } from "./db/roomContext.js";
 import { RoomsDb } from "./db/roomsDb.js";
+import type { CheckedAnswerRow } from "./db/typings.js";
 import { Accounts } from "./db/accounts.js";
 import { profileRoomSummary } from "./db/progress.js";
 import { ConflictError, HttpError, NotFoundError } from "./errors.js";
@@ -38,7 +39,14 @@ export function createApplication({ roomsDb, config, sendEmail, llm = defaultLlm
   const app = express();
   const auth = createAuth(roomsDb.connection, config, sendEmail);
   const accounts = new Accounts(roomsDb.connection, config.encryptionSecret);
-  const realtime = new RoomsWebSocketServer(id => getRoomDetails(id, roomsDb), config.trustedOrigins);
+  const realtime = new RoomsWebSocketServer({
+    loadSummary: id => getRoomSummary(id, roomsDb),
+    loadChapterAnswers: (id, chapterId) => getRoomChapterAnswers(id, chapterId, roomsDb),
+    hasQuestion: (chapterId, questionId) => {
+      const chapter = getChapterById(chapterId);
+      return Boolean(chapter && resolveChapterQuestion(chapter, questionId));
+    },
+  }, config.trustedOrigins);
   const inFlight = new Set<string>();
   app.set("trust proxy", "loopback");
   app.disable("x-powered-by");
@@ -66,7 +74,7 @@ export function createApplication({ roomsDb, config, sendEmail, llm = defaultLlm
     return { ownerId: room.owner_user_id, apiKey: accounts.decryptKey(room.owner_user_id) };
   }
   function broadcastOwnedRooms(userId: string) {
-    for (const room of roomsDb.listOwnedRooms(userId)) realtime.broadcastRoomSnapshot(getRoomDetails(room.id, roomsDb));
+    for (const room of roomsDb.listOwnedRooms(userId)) realtime.broadcastRoomSummary(getRoomSummary(room.id, roomsDb));
   }
   app.get("/health", (_req, res) => { res.json({ status: "ok" }); });
   app.get("/auth-options", (_req, res) => { res.json({ google: Boolean(config.google), github: Boolean(config.github), email: Boolean(config.smtp || sendEmail) }); });
@@ -75,9 +83,9 @@ export function createApplication({ roomsDb, config, sendEmail, llm = defaultLlm
   });
   app.get("/chapters/:chapterId", (req, res) => {
     const { chapter } = resolveChapter(readParam(req.params.chapterId));
-    // Chapter content only changes on deploy.
-    res.setHeader("Cache-Control", "public, max-age=300");
-    res.json(chapterDetails(chapter, null));
+    // Revalidated on every load (a cheap 304 via ETag) so content updates show on reload.
+    res.setHeader("Cache-Control", "no-cache");
+    res.json(chapter);
   });
   app.get("/me", async (req, res) => {
     const current = await session(req);
@@ -97,12 +105,17 @@ export function createApplication({ roomsDb, config, sendEmail, llm = defaultLlm
   });
   app.get("/me/rooms", async (req, res) => {
     const user = await requireUser(req);
-    res.json(roomsDb.listParticipatedRooms(user.id).map(room => profileRoomSummary(room, user.id)).filter(row => row !== null));
+    const answers = new Map<string, CheckedAnswerRow[]>();
+    for (const answer of roomsDb.listParticipatedCheckedAnswers(user.id)) {
+      const roomAnswers = answers.get(answer.room_id);
+      if (roomAnswers) roomAnswers.push(answer);
+      else answers.set(answer.room_id, [answer]);
+    }
+    res.json(roomsDb.listParticipatedRooms(user.id).map(room => profileRoomSummary(room, answers.get(room.id) ?? [], user.id)));
   });
   app.post("/rooms", async (req, res) => {
     const user = await requireUser(req);
-    const { chapter } = resolveChapter(readParam(req.body?.chapterId));
-    const roomId = roomsDb.createRoom({ chapterId: chapter.id, ownerUserId: user.id });
+    const roomId = roomsDb.createRoom({ ownerUserId: user.id });
     res.json({ roomId });
   });
   app.post("/rooms/:roomId/participants/me", async (req, res) => {
@@ -116,27 +129,28 @@ export function createApplication({ roomsDb, config, sendEmail, llm = defaultLlm
     realtime.removeRoom(roomId);
     res.status(204).end();
   });
-  app.post("/rooms/:roomId/questions/:questionId/check", async (req, res) => {
+  app.post("/rooms/:roomId/chapters/:chapterId/questions/:questionId/check", async (req, res) => {
     const roomId = readParam(req.params.roomId) ?? "";
+    const chapterId = readParam(req.params.chapterId) ?? "";
     let questionId = readParam(req.params.questionId) ?? "";
     let key = "";
     let acquired = false;
     try {
       const answer = ensureAnswer(req.body?.answer);
       const baseRevision = ensureBaseRevision(req.body?.baseRevision);
-      const room = getRoomDetails(roomId, roomsDb);
-      const chapter = getChapterById(room.chapterId);
+      if (!roomsDb.getRoom(roomId)) throw new NotFoundError("Room not found.");
+      const chapter = getChapterById(chapterId);
       const resolved = chapter && resolveChapterQuestion(chapter, questionId);
       if (!resolved || !chapter) throw new NotFoundError("Question not found.");
       questionId = formatQuestionRef(resolved.type, resolved.index);
-      key = `${roomId}:${questionId}`;
+      key = `${roomId}:${chapterId}:${questionId}`;
       const actor = await session(req);
       const { ownerId, apiKey } = ownerKey(roomId);
-      roomsDb.assertAnswerRevision(roomId, resolved.type, resolved.index, baseRevision);
+      roomsDb.assertAnswerRevision(roomId, chapter.id, resolved.type, resolved.index, baseRevision);
       if (inFlight.has(key)) throw new HttpError(409, "ALREADY_CHECKING", "This question is already being checked.");
       inFlight.add(key);
       acquired = true;
-      realtime.setChecking(roomId, questionId, true);
+      realtime.setChecking(roomId, chapterId, questionId, true);
       const result = await llm.grade(apiKey, resolved.type, tutorEvaluationRequestForItem(answer, resolved.item), {
         userId: ownerId, sessionId: roomId,
         metadata: {
@@ -146,15 +160,16 @@ export function createApplication({ roomsDb, config, sendEmail, llm = defaultLlm
         },
       });
       if (!Number.isFinite(result.rating) || result.rating < 1 || result.rating > 5 || typeof result.comment !== "string") throw new HttpError(502, "LLM_INVALID_RESULT", "OpenAI returned an invalid grade. Please try again.");
-      const revision = roomsDb.updateAnswer({ roomId, type: resolved.type, questionIndex: resolved.index, user_answer: answer, rating: result.rating, comment: result.comment, baseRevision });
-      realtime.broadcastRoomSnapshot(getRoomDetails(roomId, roomsDb));
+      const revision = roomsDb.updateAnswer({ roomId, chapterId: chapter.id, type: resolved.type, questionIndex: resolved.index, user_answer: answer, rating: result.rating, comment: result.comment, baseRevision });
+      realtime.broadcastChapterAnswers(getRoomChapterAnswers(roomId, chapterId, roomsDb));
+      realtime.broadcastRoomSummary(getRoomSummary(roomId, roomsDb));
       res.json({ ...result, revision });
     } catch (error) {
       respondWithError(res, error, "Failed to evaluate answer.", {
-        room: error instanceof ConflictError && roomsDb.getRoom(roomId) ? getRoomDetails(roomId, roomsDb) : undefined,
+        answers: error instanceof ConflictError && roomsDb.getRoom(roomId) ? getRoomChapterAnswers(roomId, chapterId, roomsDb) : undefined,
       });
     } finally {
-      if (acquired) { inFlight.delete(key); realtime.setChecking(roomId, questionId, false); }
+      if (acquired) { inFlight.delete(key); realtime.setChecking(roomId, chapterId, questionId, false); }
     }
   });
   app.post(realtimeTranscriptionTokenPath(), async (req, res) => {

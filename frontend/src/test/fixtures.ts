@@ -1,7 +1,7 @@
-import type { ChapterMeta, RoomDetails } from "@study-platform/shared";
+import type { Chapter, ChapterMeta, RoomChapterAnswers } from "@study-platform/shared";
 import type { ChapterSession, PracticeQuestionItem, TheoryQuestionItem } from "../components/contest-types";
 import { createInitialChapterSession } from "../components/contest-types";
-import { mergeRoomDetailsIntoSession } from "../utils/room";
+import { mergeRoomAnswersIntoSession } from "../utils/room";
 
 export const API_BASE = "http://localhost/api";
 
@@ -13,17 +13,14 @@ export const chapterMeta: ChapterMeta = {
   practiceCount: 1,
 };
 
-export const roomDetails: RoomDetails = {
-  roomId: "ABC123",
-  hasOwnerLlmKey: true,
-  chapterId: chapterMeta.id,
+export const chapter: Chapter = {
+  id: chapterMeta.id,
   number: chapterMeta.number,
   name: chapterMeta.name,
   theory: [
     {
       question: "What is a process?",
       answer: "An instance of a running program.",
-      revision: 0,
     },
   ],
   practice: [
@@ -31,9 +28,15 @@ export const roomDetails: RoomDetails = {
       task: "Implement a counter",
       question: "Write a thread-safe counter.",
       answer: "Use an atomic integer.",
-      revision: 0,
     },
   ],
+};
+
+export const roomAnswers: RoomChapterAnswers = {
+  roomId: "ABC123",
+  chapterId: chapterMeta.id,
+  theory: [],
+  practice: [],
 };
 
 export const theoryItem: TheoryQuestionItem = {
@@ -54,42 +57,24 @@ export const practiceItem: PracticeQuestionItem = {
   details: "Write a thread-safe counter.",
 };
 
-export function sessionWithRoom(details: RoomDetails = roomDetails): ChapterSession {
-  return {
-    ...createInitialChapterSession(),
-    ...mergeRoomDetailsIntoSession(createInitialChapterSession(), details),
-  };
+export function sessionWithRoom(answers: RoomChapterAnswers = roomAnswers): ChapterSession {
+  return mergeRoomAnswersIntoSession({ ...createInitialChapterSession(), details: chapter }, answers);
 }
 
-export function roomDetailsWithAnswer(
-  overrides: {
-    theoryAnswer?: { answer: string; rating: number; comment: string; revision?: number };
-    practiceAnswer?: { answer: string; rating: number; comment: string; revision?: number };
-  } = {},
-): RoomDetails {
+type AnswerOverride = { answer: string; rating: number; comment: string; revision?: number };
+
+export function roomAnswersWith(
+  overrides: { theoryAnswer?: AnswerOverride; practiceAnswer?: AnswerOverride } = {},
+): RoomChapterAnswers {
+  const fields = (override: AnswerOverride) => ({
+    user_answer: override.answer,
+    rating: override.rating,
+    comment: override.comment,
+    revision: override.revision ?? 1,
+  });
   return {
-    ...roomDetails,
-    theory: roomDetails.theory.map((item, index) =>
-      index === 0 && overrides.theoryAnswer
-        ? {
-            ...item,
-            user_answer: overrides.theoryAnswer.answer,
-            rating: overrides.theoryAnswer.rating,
-            comment: overrides.theoryAnswer.comment,
-            revision: overrides.theoryAnswer.revision ?? 1,
-          }
-        : item,
-    ),
-    practice: roomDetails.practice.map((item, index) =>
-      index === 0 && overrides.practiceAnswer
-        ? {
-            ...item,
-            user_answer: overrides.practiceAnswer.answer,
-            rating: overrides.practiceAnswer.rating,
-            comment: overrides.practiceAnswer.comment,
-            revision: overrides.practiceAnswer.revision ?? 1,
-          }
-        : item,
-    ),
+    ...roomAnswers,
+    theory: overrides.theoryAnswer ? [fields(overrides.theoryAnswer)] : [],
+    practice: overrides.practiceAnswer ? [fields(overrides.practiceAnswer)] : [],
   };
 }

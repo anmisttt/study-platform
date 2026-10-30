@@ -8,7 +8,8 @@ import {
   type DraftClientMessage,
   type DraftServerMessage,
   type DraftUpdateMessage,
-  type RoomDetails,
+  type RoomChapterAnswers,
+  type RoomSummary,
 } from "@study-platform/shared";
 import { decodeUpdateBase64, encodeUpdateBase64 } from "./wsHelpers/wireCodec.js";
 
@@ -16,8 +17,8 @@ const EMPTY_SNAPSHOT = encodeUpdateBase64(new Uint8Array());
 
 type DraftKey = string;
 
-function draftKey(roomId: string, questionId: string): DraftKey {
-  return `${roomId}:${questionId}`;
+function draftKey(roomId: string, chapterId: string, questionId: string): DraftKey {
+  return `${roomId}:${chapterId}:${questionId}`;
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -46,34 +47,27 @@ export function parseClientMessage(raw: string): DraftClientMessage | null {
     }
 
     const message = parsed as Record<string, unknown>;
+    if (!isNonEmptyString(message.chapterId)) {
+      return null;
+    }
+    const chapterId = message.chapterId.trim();
+
+    if (message.type === "watch_chapter") {
+      return { type: "watch_chapter", chapterId };
+    }
+
+    const questionId = canonicalQuestionRef(message.questionId);
+    if (!questionId) {
+      return null;
+    }
+
     if (message.type === "watch_question") {
-      const questionId = canonicalQuestionRef(message.questionId);
-      if (!questionId) {
-        return null;
-      }
-
-      return {
-        type: "watch_question",
-        questionId,
-      };
+      return { type: "watch_question", chapterId, questionId };
     }
 
-    if (message.type === "update") {
-      const questionId = canonicalQuestionRef(message.questionId);
-      if (
-        !questionId ||
-        typeof message.update !== "string"
-      ) {
-        return null;
-      }
-
-      return {
-        type: "update",
-        questionId,
-        update: message.update,
-      };
+    if (message.type === "update" && typeof message.update === "string") {
+      return { type: "update", chapterId, questionId, update: message.update };
     }
-
 
     return null;
   } catch {
@@ -128,20 +122,28 @@ export class RoomsWebSocketServer {
   private readonly questionSubscribers = new Map<DraftKey, Set<WebSocket>>();
   private readonly roomSubscribers = new Map<string, Set<WebSocket>>();
   private readonly socketQuestions = new WeakMap<WebSocket, DraftKey>();
+  private readonly socketChapters = new WeakMap<WebSocket, string>();
 
   constructor(
-    private readonly loadRoom?: (roomId: string) => RoomDetails,
+    private readonly loaders?: {
+      loadSummary: (roomId: string) => RoomSummary;
+      loadChapterAnswers: (roomId: string, chapterId: string) => RoomChapterAnswers;
+      hasQuestion: (chapterId: string, questionId: string) => boolean;
+    },
     private readonly allowedOrigins?: string[],
   ) {}
 
-  broadcastRoomSnapshot(room: RoomDetails): void {
-    const subscribers = room.roomId ? this.roomSubscribers.get(room.roomId) : undefined;
-    if (!subscribers) {
-      return;
+  broadcastChapterAnswers(answers: RoomChapterAnswers): void {
+    for (const ws of this.roomSubscribers.get(answers.roomId) ?? []) {
+      if (this.socketChapters.get(ws) === answers.chapterId) {
+        sendMessage(ws, { type: "room_snapshot", answers });
+      }
     }
+  }
 
-    for (const ws of subscribers) {
-      sendMessage(ws, { type: "room_snapshot", room });
+  broadcastRoomSummary(summary: RoomSummary): void {
+    for (const ws of this.roomSubscribers.get(summary.roomId) ?? []) {
+      sendMessage(ws, { type: "room_summary", summary });
     }
   }
 
@@ -166,10 +168,10 @@ export class RoomsWebSocketServer {
         return;
       }
 
-      let roomSnapshot: RoomDetails | undefined;
-      if (this.loadRoom) {
+      let roomSummary: RoomSummary | undefined;
+      if (this.loaders) {
         try {
-          roomSnapshot = this.loadRoom(roomId);
+          roomSummary = this.loaders.loadSummary(roomId);
         } catch (error: unknown) {
           sendMessage(ws, {
             type: "error",
@@ -201,8 +203,13 @@ export class RoomsWebSocketServer {
           return;
         }
 
+        if (message.type === "watch_chapter") {
+          this.watchChapter(ws, roomId, message.chapterId);
+          return;
+        }
+
         if (message.type === "watch_question") {
-          this.watchQuestion(ws, roomId, message.questionId);
+          this.watchQuestion(ws, roomId, message.chapterId, message.questionId);
           return;
         }
 
@@ -214,8 +221,8 @@ export class RoomsWebSocketServer {
         this.unsubscribeFromRoom(ws, roomId);
       });
 
-      if (roomSnapshot) {
-        sendMessage(ws, { type: "room_snapshot", room: roomSnapshot });
+      if (roomSummary) {
+        sendMessage(ws, { type: "room_summary", summary: roomSummary });
       }
     });
 
@@ -233,8 +240,33 @@ export class RoomsWebSocketServer {
     return doc;
   }
 
-  private watchQuestion(ws: WebSocket, roomId: string, questionId: string): void {
-    const key = draftKey(roomId, questionId);
+  private watchChapter(ws: WebSocket, roomId: string, chapterId: string): void {
+    if (!this.loaders) {
+      this.socketChapters.set(ws, chapterId);
+      return;
+    }
+
+    try {
+      const answers = this.loaders.loadChapterAnswers(roomId, chapterId);
+      // Drafts are allowed only in chapters that exist, so clients can't create unbounded docs.
+      this.socketChapters.set(ws, chapterId);
+      sendMessage(ws, { type: "room_snapshot", answers });
+    } catch (error: unknown) {
+      sendMessage(ws, { type: "error", message: error instanceof Error ? error.message : "Failed to load the chapter." });
+    }
+  }
+
+  private watchQuestion(ws: WebSocket, roomId: string, chapterId: string, questionId: string): void {
+    if (this.loaders && this.socketChapters.get(ws) !== chapterId) {
+      sendMessage(ws, { type: "error", message: "Watch the chapter before its questions." });
+      return;
+    }
+    if (this.loaders && !this.loaders.hasQuestion(chapterId, questionId)) {
+      sendMessage(ws, { type: "error", message: "Question not found." });
+      return;
+    }
+
+    const key = draftKey(roomId, chapterId, questionId);
     // Only tear down the previous subscription when switching to a *different*
     // question. Watching the same question again (e.g. after reconnect setup)
     // must not remove this socket and discard the shared doc as the last leaver.
@@ -255,23 +287,25 @@ export class RoomsWebSocketServer {
     const snapshot = Y.encodeStateAsUpdate(doc);
     sendMessage(ws, {
       type: "snapshot",
+      chapterId,
       questionId,
       update: snapshot.length > 0 ? encodeUpdateBase64(snapshot) : EMPTY_SNAPSHOT,
     });
 
     sendMessage(ws, {
       type: "checking",
+      chapterId,
       questionId,
       checking: this.checkingByKey.get(key) === true,
     });
   }
 
-  setChecking(roomId: string, questionId: string, checking: boolean): void {
-    const key = draftKey(roomId, questionId);
+  setChecking(roomId: string, chapterId: string, questionId: string, checking: boolean): void {
+    const key = draftKey(roomId, chapterId, questionId);
     if (checking) this.checkingByKey.set(key, true);
     else this.checkingByKey.delete(key);
     for (const ws of this.questionSubscribers.get(key) ?? []) {
-      sendMessage(ws, { type: "checking", questionId, checking });
+      sendMessage(ws, { type: "checking", chapterId, questionId, checking });
     }
   }
 
@@ -288,7 +322,7 @@ export class RoomsWebSocketServer {
   }
 
   private handleUpdate(ws: WebSocket, roomId: string, message: DraftUpdateMessage): void {
-    const key = draftKey(roomId, message.questionId);
+    const key = draftKey(roomId, message.chapterId, message.questionId);
     if (this.socketQuestions.get(ws) !== key) {
       sendMessage(ws, { type: "error", message: "Watch the question before sending updates." });
       return;
@@ -314,6 +348,7 @@ export class RoomsWebSocketServer {
 
       sendMessage(peer, {
         type: "update",
+        chapterId: message.chapterId,
         questionId: message.questionId,
         update: message.update,
       });

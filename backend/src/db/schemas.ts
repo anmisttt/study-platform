@@ -32,12 +32,22 @@ CREATE TABLE IF NOT EXISTS rooms (
   id TEXT PRIMARY KEY,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  chapter_id TEXT NOT NULL,
-  theory_answers TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(theory_answers)),
-  practice_answers TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(practice_answers)),
   owner_user_id TEXT REFERENCES "user"(id) ON DELETE RESTRICT
 );
 CREATE INDEX IF NOT EXISTS rooms_owner_updated_idx ON rooms(owner_user_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS answers (
+  room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  chapter_id TEXT NOT NULL,
+  question_type TEXT NOT NULL CHECK (question_type IN ('theory', 'practice')),
+  question_index INTEGER NOT NULL CHECK (question_index >= 0),
+  user_answer TEXT NOT NULL,
+  rating INTEGER CHECK (rating BETWEEN 1 AND 5),
+  comment TEXT,
+  revision INTEGER NOT NULL CHECK (revision >= 1),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (room_id, chapter_id, question_type, question_index)
+);
 
 CREATE TABLE IF NOT EXISTS user_llm_credentials (
   user_id TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
@@ -91,3 +101,9 @@ BEGIN
   DELETE FROM "user" WHERE id = OLD.id;
 END;
 `;
+
+/**
+ * Bumped with every incompatible schema change; PRAGMA user_version stores it. The migrations
+ * that brought databases to version 3 have been removed now that production is on it.
+ */
+export const SCHEMA_VERSION = 3;

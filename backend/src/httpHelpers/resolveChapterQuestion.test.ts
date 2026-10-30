@@ -126,8 +126,8 @@ describe("check path ↔ evaluate item identity", () => {
     "roomQuestionCheckApiPath(%s-%i) resolves to the same chapter item the UI would check",
     (type, index) => {
       const questionRef = formatQuestionRef(type, index);
-      const path = roomQuestionCheckApiPath("ROOM1", questionRef);
-      expect(path).toBe(`/rooms/ROOM1/questions/${questionRef}/check`);
+      const path = roomQuestionCheckApiPath("ROOM1", "first_chapter", questionRef);
+      expect(path).toBe(`/rooms/ROOM1/chapters/first_chapter/questions/${questionRef}/check`);
 
       const questionId = path.match(/\/questions\/([^/]+)\/check$/)?.[1];
       expect(questionId).toBe(questionRef);

@@ -17,7 +17,7 @@ describe("room participation", () => {
   afterEach(() => { db.close(); vi.restoreAllMocks(); });
 
   it("creates the author's participation with the room and retains it on repeated opens", () => {
-    const id = db.createRoom({ chapterId: "chapter", ownerUserId: "author" });
+    const id = db.createRoom({ ownerUserId: "author" });
     const room = db.getRoom(id)!;
     expect(db.listParticipatedRooms("author")).toEqual([{ ...room, joined_at: room.created_at, last_opened_at: room.created_at }]);
     expect(db.recordParticipation(id, "author")).toEqual({ participationCreated: false });
@@ -26,8 +26,8 @@ describe("room participation", () => {
   });
 
   it("records users independently, preserves join time, and orders by each user's last open", () => {
-    db.addRoom({ roomId: "owned", chapterId: "chapter", ownerUserId: "author" });
-    db.addRoom({ roomId: "legacy", chapterId: "chapter" });
+    db.addRoom({ roomId: "owned", ownerUserId: "author" });
+    db.addRoom({ roomId: "legacy" });
     const before = db.getRoom("owned");
     expect(db.recordParticipation("owned", "participant").participationCreated).toBe(true);
     expect(db.recordParticipation("legacy", "participant").participationCreated).toBe(true);
@@ -45,7 +45,7 @@ describe("room participation", () => {
   });
 
   it("rejects missing rooms and users, and cascades deletion without granting ownership", () => {
-    db.addRoom({ roomId: "room", chapterId: "chapter", ownerUserId: "author" });
+    db.addRoom({ roomId: "room", ownerUserId: "author" });
     expect(() => db.recordParticipation("missing", "participant")).toThrow(NotFoundError);
     expect(() => db.recordParticipation("room", "missing-user")).toThrow(/FOREIGN KEY/);
     db.recordParticipation("room", "participant");
@@ -61,10 +61,10 @@ describe("room participation", () => {
   });
 
   it("retries only room-ID collisions and does not alter the winning room", () => {
-    db.addRoom({ roomId: "taken", chapterId: "chapter", ownerUserId: "other" });
+    db.addRoom({ roomId: "taken", ownerUserId: "other" });
     const original = db.getRoom("taken");
     const generate = vi.spyOn(db, "generateRoomId").mockReturnValueOnce("taken").mockReturnValue("fresh");
-    expect(db.createRoom({ chapterId: "chapter", ownerUserId: "author" })).toBe("fresh");
+    expect(db.createRoom({ ownerUserId: "author" })).toBe("fresh");
     expect(generate).toHaveBeenCalledTimes(2);
     expect(db.getRoom("taken")).toEqual(original);
     expect(db.listParticipatedRooms("author").map(row => row.id)).toEqual(["fresh"]);
@@ -72,9 +72,9 @@ describe("room participation", () => {
   });
 
   it("bounds collision retries and rolls back failed participant inserts", () => {
-    db.addRoom({ roomId: "taken", chapterId: "chapter", ownerUserId: "other" });
+    db.addRoom({ roomId: "taken", ownerUserId: "other" });
     const generate = vi.spyOn(db, "generateRoomId").mockReturnValue("taken");
-    expect(() => db.createRoom({ chapterId: "chapter", ownerUserId: "author" })).toThrow("Failed to generate unique room id");
+    expect(() => db.createRoom({ ownerUserId: "author" })).toThrow("Failed to generate unique room id");
     expect(generate).toHaveBeenCalledTimes(10);
     expect(db.connection.inTransaction).toBe(false);
     expect(db.listParticipatedRooms("author")).toEqual([]);
@@ -83,7 +83,7 @@ describe("room participation", () => {
     // cannot accidentally be treated as a duplicate rooms.id.
     db.run(`CREATE TRIGGER fail_participant BEFORE INSERT ON room_participants
       BEGIN INSERT INTO room_participants (user_id, room_id) VALUES (NEW.user_id, NEW.room_id); END`);
-    expect(() => db.createRoom({ chapterId: "chapter", ownerUserId: "author" })).toThrow(/room_participants/);
+    expect(() => db.createRoom({ ownerUserId: "author" })).toThrow(/room_participants/);
     expect(generate).toHaveBeenCalledTimes(1);
     expect(db.getRoom("failed")).toBeUndefined();
     expect(db.connection.inTransaction).toBe(false);
@@ -100,11 +100,11 @@ it("treats a concurrent writer as busy rather than a room-ID collision", () => {
     second.connection.pragma("busy_timeout = 0");
     const generate = vi.spyOn(second, "generateRoomId").mockReturnValue("room");
     first.connection.exec("BEGIN IMMEDIATE");
-    expect(() => second.createRoom({ chapterId: "chapter", ownerUserId: "author" })).toThrow(expect.objectContaining({ code: "SQLITE_BUSY" }));
+    expect(() => second.createRoom({ ownerUserId: "author" })).toThrow(expect.objectContaining({ code: "SQLITE_BUSY" }));
     expect(generate).toHaveBeenCalledTimes(1);
     expect(second.connection.inTransaction).toBe(false);
     first.connection.exec("ROLLBACK");
     expect(second.getRoom("room")).toBeUndefined();
-    expect(second.createRoom({ chapterId: "chapter", ownerUserId: "author" })).toBe("room");
+    expect(second.createRoom({ ownerUserId: "author" })).toBe("room");
   } finally { first.close(); second.close(); rmSync(directory, { recursive: true }); vi.restoreAllMocks(); }
 });

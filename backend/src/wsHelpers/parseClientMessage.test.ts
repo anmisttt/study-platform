@@ -4,21 +4,33 @@ import { parseClientMessage, roomIdFromWebSocketUrl } from "../roomsWebSocketSer
 describe("parseClientMessage", () => {
   it("accepts a canonical one-based question watch and trims the id", () => {
     const message = parseClientMessage(
-      JSON.stringify({ type: "watch_question", questionId: " practice-1 " }),
+      JSON.stringify({ type: "watch_question", chapterId: "ch", questionId: " practice-1 " }),
     );
-    expect(message).toEqual({ type: "watch_question", questionId: "practice-1" });
+    expect(message).toEqual({ type: "watch_question", chapterId: "ch", questionId: "practice-1" });
   });
 
   it("accepts a valid update message", () => {
     const message = parseClientMessage(
-      JSON.stringify({ type: "update", questionId: "theory-2", update: "abc" }),
+      JSON.stringify({ type: "update", chapterId: "ch", questionId: "theory-2", update: "abc" }),
     );
-    expect(message).toEqual({ type: "update", questionId: "theory-2", update: "abc" });
+    expect(message).toEqual({ type: "update", chapterId: "ch", questionId: "theory-2", update: "abc" });
+  });
+
+  it("accepts a chapter watch and trims the chapter id", () => {
+    expect(parseClientMessage(JSON.stringify({ type: "watch_chapter", chapterId: " first_chapter " })))
+      .toEqual({ type: "watch_chapter", chapterId: "first_chapter" });
+  });
+
+  it("rejects messages without a chapter id", () => {
+    expect(parseClientMessage(JSON.stringify({ type: "watch_chapter" }))).toBeNull();
+    expect(parseClientMessage(JSON.stringify({ type: "watch_chapter", chapterId: "  " }))).toBeNull();
+    expect(parseClientMessage(JSON.stringify({ type: "watch_question", questionId: "theory-1" }))).toBeNull();
+    expect(parseClientMessage(JSON.stringify({ type: "update", chapterId: 3, questionId: "theory-1", update: "x" }))).toBeNull();
   });
 
   it("rejects client-authored checking messages", () => {
     const message = parseClientMessage(
-      JSON.stringify({ type: "checking", questionId: "theory-1", checking: true }),
+      JSON.stringify({ type: "checking", chapterId: "ch", questionId: "theory-1", checking: true }),
     );
     expect(message).toBeNull();
   });
@@ -36,7 +48,7 @@ describe("parseClientMessage", () => {
 
   it("rejects unknown message types", () => {
     expect(
-      parseClientMessage(JSON.stringify({ type: "snapshot", questionId: "theory-1" })),
+      parseClientMessage(JSON.stringify({ type: "snapshot", chapterId: "ch", questionId: "theory-1" })),
     ).toBeNull();
     expect(
       parseClientMessage(JSON.stringify({ type: "join_room", roomId: "ROOM1" })),
@@ -45,31 +57,31 @@ describe("parseClientMessage", () => {
 
   it("rejects messages with empty or whitespace ids", () => {
     expect(
-      parseClientMessage(JSON.stringify({ type: "watch_question", questionId: "   " })),
+      parseClientMessage(JSON.stringify({ type: "watch_question", chapterId: "ch", questionId: "   " })),
     ).toBeNull();
     expect(
-      parseClientMessage(JSON.stringify({ type: "update", questionId: "", update: "x" })),
+      parseClientMessage(JSON.stringify({ type: "update", chapterId: "ch", questionId: "", update: "x" })),
     ).toBeNull();
   });
 
   it("rejects zero-based, leading-zero, and malformed question ids", () => {
     for (const questionId of ["practice-0", "theory-01", "q1"]) {
       expect(
-        parseClientMessage(JSON.stringify({ type: "watch_question", questionId })),
+        parseClientMessage(JSON.stringify({ type: "watch_question", chapterId: "ch", questionId })),
       ).toBeNull();
     }
   });
 
   it("rejects update with a non-string update field", () => {
     expect(
-      parseClientMessage(JSON.stringify({ type: "update", questionId: "theory-1", update: 5 })),
+      parseClientMessage(JSON.stringify({ type: "update", chapterId: "ch", questionId: "theory-1", update: 5 })),
     ).toBeNull();
   });
 
   it("rejects checking with a non-boolean checking field", () => {
     expect(
       parseClientMessage(
-        JSON.stringify({ type: "checking", questionId: "theory-1", checking: "yes" }),
+        JSON.stringify({ type: "checking", chapterId: "ch", questionId: "theory-1", checking: "yes" }),
       ),
     ).toBeNull();
   });

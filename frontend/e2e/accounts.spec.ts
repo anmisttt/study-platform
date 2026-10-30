@@ -84,6 +84,41 @@ test("verified account manages its profile, key, rooms and shared progress", asy
   await guest.close();
 });
 
+test("a room stays selected across chapters and its profile card lists every answered chapter", async ({ page }) => {
+  await register(page, `multi-${Date.now()}@example.com`);
+  await page.getByLabel("API key", { exact: true }).fill("sk-browser-owner-private-123456");
+  await page.getByRole("button", { name: "Save key", exact: true }).click();
+  await expect(page.getByText("Saved key ending in 3456")).toBeVisible();
+
+  await page.goto("/chapters/1/overview");
+  await page.getByRole("button", { name: "Create a room", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Theory 1", exact: true })).toBeVisible();
+  const roomId = new URL(page.url()).searchParams.get("roomId");
+  expect(roomId).toBeTruthy();
+  await page.getByPlaceholder("Type your answer in any language...").fill("An answer for the first chapter.");
+  await page.getByRole("button", { name: "Check", exact: true }).click();
+  await expect(page.getByText("4/5 · Good")).toBeVisible();
+
+  await page.getByRole("button", { name: /^2\. / }).click();
+  await expect(page).toHaveURL(new RegExp(`/chapters/2/questions/theory-1\\?roomId=${roomId}$`));
+  await expect(page.getByPlaceholder("Type your answer in any language...")).toHaveValue("");
+  await page.getByPlaceholder("Type your answer in any language...").fill("An answer for the second chapter.");
+  await page.getByRole("button", { name: "Check", exact: true }).click();
+  await expect(page.getByText("4/5 · Good")).toBeVisible();
+
+  await page.goto("/profile");
+  const card = page.locator(".room-summary");
+  await expect(card).toHaveCount(1);
+  await expect(card.getByRole("heading")).toHaveText(/^Chapter 1 · /);
+  await expect(card.getByText(/^All 2 chapters · 2\//)).toBeVisible();
+  await expect(card.locator(".room-chapter-chip")).toHaveCount(2);
+  await expect(card.locator(".room-chapter-chip-active")).toContainText("Ch. 1");
+  await expect(card.getByRole("link", { name: "Continue" })).toHaveAttribute("href", `/chapters/1/questions/theory-2?roomId=${roomId}`);
+  await card.getByRole("button", { name: /^Chapter 2,/ }).click();
+  await expect(card.getByRole("heading")).toHaveText(/^Chapter 2 · /);
+  await expect(card.getByRole("link", { name: "Continue" })).toHaveAttribute("href", `/chapters/2/questions/theory-2?roomId=${roomId}`);
+});
+
 test("registration screen offers all sign-in methods at mobile width", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/register");
