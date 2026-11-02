@@ -198,6 +198,34 @@ describe("chapter details API", () => {
   });
 });
 
+describe("account deletion", () => {
+  it("requires sign-in", async () => {
+    expect((await api("/me", "DELETE")).status).toBe(401);
+  });
+
+  it("refuses while the user owns rooms, then deletes the user and their rows", async () => {
+    const owner = await user(); const other = await user("other@example.com");
+    const id = await room(owner.cookie); const otherRoom = await room(other.cookie);
+    expect((await api(`/rooms/${otherRoom}/participants/me`, "POST", undefined, owner.cookie)).status).toBe(200);
+    expect((await api("/me/llm-key", "PUT", { apiKey: ownerKey }, owner.cookie)).status).toBe(200);
+    const refused = await api("/me", "DELETE", undefined, owner.cookie);
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toEqual({ error: "Delete all your rooms first", code: "ROOMS_OWNED" });
+    expect(db.get('SELECT 1 FROM "user" WHERE id = ?', [owner.id])).toBeTruthy();
+    expect((await api(`/rooms/${id}`, "DELETE", undefined, owner.cookie)).status).toBe(204);
+    const deleted = await api("/me", "DELETE", undefined, owner.cookie);
+    expect(deleted.status).toBe(204);
+    expect(deleted.headers.getSetCookie().find(cookie => cookie.includes("session_token"))).toMatch(/Expires=Thu, 01 Jan 1970/);
+    for (const table of ['"user" WHERE id', "session WHERE userId", "account WHERE userId", "room_participants WHERE user_id", "user_llm_credentials WHERE user_id"]) {
+      expect(db.all(`SELECT * FROM ${table} = ?`, [owner.id])).toEqual([]);
+    }
+    await expectAnonymousProfile(owner.cookie);
+    expect((await api("/me", "DELETE", undefined, owner.cookie)).status).toBe(401);
+    expect((await api("/me", "GET", undefined, other.cookie)).status).toBe(200);
+    expect(db.getRoom(otherRoom)).toBeTruthy();
+  });
+});
+
 describe("room participation API", () => {
   it("automatically lists authored rooms and registers participants without a body", async () => {
     const owner = await user(); const participant = await user("participant@example.com");
