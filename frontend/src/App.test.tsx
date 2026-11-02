@@ -161,7 +161,11 @@ describe("App routing", () => {
     expect(await screen.findByText("What is a process?")).toBeVisible();
     expect(screen.getByRole("button", { name: "Create a room" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "1. Introduction" }));
+    const link = screen.getByRole("link", { name: "1. Introduction" });
+    expect(link.getAttribute("href")).toBe(chapterQuestionPath(chapterMeta.number, "theory-1", "OLD111"));
+    expect(screen.getByRole("link", { name: "Home: all chapters" }).getAttribute("href")).toBe(chaptersPath("OLD111"));
+
+    fireEvent.click(link);
 
     expect(await screen.findByPlaceholderText("Type your answer in any language...")).toBeEnabled();
     expect(screen.getAllByRole("button", { name: "Room OLD111" }).length).toBeGreaterThan(0);
@@ -254,7 +258,7 @@ describe("App routing", () => {
     renderApp(chapterQuestionPath(chapterMeta.number, "theory-1", "ABC123"));
     expect(await screen.findByText("What is a process?")).toBeVisible();
 
-    fireEvent.click(screen.getByRole("button", { name: "2. Storage" }));
+    fireEvent.click(screen.getByRole("link", { name: "2. Storage" }));
 
     expect(await screen.findByText("What is a B-tree?")).toBeVisible();
     expect(screen.getByPlaceholderText("Type your answer in any language...")).toBeEnabled();

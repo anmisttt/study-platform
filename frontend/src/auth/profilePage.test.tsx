@@ -102,6 +102,30 @@ it("confirms deletion for everyone and removes a card already deleted elsewhere"
   expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith("/rooms/owned") && init?.method === "DELETE")).toBe(true);
 });
 
+it("refuses account deletion while rooms remain and shows the error on the page", async () => {
+  showProfile();
+  await screen.findByRole("heading", { name: "Chapter 1 · Chapter for owned" });
+  fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
+  const confirmation = within(screen.getByRole("dialog", { name: "Delete your account?" }));
+  vi.mocked(fetch).mockResolvedValueOnce(response({ error: "Delete all your rooms first", code: "ROOMS_OWNED" }, 409));
+  fireEvent.click(confirmation.getByRole("button", { name: "Delete account" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Delete all your rooms first");
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith("/me") && init?.method === "DELETE")).toBe(true);
+});
+
+it("signs out after deleting the account", async () => {
+  const expired = vi.fn();
+  window.addEventListener("session-expired", expired);
+  showProfile();
+  await screen.findByRole("heading", { name: "Chapter 1 · Chapter for owned" });
+  fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
+  vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }));
+  fireEvent.click(within(screen.getByRole("dialog", { name: "Delete your account?" })).getByRole("button", { name: "Delete account" }));
+  await waitFor(() => expect(expired).toHaveBeenCalledOnce());
+  window.removeEventListener("session-expired", expired);
+});
+
 it("cancels pending room requests when leaving the profile", async () => {
   let complete!: (value: Response) => void;
   vi.mocked(fetch).mockReturnValueOnce(new Promise(resolve => { complete = resolve; }));

@@ -91,6 +91,15 @@ export function createApplication({ roomsDb, config, sendEmail, llm = defaultLlm
     const current = await session(req);
     res.json(current ? accounts.profile(current.user.id) : null);
   });
+  app.delete("/me", async (req, res) => {
+    const user = await requireUser(req);
+    accounts.delete(user.id);
+    const { authCookies } = await auth.$context;
+    for (const { name, attributes: { path, domain, secure, httpOnly } } of Object.values(authCookies)) {
+      res.clearCookie(name, { path, domain, secure, httpOnly });
+    }
+    res.status(204).end();
+  });
   app.put("/me/llm-key", async (req, res) => {
     const user = await requireUser(req);
     accounts.saveKey(user.id, req.body?.apiKey);
