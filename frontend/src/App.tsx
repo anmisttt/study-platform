@@ -271,7 +271,7 @@ function AppContent() {
   const activeChapterKey = chapterKeyFromPath(location.pathname);
   const activeChapterId = resolveChapterMeta(activeChapterKey, chapters)?.id ?? "";
   const roomId = roomIdFromSearch(searchParams.toString());
-  const isHomeRoute = location.pathname === chaptersPath() || location.pathname === "/";
+  const isHomeRoute = location.pathname === chaptersPath();
   const isRoomRoute = Boolean(matchPath("/chapters/:chapterId/overview", location.pathname)
     || matchPath("/chapters/:chapterId/questions/:questionRef", location.pathname));
   const participation = useRoomParticipation(isRoomRoute ? roomId : null);
@@ -366,8 +366,7 @@ function AppContent() {
           <Route path="/forgot-password" element={<AuthPage key="forgot" mode="forgot" />} />
           <Route path="/reset-password" element={<AuthPage key="reset" mode="reset" />} />
           <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/" element={<Navigate to={chaptersPath(linkRoomId)} replace />} />
-          <Route path="/chapters" element={<ChaptersIndexPage chapters={chaptersList} />} />
+          <Route path="/" element={<ChaptersIndexPage chapters={chaptersList} />} />
           <Route path="/chapters/:chapterId" element={<ChapterIdRedirect chapters={chapters} />} />
           <Route path="/chapters/:chapterId/overview" element={<ChapterOverviewPage {...routeProps} />} />
           <Route path="/chapters/:chapterId/questions/:questionRef" element={<ChapterQuestionPage {...routeProps} />} />

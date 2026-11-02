@@ -123,7 +123,7 @@ function ProfileContent({ profile }: { profile: UserProfile }) {
   return <section className="account-page profile-page">
     <div className="profile-heading">
       <div><p className="account-eyebrow">Your account</p><h1>Profile</h1><p>{profile.email}</p></div>
-      <button className="secondary-button" disabled={pending} onClick={() => void action(async () => { await signOut(); navigate("/chapters"); })}>Sign out</button>
+      <button className="secondary-button" disabled={pending} onClick={() => void action(async () => { await signOut(); navigate(chaptersPath()); })}>Sign out</button>
     </div>
     {error && confirmDelete === null && <p className="account-error" role="alert">{error}</p>}
     {notice && <p className="account-notice" role="status">{notice}</p>}
@@ -154,7 +154,7 @@ function ProfileContent({ profile }: { profile: UserProfile }) {
           <p>{filter === "Author" ? "You haven't created any rooms yet." : filter === "Participant"
             ? "Open a shared room link while signed in to find it here later."
             : "Your rooms will appear here. Create a room from a chapter, or open a shared room link while signed in."}</p>
-          {filter !== "Participant" && <Link to="/chapters">Choose a chapter to get started</Link>}
+          {filter !== "Participant" && <Link to={chaptersPath()}>Choose a chapter to get started</Link>}
         </div> : <>
           <p className="room-list-order">Most recently opened first</p>
           <div className="profile-rooms">{visibleRooms.map(room => {

@@ -126,7 +126,7 @@ describe("App routing", () => {
     vi.unstubAllGlobals();
   });
 
-  it("redirects / to /chapters and shows the index welcome", async () => {
+  it("shows the index welcome at /", async () => {
     renderApp("/");
 
     expect(await screen.findByRole("heading", { name: "Study Platform" })).toBeTruthy();
@@ -144,7 +144,7 @@ describe("App routing", () => {
     expect(screen.getByRole("button", { name: "Join room" })).toBeTruthy();
   });
 
-  it("keeps the remembered room in links from the home chapter list and the / redirect", async () => {
+  it("keeps the remembered room in links from the home chapter list", async () => {
     localStorage.setItem("study-platform.currentRoom", JSON.stringify({ roomId: "OLD111", lastPath: "/chapters/1/overview?roomId=OLD111" }));
     renderApp("/");
 

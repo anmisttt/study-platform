@@ -1,7 +1,7 @@
 import { formatQuestionRef, parseQuestionRef, type ChapterMeta } from "@study-platform/shared";
 
 export function chaptersPath(roomId?: string): string {
-  return roomId ? `/chapters?roomId=${encodeURIComponent(roomId)}` : "/chapters";
+  return roomId ? `/?roomId=${encodeURIComponent(roomId)}` : "/";
 }
 
 export function chapterOverviewPath(chapterNumber: number, roomId?: string): string {

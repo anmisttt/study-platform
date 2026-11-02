@@ -159,7 +159,7 @@ async function mockBackend(page: Page, { signedIn = true }: { signedIn?: boolean
 test("practice happy path: generate room, answer, check", async ({ page }) => {
   await mockBackend(page);
 
-  await page.goto("/chapters");
+  await page.goto("/");
   await page.getByRole("button", { name: /1\. Introduction/ }).click();
   await expect(page.getByRole("heading", { name: "Introduction" })).toBeVisible();
 
