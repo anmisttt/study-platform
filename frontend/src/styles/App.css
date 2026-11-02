@@ -45,6 +45,7 @@
   font: inherit;
   font-size: 14px;
   color: var(--muted-foreground);
+  text-decoration: none;
   cursor: pointer;
   transition: color 0.15s ease;
 }
@@ -92,6 +93,7 @@
   cursor: pointer;
   font-size: 14px;
   color: var(--muted-foreground);
+  text-decoration: none;
   transition: all 0.15s ease;
 }
 
