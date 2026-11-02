@@ -163,7 +163,7 @@ describe("App routing", () => {
 
     const link = screen.getByRole("link", { name: "1. Introduction" });
     expect(link.getAttribute("href")).toBe(chapterQuestionPath(chapterMeta.number, "theory-1", "OLD111"));
-    expect(screen.getAllByRole("link", { name: "Home" })[0].getAttribute("href")).toBe(chaptersPath("OLD111"));
+    expect(screen.getByRole("link", { name: "Home: all chapters" }).getAttribute("href")).toBe(chaptersPath("OLD111"));
 
     fireEvent.click(link);
 

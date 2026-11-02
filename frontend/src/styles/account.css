@@ -91,7 +91,8 @@ body:has(.delete-confirm[open]) { overflow: hidden; }
 .room-menu-divider { margin: 6px 0; border: 0; border-top: 1px solid var(--border); }
 @media (max-width: 900px) {
   .layout .content > .account-header { display: none; }
-  .sidebar-header .account-nav { flex: 0 0 auto; min-height: 0; padding: 0; }
+  .sidebar-header .account-nav { justify-content: flex-start; min-height: 0; padding: 0; }
+  .sidebar-header .account-nav > a { margin-left: auto; }
   /* The sidebar toggle's chevron sits next to the pill, so the compact pill has none. */
   .sidebar-header .room-pill-word, .sidebar-header .room-pill-chevron { display: none; }
   .sidebar-header .room-menu { position: fixed; top: 48px; left: 0; right: 0; width: auto; border-radius: 0 0 12px 12px; }
