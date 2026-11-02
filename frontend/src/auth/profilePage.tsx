@@ -33,6 +33,8 @@ function ProfileContent({ profile }: { profile: UserProfile }) {
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmAccount, setConfirmAccount] = useState(false);
+  const confirming = confirmDelete !== null || confirmAccount;
   const roomsRequest = useRef<AbortController | null>(null);
   const mounted = useRef(false);
   const deleteButton = useRef<HTMLButtonElement | null>(null);
@@ -43,7 +45,7 @@ function ProfileContent({ profile }: { profile: UserProfile }) {
   useEffect(() => {
     const dialog = deleteDialog.current;
     if (!dialog) return;
-    if (confirmDelete !== null) {
+    if (confirming) {
       if (!dialog.open) dialog.showModal();
       cancelDeleteButton.current?.focus();
     } else if (dialog.open) {
@@ -51,7 +53,7 @@ function ProfileContent({ profile }: { profile: UserProfile }) {
       if (deleteButton.current?.isConnected) deleteButton.current.focus();
       else filters.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus();
     }
-  }, [confirmDelete]);
+  }, [confirming]);
 
   const loadRooms = useCallback(async () => {
     if (!mounted.current) return;
@@ -113,6 +115,13 @@ function ProfileContent({ profile }: { profile: UserProfile }) {
     await loadRooms();
   }
 
+  async function deleteAccount() {
+    try { await request("/me", { method: "DELETE" }); }
+    catch (error) { setConfirmAccount(false); throw error; }
+    window.dispatchEvent(new Event("session-expired"));
+    navigate(chaptersPath());
+  }
+
   const counts: Record<RoomFilter, number> = {
     All: rooms.length,
     Author: rooms.filter(room => room.isAuthor).length,
@@ -123,9 +132,12 @@ function ProfileContent({ profile }: { profile: UserProfile }) {
   return <section className="account-page profile-page">
     <div className="profile-heading">
       <div><p className="account-eyebrow">Your account</p><h1>Profile</h1><p>{profile.email}</p></div>
-      <button className="secondary-button" disabled={pending} onClick={() => void action(async () => { await signOut(); navigate(chaptersPath()); })}>Sign out</button>
+      <div className="profile-actions">
+        <button className="text-danger" disabled={pending} onClick={event => { deleteButton.current = event.currentTarget; setError(""); setConfirmAccount(true); }}>Delete account</button>
+        <button className="secondary-button" disabled={pending} onClick={() => void action(async () => { await signOut(); navigate(chaptersPath()); })}>Sign out</button>
+      </div>
     </div>
-    {error && confirmDelete === null && <p className="account-error" role="alert">{error}</p>}
+    {error && !confirming && <p className="account-error" role="alert">{error}</p>}
     {notice && <p className="account-notice" role="status">{notice}</p>}
     {params.get("returnTo") && <Link className="return-to-room" to={safeReturnTo(params.get("returnTo"))}>Return to your room</Link>}
     <div className="profile-settings">
@@ -200,14 +212,17 @@ function ProfileContent({ profile }: { profile: UserProfile }) {
           })}</div>
         </>}
     </section>
-    <dialog className="delete-confirm" ref={deleteDialog} aria-labelledby="delete-room-title" aria-describedby="delete-room-description"
-      onCancel={event => { event.preventDefault(); if (!pending) setConfirmDelete(null); }}>
-      <h2 id="delete-room-title">Delete this room for everyone?</h2>
-      <p id="delete-room-description">Its saved progress will be deleted and everyone in the room will be disconnected.</p>
-      {error && confirmDelete !== null && <p className="account-error" role="alert">{error}</p>}
+    <dialog className="delete-confirm" ref={deleteDialog} aria-labelledby="delete-confirm-title" aria-describedby="delete-confirm-description"
+      onCancel={event => { event.preventDefault(); if (!pending) { setConfirmDelete(null); setConfirmAccount(false); } }}>
+      <h2 id="delete-confirm-title">{confirmAccount ? "Delete your account?" : "Delete this room for everyone?"}</h2>
+      <p id="delete-confirm-description">{confirmAccount ? "This can't be undone. You will be signed out." : "Its saved progress will be deleted and everyone in the room will be disconnected."}</p>
+      {error && confirming && <p className="account-error" role="alert">{error}</p>}
       <div className="account-actions">
-        <button className="text-danger" disabled={pending} onClick={() => { if (confirmDelete !== null) void action(() => deleteRoom(confirmDelete)); }}>Delete for everyone</button>
-        <button className="secondary-button" ref={cancelDeleteButton} disabled={pending} onClick={() => setConfirmDelete(null)}>Cancel</button>
+        <button className="text-danger" disabled={pending} onClick={() => {
+          if (confirmAccount) void action(deleteAccount);
+          else if (confirmDelete !== null) void action(() => deleteRoom(confirmDelete));
+        }}>{confirmAccount ? "Delete account" : "Delete for everyone"}</button>
+        <button className="secondary-button" ref={cancelDeleteButton} disabled={pending} onClick={() => { setConfirmDelete(null); setConfirmAccount(false); }}>Cancel</button>
       </div>
     </dialog>
   </section>;

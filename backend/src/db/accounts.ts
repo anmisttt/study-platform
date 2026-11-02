@@ -40,6 +40,13 @@ export class Accounts {
       .run(userId, ciphertext.toString("base64"), nonce.toString("base64"), cipher.getAuthTag().toString("base64"), key.slice(-4));
   }
 
+  delete(userId: string): void {
+    this.db.transaction(() => {
+      if (this.db.prepare("SELECT 1 FROM rooms WHERE owner_user_id = ?").get(userId)) throw new HttpError(409, "ROOMS_OWNED", "Delete all your rooms first");
+      this.db.prepare('DELETE FROM "user" WHERE id = ?').run(userId);
+    }).immediate();
+  }
+
   removeKey(userId: string): void { this.db.prepare("DELETE FROM user_llm_credentials WHERE user_id = ?").run(userId); }
 
   decryptKey(userId: string): string {
