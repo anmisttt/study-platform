@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import type { ChapterMeta } from "@study-platform/shared";
 import AccountNav from "../auth/accountNav";
 import { chapterEntryPath, chaptersPath } from "../routes/paths";
@@ -14,7 +14,6 @@ type TableOfContentsProps = {
 function TableOfContents({ chapters, activeChapterId }: TableOfContentsProps) {
   const { linkRoomId } = useCurrentRoom();
   const inSidebarHeader = useMediaQuery(SIDEBAR_HEADER_QUERY);
-  const navigate = useNavigate();
   const location = useLocation();
   const isHome = location.pathname === chaptersPath();
   const [isOpen, setIsOpen] = useState(false);
@@ -25,12 +24,11 @@ function TableOfContents({ chapters, activeChapterId }: TableOfContentsProps) {
         {isHome ? (
           <span className="sidebar-header-title">Table of contents</span>
         ) : (
-          <button
-            type="button"
+          <Link
+            to={chaptersPath(linkRoomId)}
             className="sidebar-home-link sidebar-header-home"
             onClick={() => {
               setIsOpen(false);
-              navigate(chaptersPath(linkRoomId));
             }}
           >
             <svg
@@ -46,7 +44,7 @@ function TableOfContents({ chapters, activeChapterId }: TableOfContentsProps) {
               <polyline points="15 18 9 12 15 6" />
             </svg>
             Home
-          </button>
+          </Link>
         )}
         <AccountNav showRoom={inSidebarHeader} />
         <button
@@ -79,13 +77,7 @@ function TableOfContents({ chapters, activeChapterId }: TableOfContentsProps) {
       <div className="sidebar-body" id="sidebar-body">
         <div className="sidebar-body-inner">
           {!isHome && (
-            <button
-              type="button"
-              className="sidebar-home-link sidebar-body-home"
-              onClick={() => {
-                navigate(chaptersPath(linkRoomId));
-              }}
-            >
+            <Link to={chaptersPath(linkRoomId)} className="sidebar-home-link sidebar-body-home">
               <svg
                 className="sidebar-home-chevron"
                 viewBox="0 0 24 24"
@@ -99,22 +91,21 @@ function TableOfContents({ chapters, activeChapterId }: TableOfContentsProps) {
                 <polyline points="15 18 9 12 15 6" />
               </svg>
               Home
-            </button>
+            </Link>
           )}
           <h2 className="sidebar-title">Table of contents</h2>
           <div className="chapter-list">
             {chapters.map((chapter) => (
-              <button
+              <Link
                 key={chapter.id}
-                type="button"
+                to={chapterEntryPath(chapter, linkRoomId)}
                 className={`chapter-button ${chapter.id === activeChapterId ? "active" : ""}`}
                 onClick={() => {
                   setIsOpen(false);
-                  navigate(chapterEntryPath(chapter, linkRoomId));
                 }}
               >
                 {chapter.number}. {chapter.name}
-              </button>
+              </Link>
             ))}
           </div>
         </div>
