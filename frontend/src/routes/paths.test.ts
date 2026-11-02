@@ -23,7 +23,8 @@ const chaptersById = new Map([[chapterMeta.id, chapterMeta]]);
 
 describe("routes/paths", () => {
   it("builds chapter paths from chapter number and preserves roomId", () => {
-    expect(chaptersPath()).toBe("/chapters");
+    expect(chaptersPath()).toBe("/");
+    expect(chaptersPath("ABC123")).toBe("/?roomId=ABC123");
     expect(chapterOverviewPath(1)).toBe("/chapters/1/overview");
     expect(chapterOverviewPath(1, "ABC123")).toBe("/chapters/1/overview?roomId=ABC123");
     expect(chapterQuestionPath(1, "theory-1")).toBe("/chapters/1/questions/theory-1");
