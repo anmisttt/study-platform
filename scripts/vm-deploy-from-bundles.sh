@@ -368,7 +368,7 @@ if [[ ! -f "${DEPLOY_SCRIPT_DIR}/send-errors.mjs" ]]; then
   echo "Skipping: ${DEPLOY_SCRIPT_DIR}/send-errors.mjs not uploaded"
   printf '%s\n' "${filtered_cron}" | crontab -
 elif [[ ! -f "${TRIAGE_CONF}" ]]; then
-  echo "Skipping: ${TRIAGE_CONF} not found (see CONTRIBUTING.md, Error triage)"
+  echo "Skipping: ${TRIAGE_CONF} not found (see the study-platform-issues README)"
   printf '%s\n' "${filtered_cron}" | crontab -
 else
   cp "${DEPLOY_SCRIPT_DIR}/send-errors.mjs" "${APP_DIR}/send-errors.mjs"
