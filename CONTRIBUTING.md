@@ -164,3 +164,24 @@ Use the variables in `backend/.env.example`, with `NODE_ENV=production`, your HT
 Deploy frontend and backend together. For rollback, stop the service and restore the matching database backup, previous bundles, and their deployment configuration.
 
 Re-upload and run `~/vm-deploy-from-bundles.sh` after updating bundles.
+
+### Error triage
+
+Once a day at 06:00 UTC (08:00 Berlin in summer, 07:00 in winter), `scripts/send-errors.mjs` collects new lines from the PM2 backend error log and the nginx upstream errors. It groups and redacts them, then triggers the `triage.yml` workflow in the private repo `anmisttt/study-platform-issues`, which holds the workflow and its setup README. There, Claude investigates the errors against this code and opens one issue with root-cause hypotheses and proposed diffs. If there are no new errors, nothing is sent. The workflow lives in a private repo because logs, issues and Action runs in this public repo would be public.
+
+1. Set up `anmisttt/study-platform-issues` as its README describes, including the `CLAUDE_CODE_OAUTH_TOKEN` secret from `claude setup-token`.
+2. Create a fine-grained PAT (GitHub → Settings → Developer settings → Fine-grained tokens) that can access only the private repo and has the repository permission **Actions: Read and write**, and nothing else.
+3. On the VM, create `triage.env` at the app root (next to `.env`; `chmod 600`):
+
+   ```bash
+   GITHUB_TOKEN=github_pat_...
+   TRIAGE_REPO=anmisttt/study-platform-issues
+   TRIAGE_WORKFLOW=triage.yml
+   # optional: TRIAGE_REF=main, NGINX_ERROR_LOG=/var/log/nginx/error.log
+   ```
+
+4. Re-run `~/vm-deploy-from-bundles.sh`. It installs a daily 06:00 cron entry that logs to `logs/send-errors.log`. Cron uses the VM's system timezone, which is assumed to be UTC; check it with `timedatectl`. Without `triage.env`, the deploy script skips the cron entry. The first run only records the current log offsets. The nginx log needs read access, which the `adm` group grants by default on Ubuntu.
+
+Dispatch contract: `POST /repos/anmisttt/study-platform-issues/actions/workflows/triage.yml/dispatches` with `{"ref":"main","inputs":{"errors":"<json>"}}`. `errors` is a JSON string of at most 65,535 characters, for example `{"host":"test","groups":[{"source":"backend","message":"TypeError: Cannot read properties of undefined (reading 'id')","frames":["at getRoom (/app/backend/dist/routes/rooms.js:10:5)"],"detail":[],"count":3,"first":"2026-01-01T07:00:00","last":"2026-01-01T08:00:00"}],"omitted":0}`. `source` is `backend` or `nginx`. Values are redacted, and timestamps are VM local time.
+
+To test, run the workflow by hand in the private repo with that input (Actions → Error triage → Run workflow). On the VM, preview the payload with `node <app root>/send-errors.mjs --dry-run`, or send right away with `node <app root>/send-errors.mjs`. Both run immediately. A real send advances the saved offsets.

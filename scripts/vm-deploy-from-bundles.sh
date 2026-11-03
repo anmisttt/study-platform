@@ -333,7 +333,8 @@ if pm2 describe "${BACKEND_PROCESS_NAME}" >/dev/null 2>&1; then
   pm2 delete "${BACKEND_PROCESS_NAME}"
 fi
 
-pm2 start dist/server.js --name "${BACKEND_PROCESS_NAME}" --cwd "${BACKEND_DIR}"
+# --time prefixes log lines with timestamps for send-errors.mjs.
+pm2 start dist/server.js --name "${BACKEND_PROCESS_NAME}" --cwd "${BACKEND_DIR}" --time
 
 # systemd unit so `pm2 save` dump is resurrected after reboot (idempotent).
 echo "==> Enabling PM2 restart on reboot"
@@ -356,6 +357,26 @@ CRON_LINE="0 4 * * * cd ${BACKEND_DIR} && ${NODE_BIN} dist/scripts/cleanupStaleR
 current_cron="$(crontab -l 2>/dev/null || true)"
 filtered_cron="$(printf '%s\n' "${current_cron}" | grep -v "${CRON_MARKER}" || true)"
 printf '%s\n%s\n' "${filtered_cron}" "${CRON_LINE}" | crontab -
+
+echo "==> Installing daily error triage cron"
+TRIAGE_MARKER="study-platform-send-errors"
+TRIAGE_CONF="${APP_DIR}/triage.env"
+TRIAGE_LOGS="${APP_DIR}/logs/send-errors.log"
+current_cron="$(crontab -l 2>/dev/null || true)"
+filtered_cron="$(printf '%s\n' "${current_cron}" | grep -v "${TRIAGE_MARKER}" || true)"
+if [[ ! -f "${DEPLOY_SCRIPT_DIR}/send-errors.mjs" ]]; then
+  echo "Skipping: ${DEPLOY_SCRIPT_DIR}/send-errors.mjs not uploaded"
+  printf '%s\n' "${filtered_cron}" | crontab -
+elif [[ ! -f "${TRIAGE_CONF}" ]]; then
+  echo "Skipping: ${TRIAGE_CONF} not found (see CONTRIBUTING.md, Error triage)"
+  printf '%s\n' "${filtered_cron}" | crontab -
+else
+  cp "${DEPLOY_SCRIPT_DIR}/send-errors.mjs" "${APP_DIR}/send-errors.mjs"
+  chmod 600 "${TRIAGE_CONF}"
+  # Cron uses the system timezone, assumed UTC (check: timedatectl).
+  TRIAGE_LINE="0 6 * * * BACKEND_PROCESS_NAME=${BACKEND_PROCESS_NAME} ${NODE_BIN} ${APP_DIR}/send-errors.mjs >> \"${TRIAGE_LOGS}\" 2>&1 # ${TRIAGE_MARKER}"
+  printf '%s\n%s\n' "${filtered_cron}" "${TRIAGE_LINE}" | crontab -
+fi
 
 echo "==> Verifying backend is listening on port ${API_PORT}"
 for _ in 1 2 3 4 5; do
@@ -385,6 +406,9 @@ fi
 echo "==> Deployment complete"
 echo "Backend health: curl http://127.0.0.1:${API_PORT}/health"
 echo "Stale-room cleanup: daily 04:00 (crontab; logs ${CLEANUP_LOGS})"
+if [[ -f "${TRIAGE_CONF}" ]]; then
+  echo "Error triage: daily 06:00 UTC (crontab; logs ${TRIAGE_LOGS})"
+fi
 echo "On reboot: nginx, cron, and PM2 (${BACKEND_PROCESS_NAME}) start automatically."
 echo "Verify after reboot: systemctl is-active cron nginx && pm2 list && curl -sf http://127.0.0.1:${API_PORT}/health"
 if ssl_certificate_available; then
